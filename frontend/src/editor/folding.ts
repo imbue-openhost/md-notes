@@ -50,21 +50,21 @@ const markdownFoldService = foldService.of((state, lineStart, lineEnd) => {
 
   let foldTo = docLength;
 
-  tree.iterate({
-    from: foldFrom + 1,
-    to: docLength,
-    enter: (node) => {
-      if (node.name.startsWith('ATXHeading')) {
-        const otherLevel = parseInt(node.name.replace('ATXHeading', ''), 10);
-        if (!isNaN(otherLevel) && otherLevel <= level) {
-          // Fold up to the line *before* this heading
-          const headingLine = state.doc.lineAt(node.from);
-          foldTo = headingLine.from > foldFrom ? headingLine.from - 1 : foldFrom;
-          return false; // stop iteration
-        }
+  // Use a cursor to walk the tree so we can break on first match.
+  // tree.iterate's `return false` only skips children, not siblings.
+  const cursor = tree.cursor();
+  cursor.moveTo(foldFrom + 1);
+  // Walk forward through all nodes after foldFrom
+  do {
+    if (cursor.name.startsWith('ATXHeading') && cursor.from > foldFrom) {
+      const otherLevel = parseInt(cursor.name.replace('ATXHeading', ''), 10);
+      if (!isNaN(otherLevel) && otherLevel <= level) {
+        const headingLine = state.doc.lineAt(cursor.from);
+        foldTo = headingLine.from > foldFrom ? headingLine.from - 1 : foldFrom;
+        break;
       }
-    },
-  });
+    }
+  } while (cursor.next());
 
   // Trim trailing blank lines from the fold range
   while (foldTo > foldFrom) {

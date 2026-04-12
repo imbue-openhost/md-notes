@@ -66,10 +66,10 @@ live preview toggle between source and rendered output.
 /**
  * Build the full extension set for the markdown editor.
  */
-function buildExtensions(): Extension[] {
+function buildExtensions(vimrcContent?: string): Extension[] {
   return [
     // Vim mode first so it captures keys before other keymaps
-    vimMode(),
+    vimMode(vimrcContent),
 
     // Core editing
     history(),
@@ -117,14 +117,19 @@ function buildExtensions(): Extension[] {
 /**
  * Create and mount the editor in the given container element.
  */
-export function createEditor(container: HTMLElement, initialDoc?: string): EditorView {
+export interface EditorOptions {
+  initialDoc?: string;
+  vimrcContent?: string;
+}
+
+export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorView {
   if (editorView) {
     editorView.destroy();
   }
 
   const state = EditorState.create({
-    doc: initialDoc ?? SAMPLE_MD,
-    extensions: buildExtensions(),
+    doc: options.initialDoc ?? SAMPLE_MD,
+    extensions: buildExtensions(options.vimrcContent),
   });
 
   editorView = new EditorView({
