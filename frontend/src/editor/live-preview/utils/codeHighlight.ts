@@ -1,0 +1,272 @@
+/**
+ * Code Highlighting Utility
+ *
+ * Wraps lowlight to provide syntax highlighting functionality
+ * Supports on-demand language loading with graceful degradation
+ */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LanguageFn = any;
+
+/**
+ * Highlight result interface
+ */
+export interface HighlightResult {
+  /** Highlighted HTML string */
+  html: string;
+  /** Language identifier */
+  language: string;
+  /** Whether the language was auto-detected */
+  detected: boolean;
+}
+
+// lowlight instance (lazy initialization)
+let lowlightInstance: any = null;
+let lowlightAvailable: boolean | null = null;
+
+/**
+ * Escape HTML special characters
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
+ * Convert HAST node to HTML string
+ */
+function hastToHtml(node: any): string {
+  if (!node) return '';
+
+  if (node.type === 'text') {
+    return escapeHtml(node.value || '');
+  }
+
+  if (node.type === 'element') {
+    const tag = node.tagName;
+    const classes = node.properties?.className?.join(' ') || '';
+    const classAttr = classes ? ` class="${classes}"` : '';
+    const children = (node.children || []).map(hastToHtml).join('');
+    return `<${tag}${classAttr}>${children}</${tag}>`;
+  }
+
+  if (node.type === 'root') {
+    return (node.children || []).map(hastToHtml).join('');
+  }
+
+  return '';
+}
+
+// Cached lowlight module
+let lowlightModule: { createLowlight: any; common: any } | null = null;
+
+// Try to load lowlight module via dynamic import
+async function loadLowlightModule(): Promise<boolean> {
+  if (lowlightModule !== null) {
+    return true;
+  }
+  try {
+    // Build module name dynamically so Vite doesn't try to resolve it at build time.
+    // lowlight is an optional dependency — this gracefully fails if not installed.
+    const name = ['low', 'light'].join('');
+    const mod = await (new Function('m', 'return import(m)'))(name);
+    lowlightModule = mod;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Synchronous initialization
+function initLowlightSync(): boolean {
+  if (lowlightAvailable !== null) {
+    return lowlightAvailable;
+  }
+
+  // If module is already loaded, use it
+  if (lowlightModule) {
+    try {
+      lowlightInstance = lowlightModule.createLowlight(lowlightModule.common);
+      lowlightAvailable = true;
+      return true;
+    } catch {
+      lowlightAvailable = false;
+      return false;
+    }
+  }
+
+  // lowlight not loaded yet — mark as unavailable for sync path
+  lowlightAvailable = false;
+  return false;
+}
+
+// Async initialization (recommended — call at startup)
+async function initLowlightAsync(): Promise<boolean> {
+  if (lowlightAvailable === true && lowlightInstance) {
+    return true;
+  }
+
+  const loaded = await loadLowlightModule();
+  if (!loaded || !lowlightModule) {
+    lowlightAvailable = false;
+    return false;
+  }
+
+  try {
+    lowlightInstance = lowlightModule.createLowlight(lowlightModule.common);
+    lowlightAvailable = true;
+    return true;
+  } catch {
+    lowlightAvailable = false;
+    return false;
+  }
+}
+
+/**
+ * Reset highlighter (for testing)
+ */
+export function resetHighlighter(): void {
+  lowlightInstance = null;
+  lowlightAvailable = null;
+  // Don't auto-initialize, let tests control initialization timing
+}
+
+/**
+ * Initialize highlighter asynchronously
+ * Recommended to call at application startup
+ */
+export async function initHighlighter(): Promise<boolean> {
+  return initLowlightAsync();
+}
+
+/**
+ * Check if highlighter is available
+ */
+export function isHighlighterAvailable(): boolean {
+  return lowlightAvailable === true && lowlightInstance !== null;
+}
+
+/**
+ * Highlight code
+ *
+ * @param code - Source code
+ * @param lang - Language identifier (optional, auto-detect if not provided)
+ * @returns Highlight result
+ */
+export function highlightCode(code: string, lang?: string): HighlightResult {
+  // Return early for empty code
+  if (!code) {
+    return {
+      html: '',
+      language: lang || 'text',
+      detected: false,
+    };
+  }
+
+  // Ensure lowlight is initialized
+  if (!initLowlightSync()) {
+    // lowlight not available, return escaped plain text
+    return {
+      html: escapeHtml(code),
+      language: lang || 'text',
+      detected: false,
+    };
+  }
+
+  try {
+    if (lang) {
+      // Specified language
+      if (lowlightInstance.registered(lang)) {
+        const result = lowlightInstance.highlight(lang, code);
+        return {
+          html: hastToHtml(result),
+          language: lang,
+          detected: false,
+        };
+      } else {
+        // Language not registered, return plain text
+        return {
+          html: escapeHtml(code),
+          language: lang,
+          detected: false,
+        };
+      }
+    } else {
+      // Auto-detect language
+      const result = lowlightInstance.highlightAuto(code);
+      return {
+        html: hastToHtml(result),
+        language: result.data?.language || 'text',
+        detected: true,
+      };
+    }
+  } catch {
+    // Highlighting failed, return plain text
+    return {
+      html: escapeHtml(code),
+      language: lang || 'text',
+      detected: false,
+    };
+  }
+}
+
+/**
+ * Register a language
+ *
+ * @param name - Language name
+ * @param syntax - Language definition function
+ */
+export function registerLanguage(name: string, syntax: LanguageFn): void {
+  if (!initLowlightSync()) {
+    console.warn('[codeHighlight] lowlight not available, cannot register language');
+    return;
+  }
+
+  try {
+    lowlightInstance.register({ [name]: syntax });
+  } catch (error) {
+    console.warn(`[codeHighlight] Failed to register language "${name}":`, error);
+  }
+}
+
+/**
+ * Highlight code and return raw HAST tree (for mark decorations)
+ *
+ * @param code - Source code
+ * @param lang - Language identifier
+ * @returns HAST root node, or null if highlighting unavailable
+ */
+export function highlightCodeHast(code: string, lang?: string): any | null {
+  if (!code) return null;
+  if (!initLowlightSync()) return null;
+
+  try {
+    if (lang && lowlightInstance.registered(lang)) {
+      return lowlightInstance.highlight(lang, code);
+    }
+    if (!lang) {
+      return lowlightInstance.highlightAuto(code);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if a language is registered
+ *
+ * @param name - Language name
+ * @returns Whether the language is registered
+ */
+export function isLanguageRegistered(name: string): boolean {
+  if (!initLowlightSync()) {
+    return false;
+  }
+
+  return lowlightInstance.registered(name);
+}

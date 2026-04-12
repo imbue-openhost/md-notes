@@ -1,31 +1,4 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-dist/
-*.egg-info/
-.venv/
-venv/
-env/
-.env
-.pixi/
-
-# uv
-.python-version
-
-# PyCharm
-.idea/
-
-# VSCode
-.vscode/
-
-# Mac
-.DS_Store
-
-.swp
-
-
-.claude/settings.json
+node_modules
+dist
+test-results
+.idea
