@@ -12,6 +12,7 @@
 import { vim, Vim } from '@replit/codemirror-vim';
 import { EditorView } from '@codemirror/view';
 import { EditorState, type Extension } from '@codemirror/state';
+import { foldAll, unfoldAll, toggleFold, foldCode, unfoldCode } from '@codemirror/language';
 
 // ── Vimrc parser ──────────────────────────────────────────────────────────
 
@@ -30,9 +31,15 @@ export interface VimSetting {
   value: string | number | boolean;
 }
 
+export interface VimExmap {
+  name: string;
+  action: string;
+}
+
 export interface VimrcResult {
   mappings: VimMapping[];
   settings: VimSetting[];
+  exmaps: VimExmap[];
   errors: string[];
 }
 
@@ -73,6 +80,21 @@ const NUMERIC_OPTIONS = new Set([
 ]);
 
 /**
+ * Built-in editor actions that can be bound via `exmap`.
+ *
+ * Usage in vimrc:
+ *   exmap togglefold toggle-fold
+ *   nmap za :togglefold<CR>
+ */
+const BUILTIN_ACTIONS: Record<string, (view: EditorView) => boolean> = {
+  'toggle-fold': (view) => toggleFold(view),
+  'fold-all': (view) => foldAll(view),
+  'unfold-all': (view) => unfoldAll(view),
+  'fold-at-cursor': (view) => foldCode(view),
+  'unfold-at-cursor': (view) => unfoldCode(view),
+};
+
+/**
  * Parse a vimrc string into mappings and settings.
  *
  * Ignores blank lines, comment lines (starting with `"`), and
@@ -81,6 +103,7 @@ const NUMERIC_OPTIONS = new Set([
 export function parseVimrc(content: string): VimrcResult {
   const mappings: VimMapping[] = [];
   const settings: VimSetting[] = [];
+  const exmaps: VimExmap[] = [];
   const errors: string[] = [];
   let mapleader = '\\';  // vim default leader
 
@@ -102,6 +125,22 @@ export function parseVimrc(content: string): VimrcResult {
         mapleader = rhs.replace(/^["']|["']$/g, '');
       } else {
         errors.push(`vimrc:${lineNum + 1}: unsupported let command: ${line}`);
+      }
+      continue;
+    }
+
+    // ── exmap — define ex commands bound to built-in actions ────────
+    if (cmd === 'exmap') {
+      if (parts.length >= 3) {
+        const name = parts[1];
+        const action = parts.slice(2).join(' ');
+        if (action in BUILTIN_ACTIONS) {
+          exmaps.push({ name, action });
+        } else {
+          errors.push(`vimrc:${lineNum + 1}: unknown action '${action}'. Available: ${Object.keys(BUILTIN_ACTIONS).join(', ')}`);
+        }
+      } else {
+        errors.push(`vimrc:${lineNum + 1}: exmap needs a name and action: ${line}`);
       }
       continue;
     }
@@ -171,10 +210,23 @@ export function parseVimrc(content: string): VimrcResult {
     errors.push(`vimrc:${lineNum + 1}: unsupported command: ${line}`);
   }
 
-  return { mappings, settings, errors };
+  return { mappings, settings, exmaps, errors };
 }
 
 // ── Apply to editor ───────────────────────────────────────────────────────
+
+/**
+ * Register ex commands from exmap declarations via Vim.defineEx.
+ */
+export function applyExmaps(exmaps: VimExmap[]): void {
+  for (const { name, action } of exmaps) {
+    const fn = BUILTIN_ACTIONS[action];
+    if (!fn) continue;
+    Vim.defineEx(name, name, (cm: any) => {
+      fn(cm.cm6);
+    });
+  }
+}
 
 /**
  * Apply parsed mappings via Vim.map / Vim.noremap.
@@ -249,6 +301,7 @@ export function vimMode(vimrcContent?: string): Extension[] {
     for (const err of result.errors) {
       console.error(err);
     }
+    applyExmaps(result.exmaps);
     applyMappings(result.mappings);
     extensions.push(...settingsToExtensions(result.settings));
   }

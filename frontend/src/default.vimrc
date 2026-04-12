@@ -25,5 +25,14 @@ nnoremap m d
 nnoremap mm dd
 xnoremap m d
 
-" soft-wrapping
-set wrap
+" Folding
+exmap togglefold toggle-fold
+exmap foldall fold-all
+exmap unfoldall unfold-all
+exmap foldcursor fold-at-cursor
+exmap unfoldcursor unfold-at-cursor
+nmap zo :togglefold<CR>
+nmap zc :foldcursor<CR>
+nmap za :togglefold<CR>
+nmap zM :foldall<CR>
+nmap zR :unfoldall<CR>
