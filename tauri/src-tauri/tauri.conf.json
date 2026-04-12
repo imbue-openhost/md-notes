@@ -1,0 +1,38 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicgirault/schemats/main/src/schemas/tauri.schema.json",
+  "productName": "md-notes",
+  "version": "0.1.0",
+  "identifier": "com.mdnotes.app",
+  "build": {
+    "frontendDist": "../../frontend/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "cd ../../frontend && npm run dev",
+    "beforeBuildCommand": "cd ../../frontend && npm run build"
+  },
+  "app": {
+    "title": "md-notes",
+    "windows": [
+      {
+        "title": "md-notes",
+        "width": 1200,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

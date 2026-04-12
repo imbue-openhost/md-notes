@@ -7,11 +7,13 @@
 
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
+import { IndexeddbPersistence } from 'y-indexeddb';
 import { yCollab } from 'y-codemirror.next';
 import type { Extension } from '@codemirror/state';
 
 let ydoc: Y.Doc | null = null;
 let provider: WebsocketProvider | null = null;
+let idbPersistence: IndexeddbPersistence | null = null;
 let ytext: Y.Text | null = null;
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
@@ -61,6 +63,9 @@ export function initSync(
   const wsUrl = getWsUrl(serverUrl) + '/ws/sync';
   provider = new WebsocketProvider(wsUrl, docPath, ydoc);
 
+  // IndexedDB persistence for offline support
+  idbPersistence = new IndexeddbPersistence(`mdnotes-${docPath}`, ydoc);
+
   provider.on('status', (event: { status: string }) => {
     notifyStatus(event.status as ConnectionStatus);
   });
@@ -81,6 +86,10 @@ export function destroySync(): void {
     provider.disconnect();
     provider.destroy();
     provider = null;
+  }
+  if (idbPersistence) {
+    idbPersistence.destroy();
+    idbPersistence = null;
   }
   if (ydoc) {
     ydoc.destroy();
