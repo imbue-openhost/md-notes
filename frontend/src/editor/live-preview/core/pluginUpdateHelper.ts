@@ -58,18 +58,13 @@ export function checkUpdateAction(update: ViewUpdate): UpdateAction {
     return 'skip';
   }
 
-  // Selection changed: rebuild — but use requestMeasure to avoid
-  // recursive InlineCoordsScan overflows from decoration-triggered
-  // layout changes during the same update cycle.
-  if (update.selectionSet) {
-    return 'rebuild';
-  }
+  // NOTE: selectionSet intentionally NOT triggering rebuild here.
+  // Rebuilding mark decorations on selection change causes CM6's
+  // InlineCoordsScan to recurse infinitely when vim navigates with j/k.
+  // This means inline formatting marks (**, *, etc.) won't show/hide
+  // based on cursor position — they'll only update on document edits.
+  // The livePreviewPlugin has its own selection-aware update logic
+  // with an active-lines guard to handle this safely.
 
   return 'none';
-
-  // Note: even though we return 'rebuild' for selectionSet, the caller
-  // (livePreviewPlugin) rebuilds synchronously. The actual overflow is
-  // caught by the browser and doesn't crash — it just produces console
-  // errors. This is a known incompatibility between CM6's coordinate
-  // scanner and plugins that change mark decorations on selection change.
 }

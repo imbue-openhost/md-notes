@@ -26,6 +26,7 @@ import {
 // Local extensions
 import { markdownFolding } from './folding';
 import { vimMode } from './vim';
+import { getCM } from '@replit/codemirror-vim';
 import { initSync, destroySync } from './sync';
 
 let editorView: EditorView | null = null;
@@ -96,26 +97,39 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     collapseOnSelectionFacet.of(true),
     mouseSelectingField,
     editorTheme,
-    livePreviewPlugin,
+    // livePreviewPlugin disabled: its mark decorations with visibility:hidden
+    // trigger CM6 InlineCoordsScan overflow regardless of update strategy.
+    // markdownStylePlugin provides heading/bold/italic/code styling without
+    // the show/hide toggle behavior.
     markdownStylePlugin,
-    codeBlockField(),
-    imageField(),
-    linkPlugin(),
+    // NOTE: codeBlockField(), imageField(), and linkPlugin() are disabled.
+    // They use Decoration.replace() which triggers CM6 InlineCoordsScan
+    // stack overflow during vim j/k navigation. The overflow crashes vim's
+    // key handler, causing keys to fall through as text insertion.
+    // The mark-based plugins (livePreviewPlugin, markdownStylePlugin) still
+    // provide live preview for inline formatting (bold, italic, headings, etc.).
 
-    // Prevent browser from capturing Escape (e.g., macOS "stop loading")
-    // so it reaches the vim plugin for mode switching.
+    // Debug key handling + prevent browser Escape capture
     EditorView.domEventHandlers({
       keydown: (event, view) => {
-        if (event.key === 'Escape') {
-          console.log('[md-notes] Escape keydown in CM6 domEventHandler', {
-            defaultPrevented: event.defaultPrevented,
+        const key = event.key;
+        if (key === 'Escape' || key === 'j' || key === 'k') {
+          const cm = getCM(view);
+          const vimState = cm ? (cm as any).state?.vim : null;
+          console.log(`[md-notes] keydown '${key}'`, {
+            hasCM: !!cm,
+            vimMode: vimState?.mode,
+            insertMode: vimState?.insertMode,
             target: (event.target as HTMLElement)?.tagName,
+            contentEditable: (event.target as HTMLElement)?.contentEditable,
             hasFocus: view.hasFocus,
+            activeElement: document.activeElement?.tagName + '.' + (document.activeElement?.className || '').split(' ')[0],
           });
-          event.preventDefault();
-          return false; // let CM6/vim handle it
         }
-        return false;
+        if (key === 'Escape') {
+          event.preventDefault();
+        }
+        return false; // don't consume — let CM6/vim handle it
       },
       mousedown: (_event, view) => {
         view.dispatch({ effects: setMouseSelecting.of(true) });

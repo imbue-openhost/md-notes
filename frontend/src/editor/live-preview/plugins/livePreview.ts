@@ -1,5 +1,5 @@
 import { syntaxTree } from '@codemirror/language';
-import { Range } from '@codemirror/state';
+import { EditorState, Range } from '@codemirror/state';
 import {
   Decoration,
   DecorationSet,
@@ -10,6 +10,12 @@ import {
 import { shouldShowSource } from '../core/shouldShowSource';
 import { mouseSelectingField } from '../core/mouseSelecting';
 import { checkUpdateAction } from '../core/pluginUpdateHelper';
+
+function setsEqual(a: Set<number>, b: Set<number>): boolean {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
 
 /**
  * Parent node types to skip
@@ -47,30 +53,40 @@ function isInsideSkippedParent(node: {
 export const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    private activeLines: Set<number> = new Set();
 
     constructor(view: EditorView) {
       this.decorations = this.build(view);
     }
 
     update(update: ViewUpdate) {
-      if (checkUpdateAction(update) === 'rebuild') {
+      // Only rebuild on document changes. Selection-based rebuilds
+      // (showing/hiding marks near cursor) cause InlineCoordsScan
+      // stack overflow with vim navigation.
+      if (update.docChanged) {
         this.decorations = this.build(update.view);
       }
+    }
+
+    private getActiveLines(state: EditorState): Set<number> {
+      const lines = new Set<number>();
+      for (const range of state.selection.ranges) {
+        const startLine = state.doc.lineAt(range.from).number;
+        const endLine = state.doc.lineAt(range.to).number;
+        for (let l = startLine; l <= endLine; l++) {
+          lines.add(l);
+        }
+      }
+      return lines;
     }
 
     build(view: EditorView) {
       const decorations: Range<Decoration>[] = [];
       const { state } = view;
 
-      // Get all active lines
-      const activeLines = new Set<number>();
-      for (const range of state.selection.ranges) {
-        const startLine = state.doc.lineAt(range.from).number;
-        const endLine = state.doc.lineAt(range.to).number;
-        for (let l = startLine; l <= endLine; l++) {
-          activeLines.add(l);
-        }
-      }
+      // Get all active lines and cache for change detection
+      const activeLines = this.getActiveLines(state);
+      this.activeLines = activeLines;
 
       const isDrag = state.field(mouseSelectingField, false);
 
