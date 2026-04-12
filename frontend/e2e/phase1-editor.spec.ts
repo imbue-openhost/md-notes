@@ -97,7 +97,10 @@ test.describe('Phase 1: Editor Core', () => {
 
     // Filter out expected warnings (e.g., lowlight not available)
     const realErrors = errors.filter(
-      (e) => !e.includes('lowlight') && !e.includes('Failed to fetch')
+      (e) =>
+        !e.includes('lowlight') &&
+        !e.includes('Failed to fetch') &&
+        !e.includes('ERR_CONNECTION_REFUSED')
     );
     expect(realErrors).toEqual([]);
   });

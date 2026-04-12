@@ -41,3 +41,101 @@ body {
 #editor-container .cm-scroller {
   overflow: auto;
 }
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+#sidebar {
+  width: 240px;
+  min-width: 180px;
+  border-right: 1px solid hsl(var(--border));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: hsl(var(--muted));
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.sidebar-btn {
+  background: none;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 8px;
+  color: hsl(var(--foreground));
+}
+
+.sidebar-btn:hover {
+  background: hsl(var(--border));
+}
+
+.sidebar-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.sidebar-tree ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-children {
+  display: none;
+  padding-left: 12px;
+}
+
+li.open > .sidebar-children {
+  display: block;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 4px;
+  margin: 1px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-item:hover {
+  background: hsl(var(--border));
+}
+
+.sidebar-item.active {
+  background: hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary));
+}
+
+.sidebar-arrow {
+  font-size: 10px;
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.sidebar-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.sidebar-error {
+  padding: 12px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  text-align: center;
+}

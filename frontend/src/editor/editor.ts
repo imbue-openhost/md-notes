@@ -141,6 +141,23 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 }
 
 /**
+ * Replace the editor content with new text (e.g., when opening a file).
+ */
+export function setEditorContent(content: string): void {
+  if (!editorView) return;
+  editorView.dispatch({
+    changes: { from: 0, to: editorView.state.doc.length, insert: content },
+  });
+}
+
+/**
+ * Get the current editor document as a string.
+ */
+export function getEditorContent(): string {
+  return editorView?.state.doc.toString() ?? '';
+}
+
+/**
  * Get the current EditorView instance.
  */
 export function getEditorView(): EditorView | null {
