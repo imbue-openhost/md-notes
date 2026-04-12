@@ -26,7 +26,6 @@ import {
 // Local extensions
 import { markdownFolding } from './folding';
 import { vimMode } from './vim';
-import { getCM } from '@replit/codemirror-vim';
 import { initSync, destroySync } from './sync';
 
 let editorView: EditorView | null = null;
@@ -109,27 +108,13 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     // The mark-based plugins (livePreviewPlugin, markdownStylePlugin) still
     // provide live preview for inline formatting (bold, italic, headings, etc.).
 
-    // Debug key handling + prevent browser Escape capture
+    // Prevent browser from capturing Escape before vim gets it
     EditorView.domEventHandlers({
-      keydown: (event, view) => {
-        const key = event.key;
-        if (key === 'Escape' || key === 'j' || key === 'k') {
-          const cm = getCM(view);
-          const vimState = cm ? (cm as any).state?.vim : null;
-          console.log(`[md-notes] keydown '${key}'`, {
-            hasCM: !!cm,
-            vimMode: vimState?.mode,
-            insertMode: vimState?.insertMode,
-            target: (event.target as HTMLElement)?.tagName,
-            contentEditable: (event.target as HTMLElement)?.contentEditable,
-            hasFocus: view.hasFocus,
-            activeElement: document.activeElement?.tagName + '.' + (document.activeElement?.className || '').split(' ')[0],
-          });
-        }
-        if (key === 'Escape') {
+      keydown: (event) => {
+        if (event.key === 'Escape') {
           event.preventDefault();
         }
-        return false; // don't consume — let CM6/vim handle it
+        return false;
       },
       mousedown: (_event, view) => {
         view.dispatch({ effects: setMouseSelecting.of(true) });
