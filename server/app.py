@@ -18,17 +18,23 @@ def create_app() -> Quart:
     # Register route blueprints
     from .routes.files import bp as files_bp
     from .routes.sync import bp as sync_bp, start_ws_server, stop_ws_server
+    from .routes.share import bp as share_bp
+    from .db import init_db, close_db
+    from .config import DB_PATH
 
     app.register_blueprint(files_bp)
     app.register_blueprint(sync_bp)
+    app.register_blueprint(share_bp)
 
     @app.before_serving
     async def startup():
+        init_db(DB_PATH)
         await start_ws_server()
 
     @app.after_serving
     async def shutdown():
         await stop_ws_server()
+        close_db()
 
     # ── Serve frontend static files ──────────────────────────────────────
     @app.route("/")

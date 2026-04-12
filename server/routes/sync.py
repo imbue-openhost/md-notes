@@ -50,7 +50,10 @@ class QuartWebsocketChannel:
             if isinstance(data, str):
                 return data.encode()
             return data
+        except (asyncio.CancelledError, GeneratorExit):
+            raise StopAsyncIteration
         except Exception:
+            log.debug("WebSocket receive error on %s", self._path, exc_info=True)
             raise StopAsyncIteration
 
     async def send(self, message: bytes) -> None:
@@ -94,7 +97,7 @@ async def _save_room(room_name: str, room: YRoom) -> None:
     """Write Y.Doc text content back to the .md file."""
     try:
         doc = room.ydoc
-        text = doc.get("content")
+        text = doc.get("content", type=Text)
         if text is None:
             return
         content = str(text)
@@ -143,7 +146,7 @@ async def stop_ws_server() -> None:
             room = await _ws_server.get_room(room_name)
             await _save_room(room_name, room)
         except Exception:
-            pass
+            log.exception("Failed to save room %s during shutdown", room_name)
     await _ws_server.stop()
     if _ws_server_task:
         _ws_server_task.cancel()
@@ -151,6 +154,30 @@ async def stop_ws_server() -> None:
     _ws_server = None
     _initialised_rooms.clear()
     log.info("Yjs WebSocket server stopped")
+
+
+# ── Public API (used by share.py) ─────────────────────────────────────────
+
+def get_ws_server() -> WebsocketServer | None:
+    """Return the global WebSocket server instance."""
+    return _ws_server
+
+
+async def serve_document(ws_server: WebsocketServer, ws, doc_path: str) -> None:
+    """Set up a room for doc_path and serve the given websocket connection."""
+    room = await ws_server.get_room(doc_path)
+    _init_room_doc(room, doc_path)
+    room.ready = True
+
+    channel = QuartWebsocketChannel(ws, doc_path)
+
+    try:
+        await ws_server.serve(channel)
+    finally:
+        if not room.clients:
+            await _save_room(doc_path, room)
+            await ws_server.delete_room(room=room)
+            _initialised_rooms.discard(doc_path)
 
 
 # ── WebSocket route ───────────────────────────────────────────────────────
@@ -162,18 +189,4 @@ async def sync_doc(filepath: str):
         await websocket.close(1011, "Sync server not running")
         return
 
-    room_name = filepath
-    room = await _ws_server.get_room(room_name)
-    _init_room_doc(room, room_name)
-    room.ready = True
-
-    channel = QuartWebsocketChannel(websocket._get_current_object(), room_name)
-
-    try:
-        await _ws_server.serve(channel)
-    finally:
-        # When last client disconnects, save to disk
-        if not room.clients:
-            await _save_room(room_name, room)
-            await _ws_server.delete_room(room=room)
-            _initialised_rooms.discard(room_name)
+    await serve_document(_ws_server, websocket._get_current_object(), filepath)

@@ -1,7 +1,7 @@
 import './style.css';
 import { createEditor } from './editor/editor';
 import { createSidebar, refreshSidebar, setCurrentFile } from './ui/sidebar';
-import { setApiBaseUrl, getApiBaseUrl } from './api/client';
+import { setApiBaseUrl } from './api/client';
 
 const DEFAULT_VIMRC = `
 " Default vimrc

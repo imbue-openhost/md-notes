@@ -67,13 +67,14 @@ live preview toggle between source and rendered output.
 /**
  * Build the full extension set for the markdown editor.
  */
-function buildExtensions(vimrcContent?: string): Extension[] {
+function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
   return [
     // Vim mode first so it captures keys before other keymaps
     vimMode(vimrcContent),
 
-    // Core editing
-    history(),
+    // Core editing — skip CM6 history when Yjs sync is active
+    // (yCollab provides its own Y.UndoManager)
+    ...(useSync ? [] : [history()]),
     drawSelection(),
     highlightActiveLine(),
     highlightSelectionMatches(),
@@ -81,7 +82,11 @@ function buildExtensions(vimrcContent?: string): Extension[] {
     lineNumbers(),
 
     // Keymaps
-    keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+    keymap.of([
+      ...defaultKeymap,
+      ...(useSync ? [] : historyKeymap),
+      ...searchKeymap,
+    ]),
 
     // Markdown language support
     markdown({ base: markdownLanguage, codeLanguages: languages }),
@@ -133,7 +138,8 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     editorView.destroy();
   }
 
-  const extensions = buildExtensions(options.vimrcContent);
+  const useSync = !!(options.syncDocPath && options.syncServerUrl);
+  const extensions = buildExtensions(options.vimrcContent, useSync);
 
   // Add Yjs sync if configured
   if (options.syncDocPath && options.syncServerUrl) {
