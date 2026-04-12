@@ -20,6 +20,9 @@ env/
 node_modules/
 test-results/
 
+# Rust
+target/
+
 # IDE
 .idea/
 .vscode/

@@ -1,5 +1,4 @@
 {
-  "$schema": "https://raw.githubusercontent.com/nicgirault/schemats/main/src/schemas/tauri.schema.json",
   "productName": "md-notes",
   "version": "0.1.0",
   "identifier": "com.mdnotes.app",
@@ -10,7 +9,6 @@
     "beforeBuildCommand": "cd ../../frontend && npm run build"
   },
   "app": {
-    "title": "md-notes",
     "windows": [
       {
         "title": "md-notes",
