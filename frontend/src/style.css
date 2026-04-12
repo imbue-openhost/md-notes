@@ -247,6 +247,79 @@ li.open > .sidebar-children {
   box-sizing: border-box;
 }
 
+.share-modal-body {
+  font-size: 13px;
+}
+
+.share-modal-empty {
+  color: hsl(var(--muted-foreground));
+  padding: 8px 0;
+}
+
+.share-link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.share-link-row {
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.share-link-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.share-link-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
+.share-link-badge-write {
+  background: hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary));
+}
+
+.share-link-date {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+}
+
+.share-link-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.share-modal-btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.share-modal-btn-danger {
+  color: hsl(0 84% 40%);
+  border-color: hsl(0 84% 80%);
+}
+
+.share-modal-btn-danger:hover {
+  background: hsl(0 84% 95%);
+}
+
+.share-new-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid hsl(var(--border));
+}
+
 .share-modal-error {
   color: hsl(0 84% 40%);
   font-size: 13px;
