@@ -166,3 +166,88 @@ li.open > .sidebar-children {
 .sidebar-context-item:hover {
   background: hsl(var(--muted));
 }
+
+/* ── Share modal ──────────────────────────────────────────── */
+.share-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.share-modal {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 340px;
+  max-width: 480px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.share-modal-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 16px;
+  word-break: break-all;
+}
+
+.share-modal-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.share-modal-btn {
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  color: hsl(var(--foreground));
+}
+
+.share-modal-btn:hover {
+  background: hsl(var(--border));
+}
+
+.share-modal-btn-primary {
+  background: hsl(var(--primary));
+  color: white;
+  border-color: hsl(var(--primary));
+}
+
+.share-modal-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.share-modal-result {
+  margin-top: 12px;
+}
+
+.share-modal-label {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 6px;
+}
+
+.share-modal-link {
+  width: 100%;
+  padding: 8px;
+  font-size: 12px;
+  font-family: monospace;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+
+.share-modal-error {
+  color: hsl(0 84% 40%);
+  font-size: 13px;
+}

@@ -45,16 +45,85 @@ if (shareConfig) {
   }
 
   async function handleShare(path: string): Promise<void> {
-    const permission = confirm('Allow editing? (OK = read-write, Cancel = read-only)')
-      ? 'write' : 'read';
-    try {
-      const uuid = await createShareLink(path, permission as 'read' | 'write');
-      const link = `${window.location.origin}/share/${uuid}`;
-      await navigator.clipboard.writeText(link);
-      alert(`Share link copied to clipboard:\n${link}\n\nPermission: ${permission}`);
-    } catch (e) {
-      alert(`Failed to create share link: ${e}`);
+    showShareModal(path);
+  }
+
+  function showShareModal(path: string): void {
+    // Remove any existing modal
+    document.querySelector('.share-modal-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'share-modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'share-modal';
+
+    const title = document.createElement('div');
+    title.className = 'share-modal-title';
+    title.textContent = `Share: ${path}`;
+    modal.appendChild(title);
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'share-modal-buttons';
+
+    async function generate(permission: 'read' | 'write') {
+      try {
+        const uuid = await createShareLink(path, permission);
+        const link = `${window.location.origin}/share/${uuid}`;
+
+        // Show the link
+        btnRow.innerHTML = '';
+        const result = document.createElement('div');
+        result.className = 'share-modal-result';
+
+        const label = document.createElement('div');
+        label.className = 'share-modal-label';
+        label.textContent = permission === 'read' ? 'Read-only link:' : 'Editable link:';
+        result.appendChild(label);
+
+        const input = document.createElement('input');
+        input.className = 'share-modal-link';
+        input.type = 'text';
+        input.value = link;
+        input.readOnly = true;
+        input.addEventListener('click', () => input.select());
+        result.appendChild(input);
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'share-modal-btn';
+        copyBtn.textContent = 'Copy';
+        copyBtn.addEventListener('click', async () => {
+          await navigator.clipboard.writeText(link);
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+        });
+        result.appendChild(copyBtn);
+
+        modal.appendChild(result);
+      } catch (e) {
+        btnRow.innerHTML = `<div class="share-modal-error">Failed: ${e}</div>`;
+      }
     }
+
+    const readBtn = document.createElement('button');
+    readBtn.className = 'share-modal-btn';
+    readBtn.textContent = 'Read-only link';
+    readBtn.addEventListener('click', () => generate('read'));
+    btnRow.appendChild(readBtn);
+
+    const writeBtn = document.createElement('button');
+    writeBtn.className = 'share-modal-btn share-modal-btn-primary';
+    writeBtn.textContent = 'Editable link';
+    writeBtn.addEventListener('click', () => generate('write'));
+    btnRow.appendChild(writeBtn);
+
+    modal.appendChild(btnRow);
+
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
   }
 
   createSidebar(app, handleFileSelect, handleShare);
