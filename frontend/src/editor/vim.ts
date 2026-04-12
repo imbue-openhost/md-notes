@@ -80,6 +80,7 @@ const NUMERIC_OPTIONS = new Set([
 export function parseVimrc(content: string): VimrcResult {
   const mappings: VimMapping[] = [];
   const settings: VimSetting[] = [];
+  let mapleader = '\\';  // vim default leader
 
   for (const raw of content.split('\n')) {
     const line = raw.trim();
@@ -91,11 +92,23 @@ export function parseVimrc(content: string): VimrcResult {
     // Strip leading colon (`:inoremap` → `inoremap`)
     const cmd = parts[0].replace(/^:/, '');
 
+    // ── let mapleader ───────────────────────────────────────────────
+    if (cmd === 'let' && parts.length >= 3 && parts[1] === 'mapleader') {
+      // let mapleader = ","  or  let mapleader=","
+      const rhs = parts.slice(2).join(' ').replace(/^=\s*/, '');
+      // Strip quotes: "," → ,  or ',' → ,
+      mapleader = rhs.replace(/^["']|["']$/g, '');
+      continue;
+    }
+
     // ── map / noremap variants ──────────────────────────────────────
     if (cmd in MODE_MAP && parts.length >= 3) {
+      // Expand <Leader> to the mapleader character
+      const lhs = parts[1].replace(/<[Ll]eader>/g, mapleader);
+      const rhs = parts.slice(2).join(' ').replace(/<[Ll]eader>/g, mapleader);
       mappings.push({
-        lhs: parts[1],
-        rhs: parts.slice(2).join(' '),
+        lhs,
+        rhs,
         context: MODE_MAP[cmd],
         noremap: NOREMAP_CMDS.has(cmd),
       });
