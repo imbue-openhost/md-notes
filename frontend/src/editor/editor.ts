@@ -75,11 +75,11 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     // Core editing — skip CM6 history when Yjs sync is active
     // (yCollab provides its own Y.UndoManager)
     ...(useSync ? [] : [history()]),
+    EditorView.lineWrapping,
     drawSelection(),
     highlightActiveLine(),
     highlightSelectionMatches(),
     bracketMatching(),
-    lineNumbers(),
 
     // Keymaps
     keymap.of([

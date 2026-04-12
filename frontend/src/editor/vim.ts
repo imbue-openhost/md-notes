@@ -33,6 +33,7 @@ export interface VimSetting {
 export interface VimrcResult {
   mappings: VimMapping[];
   settings: VimSetting[];
+  errors: string[];
 }
 
 /**
@@ -80,10 +81,12 @@ const NUMERIC_OPTIONS = new Set([
 export function parseVimrc(content: string): VimrcResult {
   const mappings: VimMapping[] = [];
   const settings: VimSetting[] = [];
+  const errors: string[] = [];
   let mapleader = '\\';  // vim default leader
 
-  for (const raw of content.split('\n')) {
-    const line = raw.trim();
+  const lines = content.split('\n');
+  for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+    const line = lines[lineNum].trim();
 
     // Skip blanks and comments
     if (!line || line.startsWith('"')) continue;
@@ -93,25 +96,30 @@ export function parseVimrc(content: string): VimrcResult {
     const cmd = parts[0].replace(/^:/, '');
 
     // ── let mapleader ───────────────────────────────────────────────
-    if (cmd === 'let' && parts.length >= 3 && parts[1] === 'mapleader') {
-      // let mapleader = ","  or  let mapleader=","
-      const rhs = parts.slice(2).join(' ').replace(/^=\s*/, '');
-      // Strip quotes: "," → ,  or ',' → ,
-      mapleader = rhs.replace(/^["']|["']$/g, '');
+    if (cmd === 'let') {
+      if (parts.length >= 3 && parts[1] === 'mapleader') {
+        const rhs = parts.slice(2).join(' ').replace(/^=\s*/, '');
+        mapleader = rhs.replace(/^["']|["']$/g, '');
+      } else {
+        errors.push(`vimrc:${lineNum + 1}: unsupported let command: ${line}`);
+      }
       continue;
     }
 
     // ── map / noremap variants ──────────────────────────────────────
-    if (cmd in MODE_MAP && parts.length >= 3) {
-      // Expand <Leader> to the mapleader character
-      const lhs = parts[1].replace(/<[Ll]eader>/g, mapleader);
-      const rhs = parts.slice(2).join(' ').replace(/<[Ll]eader>/g, mapleader);
-      mappings.push({
-        lhs,
-        rhs,
-        context: MODE_MAP[cmd],
-        noremap: NOREMAP_CMDS.has(cmd),
-      });
+    if (cmd in MODE_MAP) {
+      if (parts.length >= 3) {
+        const lhs = parts[1].replace(/<[Ll]eader>/g, mapleader);
+        const rhs = parts.slice(2).join(' ').replace(/<[Ll]eader>/g, mapleader);
+        mappings.push({
+          lhs,
+          rhs,
+          context: MODE_MAP[cmd],
+          noremap: NOREMAP_CMDS.has(cmd),
+        });
+      } else {
+        errors.push(`vimrc:${lineNum + 1}: map command needs lhs and rhs: ${line}`);
+      }
       continue;
     }
 
@@ -126,7 +134,14 @@ export function parseVimrc(content: string): VimrcResult {
           const [, name, val] = eqMatch;
           if (NUMERIC_OPTIONS.has(name)) {
             settings.push({ name, value: parseInt(val, 10) });
+          } else {
+            errors.push(`vimrc:${lineNum + 1}: unsupported set option: ${name}`);
           }
+          continue;
+        }
+
+        // set option+=value (skip with no error — vim syntax we don't need)
+        if (token.includes('+=') || token.includes('-=')) {
           continue;
         }
 
@@ -135,6 +150,8 @@ export function parseVimrc(content: string): VimrcResult {
           const name = token.slice(2);
           if (BOOLEAN_OPTIONS.has(name)) {
             settings.push({ name, value: false });
+          } else {
+            errors.push(`vimrc:${lineNum + 1}: unsupported set option: ${token}`);
           }
           continue;
         }
@@ -144,12 +161,17 @@ export function parseVimrc(content: string): VimrcResult {
           settings.push({ name: token, value: true });
           continue;
         }
+
+        errors.push(`vimrc:${lineNum + 1}: unsupported set option: ${token}`);
       }
       continue;
     }
+
+    // Unrecognised command
+    errors.push(`vimrc:${lineNum + 1}: unsupported command: ${line}`);
   }
 
-  return { mappings, settings };
+  return { mappings, settings, errors };
 }
 
 // ── Apply to editor ───────────────────────────────────────────────────────
@@ -224,6 +246,9 @@ export function vimMode(vimrcContent?: string): Extension[] {
 
   if (vimrcContent) {
     const result = parseVimrc(vimrcContent);
+    for (const err of result.errors) {
+      console.error(err);
+    }
     applyMappings(result.mappings);
     extensions.push(...settingsToExtensions(result.settings));
   }

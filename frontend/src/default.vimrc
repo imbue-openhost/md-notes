@@ -1,5 +1,7 @@
 " Default vimrc (based on ~/.ideavimrc)
 
+let mapleader = ","
+
 " Use jk for esc in insert mode
 inoremap jk <Esc>
 inoremap Jk <Esc>
@@ -10,9 +12,6 @@ inoremap jK <Esc>
 set ignorecase
 set smartcase
 set incsearch
-
-" Use Q for formatting
-map Q gq
 
 " Vim-easyclip emulation: d/x delete to black hole, m cuts
 nnoremap d "_d
@@ -26,11 +25,5 @@ nnoremap m d
 nnoremap mm dd
 xnoremap m d
 
-" Editor settings
-set number
-set relativenumber
-set tabstop=4
-set shiftwidth=2
-set expandtab
+" soft-wrapping
 set wrap
-set scrolloff=5
