@@ -52,6 +52,7 @@ function getWsUrl(serverUrl: string): string {
 export function initSync(
   docPath: string,
   serverUrl: string,
+  apiKey?: string,
 ): { extension: Extension; getText: () => string } {
   destroySync();
 
@@ -61,7 +62,11 @@ export function initSync(
   // y-websocket appends roomname to the serverUrl, producing:
   // ws://<host>/ws/sync/<docPath>
   const wsUrl = getWsUrl(serverUrl) + '/ws/sync';
-  provider = new WebsocketProvider(wsUrl, docPath, ydoc);
+  const params: Record<string, string> = {};
+  if (apiKey) {
+    params.token = apiKey;
+  }
+  provider = new WebsocketProvider(wsUrl, docPath, ydoc, { params });
 
   // IndexedDB persistence for offline support
   idbPersistence = new IndexeddbPersistence(`mdnotes-${docPath}`, ydoc);

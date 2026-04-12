@@ -1,0 +1,13 @@
+node_modules
+.venv
+target
+.git
+.idea
+.vscode
+*.swp
+__pycache__
+test-results
+specs
+tauri
+frontend/e2e
+frontend/node_modules

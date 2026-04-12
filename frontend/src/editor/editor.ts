@@ -132,6 +132,8 @@ export interface EditorOptions {
   syncServerUrl?: string;
   /** If true, editor is read-only (for read-only share links). */
   readOnly?: boolean;
+  /** API key for authenticating WebSocket sync connections. */
+  apiKey?: string;
 }
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorView {
@@ -148,7 +150,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
   // Add Yjs sync if configured
   if (options.syncDocPath && options.syncServerUrl) {
-    const sync = initSync(options.syncDocPath, options.syncServerUrl);
+    const sync = initSync(options.syncDocPath, options.syncServerUrl, options.apiKey);
     extensions.push(sync.extension);
   }
 

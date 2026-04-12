@@ -5,10 +5,16 @@
 import type { FileEntry } from './types';
 
 let baseUrl = '';
+let apiKey = '';
 
 /** Set the API base URL (e.g., "http://localhost:8080"). */
 export function setApiBaseUrl(url: string): void {
   baseUrl = url.replace(/\/$/, '');
+}
+
+/** Set the API key for authenticated requests. */
+export function setApiKey(key: string): void {
+  apiKey = key;
 }
 
 /** Auto-detect: if served by the Quart server, baseUrl is empty (same-origin). */
@@ -17,7 +23,11 @@ export function getApiBaseUrl(): string {
 }
 
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  const res = await fetch(`${baseUrl}${path}`, init);
+  const headers = new Headers(init?.headers);
+  if (apiKey) {
+    headers.set('Authorization', `Bearer ${apiKey}`);
+  }
+  const res = await fetch(`${baseUrl}${path}`, { ...init, headers });
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`API ${res.status}: ${body}`);

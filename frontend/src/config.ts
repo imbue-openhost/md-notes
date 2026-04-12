@@ -32,3 +32,13 @@ export const serverUrl = isDevServer
 export function getShareConfig() {
   return typeof window !== 'undefined' ? window.__SHARE_CONFIG__ : undefined;
 }
+
+/**
+ * API key for authenticating with the server.
+ * In the Tauri app this would come from the config file.
+ * In the browser, same-origin requests go through the OpenHost
+ * router which handles auth, so no key is needed.
+ */
+export function getApiKey(): string {
+  return '';  // Browser doesn't need a key — OpenHost router handles auth
+}

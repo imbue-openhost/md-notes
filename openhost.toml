@@ -1,0 +1,22 @@
+[app]
+name = "md-notes"
+version = "0.1.0"
+description = "Obsidian-like markdown notes app with live preview and Yjs sync"
+
+[runtime.container]
+image = "Dockerfile"
+port = 8080
+
+[routing]
+health_check = "/health"
+# Share pages and their WebSocket sync are public.
+# Everything else goes through OpenHost router auth or API key.
+public_paths = ["/share/", "/ws/share/", "/health", "/assets/"]
+
+[resources]
+memory_mb = 256
+cpu_millicores = 200
+
+[data]
+sqlite = ["main"]
+app_data = true
