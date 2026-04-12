@@ -102,8 +102,16 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     imageField(),
     linkPlugin(),
 
-    // Mouse selecting tracking for live preview
+    // Prevent browser from capturing Escape (e.g., macOS "stop loading")
+    // so it reaches the vim plugin for mode switching.
     EditorView.domEventHandlers({
+      keydown: (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          return false; // let CM6/vim handle it
+        }
+        return false;
+      },
       mousedown: (_event, view) => {
         view.dispatch({ effects: setMouseSelecting.of(true) });
         const onUp = () => {
