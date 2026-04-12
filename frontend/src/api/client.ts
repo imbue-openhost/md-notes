@@ -56,3 +56,37 @@ export async function deleteFile(path: string): Promise<void> {
     method: 'DELETE',
   });
 }
+
+// ── Share links ───────────────────────────────────────────────────────────
+
+export interface ShareLink {
+  uuid: string;
+  doc_path: string;
+  permission: 'read' | 'write';
+  created_at: string;
+}
+
+export async function createShareLink(
+  docPath: string,
+  permission: 'read' | 'write' = 'read',
+): Promise<string> {
+  const res = await apiFetch('/api/share', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ docPath, permission }),
+  });
+  const data = await res.json();
+  return data.uuid;
+}
+
+export async function deleteShareLink(uuid: string): Promise<void> {
+  await apiFetch(`/api/share/${encodeURIComponent(uuid)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function listShareLinks(docPath?: string): Promise<ShareLink[]> {
+  const params = docPath ? `?docPath=${encodeURIComponent(docPath)}` : '';
+  const res = await apiFetch(`/api/share${params}`);
+  return res.json();
+}

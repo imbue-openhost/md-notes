@@ -1,12 +1,15 @@
 """Share link endpoints and shared document WebSocket."""
 
 import json
+import logging
 
 from quart import Blueprint, jsonify, request, websocket
 
 from ..config import FRONTEND_DIST
 from ..db import create_link, delete_link, get_link, list_links
-from .sync import get_ws_server, serve_document
+from .sync import get_ws_server, serve_document, QuartWebsocketChannel, _init_room_doc, _save_room, _initialised_rooms
+
+log = logging.getLogger(__name__)
 
 bp = Blueprint("share", __name__)
 
@@ -57,13 +60,10 @@ async def share_page(link_uuid: str):
     if not link:
         return "Share link not found or revoked", 404
 
-    # Serve the frontend index — the client reads the share config
-    # from a script tag we inject, or via a separate API call.
     index = FRONTEND_DIST / "index.html"
     if not index.exists():
         return "Frontend not built", 404
     html = index.read_text()
-    # Inject share config as a global variable — use json.dumps for proper escaping
     config_data = json.dumps({
         "uuid": link["uuid"],
         "docPath": link["doc_path"],
@@ -76,13 +76,58 @@ async def share_page(link_uuid: str):
 
 # ── Shared document WebSocket ─────────────────────────────────────────────
 
+# Yjs sync protocol message types (first byte of the message)
+_MSG_SYNC = 0        # sync protocol messages (step1, step2, update)
+_SYNC_UPDATE = 2     # third byte: it's an update (as opposed to step1=0, step2=1)
+
+
+class ReadOnlyChannel:
+    """Wraps a channel to enforce read-only access.
+
+    Allows the initial sync handshake (sync step 1 + step 2) so the
+    client receives the document contents, but drops any subsequent
+    Yjs sync updates from the client. Awareness messages pass through.
+    """
+
+    def __init__(self, inner: QuartWebsocketChannel):
+        self._inner = inner
+
+    @property
+    def path(self) -> str:
+        return self._inner.path
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self) -> bytes:
+        while True:
+            data = await self._inner.__anext__()
+            if len(data) < 2:
+                return data
+            msg_type = data[0]
+            if msg_type == _MSG_SYNC:
+                sub_type = data[1]
+                if sub_type == _SYNC_UPDATE:
+                    # Drop sync updates from read-only clients
+                    log.debug("Dropped update from read-only client")
+                    continue
+            # Allow sync step1/step2 and awareness messages
+            return data
+
+    async def send(self, message: bytes) -> None:
+        await self._inner.send(message)
+
+    async def recv(self) -> bytes:
+        return await self._inner.recv()
+
+
 @bp.websocket("/ws/share/<link_uuid>")
 async def share_sync(link_uuid: str):
     """Yjs sync for shared documents.
 
-    Both read and write links connect to the same room. Read-only
-    enforcement happens on the client side (the editor is set to
-    readOnly mode). The server syncs normally for both.
+    Read-only links: server drops Yjs update messages from the client,
+    only allowing the initial sync handshake so they receive the doc.
+    Write links: full bidirectional sync.
     """
     link = get_link(link_uuid)
     if not link:
@@ -95,4 +140,21 @@ async def share_sync(link_uuid: str):
         return
 
     doc_path = link["doc_path"]
-    await serve_document(ws_server, websocket._get_current_object(), doc_path)
+    permission = link["permission"]
+
+    if permission == "read":
+        # Read-only: wrap channel to drop updates
+        room = await ws_server.get_room(doc_path)
+        _init_room_doc(room, doc_path)
+        room.ready = True
+        raw_channel = QuartWebsocketChannel(websocket._get_current_object(), doc_path)
+        channel = ReadOnlyChannel(raw_channel)
+        try:
+            await ws_server.serve(channel)
+        finally:
+            if not room.clients:
+                await _save_room(doc_path, room)
+                await ws_server.delete_room(room=room)
+                _initialised_rooms.discard(doc_path)
+    else:
+        await serve_document(ws_server, websocket._get_current_object(), doc_path)

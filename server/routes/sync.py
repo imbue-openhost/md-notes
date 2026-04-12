@@ -89,6 +89,12 @@ def _init_room_doc(room: YRoom, room_name: str) -> None:
     if content:
         text += content
 
+    # Subscribe to document changes for debounced auto-save
+    def on_change(event):
+        _schedule_save(room_name, room)
+
+    doc.observe(on_change)
+
     _initialised_rooms.add(room_name)
     log.info("Initialised room %s from disk (%d chars)", room_name, len(content))
 

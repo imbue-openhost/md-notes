@@ -130,9 +130,14 @@ export interface EditorOptions {
   syncDocPath?: string;
   /** Server URL for Yjs sync (e.g., "http://localhost:8080"). */
   syncServerUrl?: string;
+  /** If true, editor is read-only (for read-only share links). */
+  readOnly?: boolean;
 }
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorView {
+  editorContainer = container;
+  currentOptions = options;
+
   if (editorView) {
     destroySync();
     editorView.destroy();
@@ -145,6 +150,10 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   if (options.syncDocPath && options.syncServerUrl) {
     const sync = initSync(options.syncDocPath, options.syncServerUrl);
     extensions.push(sync.extension);
+  }
+
+  if (options.readOnly) {
+    extensions.push(EditorState.readOnly.of(true));
   }
 
   const state = EditorState.create({
@@ -175,6 +184,29 @@ export function setEditorContent(content: string): void {
  */
 export function getEditorContent(): string {
   return editorView?.state.doc.toString() ?? '';
+}
+
+// Store the container so openDocument() can re-create the editor.
+let editorContainer: HTMLElement | null = null;
+let currentOptions: EditorOptions = {};
+
+/**
+ * Open a document by path via Yjs sync, tearing down any existing session.
+ */
+export function openDocument(
+  path: string,
+  serverUrl: string,
+  opts: Pick<EditorOptions, 'vimrcContent' | 'readOnly'> = {},
+): EditorView {
+  if (!editorContainer) {
+    throw new Error('Editor not initialised — call createEditor() first');
+  }
+  return createEditor(editorContainer, {
+    ...currentOptions,
+    ...opts,
+    syncDocPath: path,
+    syncServerUrl: serverUrl,
+  });
 }
 
 /**

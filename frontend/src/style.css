@@ -139,3 +139,49 @@ li.open > .sidebar-children {
   font-size: 12px;
   text-align: center;
 }
+
+/* ── Editor toolbar ───────────────────────────────────────── */
+#editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+}
+
+.toolbar-btn {
+  background: none;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: hsl(var(--foreground));
+}
+
+.toolbar-btn:hover {
+  background: hsl(var(--muted));
+}
+
+/* ── Context menu ─────────────────────────────────────────── */
+.sidebar-context-menu {
+  position: fixed;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 140px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+}
+
+.sidebar-context-item {
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sidebar-context-item:hover {
+  background: hsl(var(--muted));
+}
