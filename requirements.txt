@@ -1,3 +1,5 @@
 quart>=0.20
 quart-cors>=0.8
 hypercorn>=0.17
+pycrdt>=0.12
+pycrdt-websocket>=0.16

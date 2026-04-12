@@ -140,17 +140,18 @@ test.describe('Phase 3: Server + File Management', () => {
   });
 
   test('sidebar shows file tree when API is available', async ({ page }) => {
-    // Point the frontend at our test server
-    await page.goto('/');
+    // Load the app served by the Quart server (which has the API)
+    await page.goto(`http://localhost:${SERVER_PORT}/`);
     await page.waitForSelector('.cm-editor', { timeout: 5000 });
 
-    // Override the API base URL via console
-    await page.evaluate((port) => {
-      (window as any).__setApiBaseUrl?.(`http://localhost:${port}`);
-    }, SERVER_PORT);
+    // Wait for sidebar to load file tree
+    await page.waitForTimeout(500);
 
-    // The sidebar should exist
+    // The sidebar should exist and contain files from the test vault
     const sidebar = page.locator('#sidebar');
     await expect(sidebar).toBeVisible();
+
+    // Check that file names appear in the sidebar
+    await expect(sidebar).toContainText('hello');
   });
 });

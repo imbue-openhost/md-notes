@@ -5,6 +5,7 @@ from quart import Blueprint, jsonify, request
 from ..config import VAULT_PATH
 from ..vault import (
     PathTraversalError,
+    create_directory,
     delete_file,
     list_files,
     read_file,
@@ -49,8 +50,7 @@ async def create_file(filepath: str):
     file_type = data.get("type", "file")
 
     if file_type == "dir":
-        target = VAULT_PATH / filepath
-        target.mkdir(parents=True, exist_ok=True)
+        create_directory(VAULT_PATH, filepath)
     else:
         content = data.get("content", "")
         write_file(VAULT_PATH, filepath, content)

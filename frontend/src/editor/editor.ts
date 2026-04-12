@@ -26,6 +26,7 @@ import {
 // Local extensions
 import { markdownFolding } from './folding';
 import { vimMode } from './vim';
+import { initSync, destroySync } from './sync';
 
 let editorView: EditorView | null = null;
 
@@ -120,16 +121,29 @@ function buildExtensions(vimrcContent?: string): Extension[] {
 export interface EditorOptions {
   initialDoc?: string;
   vimrcContent?: string;
+  /** If set, enables Yjs sync for this document path. */
+  syncDocPath?: string;
+  /** Server URL for Yjs sync (e.g., "http://localhost:8080"). */
+  syncServerUrl?: string;
 }
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorView {
   if (editorView) {
+    destroySync();
     editorView.destroy();
   }
 
+  const extensions = buildExtensions(options.vimrcContent);
+
+  // Add Yjs sync if configured
+  if (options.syncDocPath && options.syncServerUrl) {
+    const sync = initSync(options.syncDocPath, options.syncServerUrl);
+    extensions.push(sync.extension);
+  }
+
   const state = EditorState.create({
-    doc: options.initialDoc ?? SAMPLE_MD,
-    extensions: buildExtensions(options.vimrcContent),
+    doc: options.syncDocPath ? '' : (options.initialDoc ?? SAMPLE_MD),
+    extensions,
   });
 
   editorView = new EditorView({

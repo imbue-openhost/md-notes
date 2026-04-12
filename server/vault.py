@@ -72,6 +72,12 @@ def write_file(root: Path, rel_path: str, content: str) -> None:
     target.write_text(content, encoding="utf-8")
 
 
+def create_directory(root: Path, rel_path: str) -> None:
+    """Create a directory inside the vault."""
+    target = _resolve_and_validate(root, rel_path)
+    target.mkdir(parents=True, exist_ok=True)
+
+
 def delete_file(root: Path, rel_path: str) -> None:
     """Delete a file or empty directory."""
     target = _resolve_and_validate(root, rel_path)
