@@ -9,9 +9,9 @@ port = 8080
 
 [routing]
 health_check = "/health"
-# Share pages and their WebSocket sync are public.
-# Everything else goes through OpenHost router auth or API key.
-public_paths = ["/share/", "/ws/share/", "/health", "/assets/"]
+# All routes are public — the app handles its own auth via API key.
+# OpenHost router owner sessions are also accepted (X-OpenHost-Is-Owner).
+public_paths = ["/"]
 
 [resources]
 memory_mb = 256
