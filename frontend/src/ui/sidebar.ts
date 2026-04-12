@@ -10,17 +10,21 @@ import type { FileEntry } from '../api/types';
 import { listFiles, createFile, deleteFile, renameFile } from '../api/client';
 
 export type OnFileSelect = (path: string) => void;
+export type OnShare = (path: string) => void;
 
 let currentPath: string | null = null;
 let container: HTMLElement | null = null;
 let onFileSelect: OnFileSelect | null = null;
+let onShare: OnShare | null = null;
 
 /** Create and mount the sidebar. */
 export function createSidebar(
   parent: HTMLElement,
   onSelect: OnFileSelect,
+  onShareCb?: OnShare,
 ): HTMLElement {
   onFileSelect = onSelect;
+  onShare = onShareCb ?? null;
 
   container = document.createElement('div');
   container.id = 'sidebar';
@@ -28,14 +32,34 @@ export function createSidebar(
   // Header
   const header = document.createElement('div');
   header.className = 'sidebar-header';
-  header.textContent = 'Files';
+
+  const title = document.createElement('span');
+  title.textContent = 'Files';
+  header.appendChild(title);
+
+  const buttons = document.createElement('div');
+  buttons.className = 'sidebar-header-buttons';
 
   const newBtn = document.createElement('button');
   newBtn.className = 'sidebar-btn';
   newBtn.textContent = '+';
   newBtn.title = 'New file';
   newBtn.addEventListener('click', handleNewFile);
-  header.appendChild(newBtn);
+  buttons.appendChild(newBtn);
+
+  if (onShareCb) {
+    const shareBtn = document.createElement('button');
+    shareBtn.className = 'sidebar-btn';
+    shareBtn.textContent = '\u{1F517}'; // 🔗
+    shareBtn.title = 'Share current file';
+    shareBtn.addEventListener('click', () => {
+      if (currentPath) onShare?.(currentPath);
+      else alert('Open a file first.');
+    });
+    buttons.appendChild(shareBtn);
+  }
+
+  header.appendChild(buttons);
 
   container.appendChild(header);
 

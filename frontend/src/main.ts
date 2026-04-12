@@ -44,36 +44,21 @@ if (shareConfig) {
     });
   }
 
-  createSidebar(app, handleFileSelect);
-  app.appendChild(editorContainer);
-
-  // Share button in a toolbar above the editor
-  const toolbar = document.createElement('div');
-  toolbar.id = 'editor-toolbar';
-
-  const shareBtn = document.createElement('button');
-  shareBtn.className = 'toolbar-btn';
-  shareBtn.textContent = 'Share';
-  shareBtn.title = 'Generate a share link for this document';
-  shareBtn.addEventListener('click', async () => {
-    if (!currentDocPath) {
-      alert('Open a file first.');
-      return;
-    }
+  async function handleShare(path: string): Promise<void> {
     const permission = confirm('Allow editing? (OK = read-write, Cancel = read-only)')
       ? 'write' : 'read';
     try {
-      const uuid = await createShareLink(currentDocPath, permission as 'read' | 'write');
+      const uuid = await createShareLink(path, permission as 'read' | 'write');
       const link = `${window.location.origin}/share/${uuid}`;
       await navigator.clipboard.writeText(link);
       alert(`Share link copied to clipboard:\n${link}\n\nPermission: ${permission}`);
     } catch (e) {
       alert(`Failed to create share link: ${e}`);
     }
-  });
-  toolbar.appendChild(shareBtn);
+  }
 
-  editorContainer.insertAdjacentElement('beforebegin', toolbar);
+  createSidebar(app, handleFileSelect, handleShare);
+  app.appendChild(editorContainer);
 
   // Start with the sample doc (no sync)
   createEditor(editorContainer, { vimrcContent: DEFAULT_VIMRC });
