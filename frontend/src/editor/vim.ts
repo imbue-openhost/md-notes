@@ -46,12 +46,14 @@ const MODE_MAP: Record<string, string> = {
   nnoremap: 'normal',
   vmap: 'visual',
   vnoremap: 'visual',
+  xmap: 'visual',    // xmap = visual mode (like vmap)
+  xnoremap: 'visual',
   imap: 'insert',
   inoremap: 'insert',
 };
 
 const NOREMAP_CMDS = new Set([
-  'noremap', 'nnoremap', 'vnoremap', 'inoremap',
+  'noremap', 'nnoremap', 'vnoremap', 'xnoremap', 'inoremap',
 ]);
 
 /**
@@ -59,6 +61,7 @@ const NOREMAP_CMDS = new Set([
  */
 const BOOLEAN_OPTIONS = new Set([
   'number', 'relativenumber', 'expandtab', 'wrap',
+  'ignorecase', 'smartcase', 'incsearch',
 ]);
 
 /**
@@ -85,7 +88,8 @@ export function parseVimrc(content: string): VimrcResult {
     if (!line || line.startsWith('"')) continue;
 
     const parts = line.split(/\s+/);
-    const cmd = parts[0];
+    // Strip leading colon (`:inoremap` → `inoremap`)
+    const cmd = parts[0].replace(/^:/, '');
 
     // ── map / noremap variants ──────────────────────────────────────
     if (cmd in MODE_MAP && parts.length >= 3) {
@@ -183,6 +187,12 @@ export function settingsToExtensions(settings: VimSetting[]): Extension[] {
         break;
       case 'scrolloff':
         Vim.setOption('scrolloff', s.value);
+        break;
+      case 'ignorecase':
+      case 'smartcase':
+      case 'incsearch':
+        // These are handled by the vim plugin directly
+        Vim.setOption(s.name, s.value);
         break;
     }
   }
