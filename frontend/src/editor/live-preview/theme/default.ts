@@ -39,31 +39,21 @@ export const editorTheme = EditorView.theme({
   },
 
   // ========== Inline Mark Animation ==========
+  // Use visibility:hidden to hide marks — keeps them in layout so
+  // CM6's InlineCoordsScan doesn't overflow recalculating positions.
   '.cm-formatting-inline': {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    whiteSpace: 'nowrap',
-    verticalAlign: 'baseline',
+    visibility: 'hidden',
+    fontSize: '0.01px',
+    letterSpacing: '0',
     color: 'hsl(var(--muted-foreground, 220 9% 46%) / 0.6)',
     fontFamily: "'JetBrains Mono', monospace",
-    fontSize: '0.85em',
-    maxWidth: '0',
-    opacity: '0',
-    transform: 'scaleX(0.8)',
-    transition: `
-      max-width 0.2s cubic-bezier(0.2, 0, 0.2, 1),
-      opacity 0.15s ease-out,
-      transform 0.15s ease-out
-    `,
     pointerEvents: 'none',
   },
 
   '.cm-formatting-inline-visible': {
-    maxWidth: '4ch',
-    opacity: '1',
-    transform: 'scaleX(1)',
+    visibility: 'visible',
+    fontSize: '0.85em',
+    opacity: '0.6',
     margin: '0 1px',
     pointerEvents: 'auto',
   },

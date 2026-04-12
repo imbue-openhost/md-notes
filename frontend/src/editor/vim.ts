@@ -197,7 +197,7 @@ export function settingsToExtensions(settings: VimSetting[]): Extension[] {
  * it is parsed and the resulting mappings/settings are applied.
  */
 export function vimMode(vimrcContent?: string): Extension[] {
-  const extensions: Extension[] = [vim()];
+  const extensions: Extension[] = [vim({ status: true })];
 
   if (vimrcContent) {
     const result = parseVimrc(vimrcContent);

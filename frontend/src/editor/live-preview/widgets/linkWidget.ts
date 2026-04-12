@@ -96,6 +96,7 @@ export class LinkWidget extends WidgetType {
     const anchor = document.createElement('a');
     anchor.textContent = text;
     anchor.title = title || '';
+    anchor.tabIndex = -1; // Prevent focus stealing from editor/vim
 
     if (isWikiLink) {
       // Wiki link style

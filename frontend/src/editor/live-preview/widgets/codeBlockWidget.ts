@@ -162,6 +162,7 @@ export class CodeBlockWidget extends WidgetType {
       toggleBtn.type = 'button';
       toggleBtn.className = 'cm-codeblock-toggle';
       toggleBtn.textContent = 'MD';
+      toggleBtn.tabIndex = -1;
       toggleBtn.setAttribute('aria-label', 'Show markdown source');
       toggleBtn.addEventListener('click', (event) => {
         event.preventDefault();
@@ -187,6 +188,7 @@ export class CodeBlockWidget extends WidgetType {
       copyBtn.type = 'button';
       copyBtn.className = 'cm-codeblock-copy';
       copyBtn.textContent = 'Copy';
+      copyBtn.tabIndex = -1;
       copyBtn.setAttribute('aria-label', 'Copy code');
 
       copyBtn.addEventListener('click', async (e) => {

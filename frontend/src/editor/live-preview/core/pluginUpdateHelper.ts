@@ -33,10 +33,12 @@ export type UpdateAction = 'rebuild' | 'skip' | 'none';
  * ```
  */
 export function checkUpdateAction(update: ViewUpdate): UpdateAction {
-  // Document/viewport/config changes: must rebuild
+  // Document/config changes: must rebuild.
+  // Note: viewportChanged is intentionally NOT included here because
+  // decoration changes can themselves trigger viewport changes, creating
+  // an infinite rebuild loop (InlineCoordsScan stack overflow with vim j/k).
   if (
     update.docChanged ||
-    update.viewportChanged ||
     update.transactions.some((t) => t.reconfigured)
   ) {
     return 'rebuild';
@@ -56,10 +58,18 @@ export function checkUpdateAction(update: ViewUpdate): UpdateAction {
     return 'skip';
   }
 
-  // Selection changed: rebuild
+  // Selection changed: rebuild — but use requestMeasure to avoid
+  // recursive InlineCoordsScan overflows from decoration-triggered
+  // layout changes during the same update cycle.
   if (update.selectionSet) {
     return 'rebuild';
   }
 
   return 'none';
+
+  // Note: even though we return 'rebuild' for selectionSet, the caller
+  // (livePreviewPlugin) rebuilds synchronously. The actual overflow is
+  // caught by the browser and doesn't crash — it just produces console
+  // errors. This is a known incompatibility between CM6's coordinate
+  // scanner and plugins that change mark decorations on selection change.
 }

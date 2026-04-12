@@ -168,6 +168,7 @@ class CodeBlockHeaderWidget extends WidgetType {
       copyBtn.type = 'button';
       copyBtn.className = 'cm-codeblock-copy';
       copyBtn.textContent = 'Copy';
+      copyBtn.tabIndex = -1;
       copyBtn.setAttribute('aria-label', 'Copy code');
       const code = this.code;
       copyBtn.addEventListener('click', async (e) => {
@@ -194,6 +195,7 @@ class CodeBlockHeaderWidget extends WidgetType {
     mdBtn.type = 'button';
     mdBtn.className = 'cm-codeblock-toggle';
     mdBtn.textContent = 'MD';
+    mdBtn.tabIndex = -1;
     mdBtn.setAttribute('aria-label', 'Show markdown source');
     const from = this.from;
     const to = this.to;
@@ -553,9 +555,15 @@ function createCodeBlockField(
         return deco;
       }
 
-      // Rebuild on selection change
+      // Rebuild on selection change, but only if the cursor moved to a
+      // different line — prevents infinite recursion when decoration
+      // changes trigger layout updates that cause further selection events.
       if (tr.selection) {
-        return buildFn(tr.state, options);
+        const oldLine = tr.startState.doc.lineAt(tr.startState.selection.main.head).number;
+        const newLine = tr.state.doc.lineAt(tr.state.selection.main.head).number;
+        if (oldLine !== newLine) {
+          return buildFn(tr.state, options);
+        }
       }
 
       return deco;

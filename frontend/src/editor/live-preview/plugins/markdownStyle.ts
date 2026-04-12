@@ -45,7 +45,7 @@ export const markdownStylePlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged) {
+      if (update.docChanged) {
         this.decorations = this.build(update.view);
       }
     }

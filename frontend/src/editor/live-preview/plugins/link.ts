@@ -237,8 +237,10 @@ export function linkPlugin(
       }
 
       update(update: ViewUpdate) {
-        // Rebuild on document or config change
-        if (update.docChanged || update.viewportChanged) {
+        // Rebuild on document or config change.
+        // Note: viewportChanged excluded to avoid infinite recursion
+        // when decoration changes trigger layout changes.
+        if (update.docChanged) {
           this.decorations = buildLinkDecorations(update.view, mergedOptions);
           return;
         }

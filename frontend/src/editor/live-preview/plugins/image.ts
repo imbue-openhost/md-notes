@@ -138,9 +138,14 @@ function createImageField(
         return deco;
       }
 
-      // Rebuild on selection change
+      // Rebuild on selection change — guard against same-line rebuilds
+      // to prevent infinite recursion from layout-triggered updates.
       if (tr.selection) {
-        return buildImageDecorations(tr.state, options);
+        const oldLine = tr.startState.doc.lineAt(tr.startState.selection.main.head).number;
+        const newLine = tr.state.doc.lineAt(tr.state.selection.main.head).number;
+        if (oldLine !== newLine) {
+          return buildImageDecorations(tr.state, options);
+        }
       }
 
       return deco;
