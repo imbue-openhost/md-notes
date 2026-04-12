@@ -105,8 +105,13 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     // Prevent browser from capturing Escape (e.g., macOS "stop loading")
     // so it reaches the vim plugin for mode switching.
     EditorView.domEventHandlers({
-      keydown: (event) => {
+      keydown: (event, view) => {
         if (event.key === 'Escape') {
+          console.log('[md-notes] Escape keydown in CM6 domEventHandler', {
+            defaultPrevented: event.defaultPrevented,
+            target: (event.target as HTMLElement)?.tagName,
+            hasFocus: view.hasFocus,
+          });
           event.preventDefault();
           return false; // let CM6/vim handle it
         }

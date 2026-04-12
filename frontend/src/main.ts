@@ -1,4 +1,15 @@
 import './style.css';
+
+// Debug: log all Escape key events at the document level
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    console.log('[md-notes] Escape at document level', {
+      defaultPrevented: e.defaultPrevented,
+      target: (e.target as HTMLElement)?.tagName + '.' + (e.target as HTMLElement)?.className?.split(' ')[0],
+      phase: e.eventPhase, // 1=capture, 2=target, 3=bubble
+    });
+  }
+}, true); // capture phase to see it first
 import { createEditor } from './editor/editor';
 import { createSidebar, refreshSidebar, setCurrentFile } from './ui/sidebar';
 import { setApiBaseUrl, createShareLink } from './api/client';
