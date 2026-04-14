@@ -35,8 +35,9 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
-export async function listFiles(): Promise<FileEntry[]> {
-  const res = await apiFetch('/api/files');
+export async function listFiles(root?: string): Promise<FileEntry[]> {
+  const params = root ? `?root=${encodeURIComponent(root)}` : '';
+  const res = await apiFetch(`/api/files${params}`);
   return res.json();
 }
 

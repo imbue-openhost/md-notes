@@ -1,30 +1,40 @@
 /**
  * File tree sidebar — vanilla DOM.
  *
- * Renders a recursive file tree from the REST API response.
- * Click a file to open it; click a folder to expand/collapse.
- * Right-click for context menu with rename/delete.
+ * Renders a recursive file tree. Uses vault-ops for file operations,
+ * which routes to Tauri commands or REST API based on vault sync mode.
  */
 
 import type { FileEntry } from '../api/types';
-import { listFiles, createFile, deleteFile, renameFile } from '../api/client';
+import { listFiles, createFile, deleteFile, renameFile } from '../api/vault-ops';
 
 export type OnFileSelect = (path: string) => void;
 export type OnShare = (path: string) => void;
+export type OnSettings = () => void;
+export type OnSwitchVault = () => void;
 
 let currentPath: string | null = null;
 let container: HTMLElement | null = null;
 let onFileSelect: OnFileSelect | null = null;
 let onShare: OnShare | null = null;
+let onSettings: OnSettings | null = null;
+let onSwitchVault: OnSwitchVault | null = null;
+
+export interface SidebarOptions {
+  onSelect: OnFileSelect;
+  onShare?: OnShare;
+  onSettings?: OnSettings;
+  onSwitchVault?: OnSwitchVault;
+  vaultName?: string;
+  showSyncStatus?: boolean;
+}
 
 /** Create and mount the sidebar. */
-export function createSidebar(
-  parent: HTMLElement,
-  onSelect: OnFileSelect,
-  onShareCb?: OnShare,
-): HTMLElement {
-  onFileSelect = onSelect;
-  onShare = onShareCb ?? null;
+export function createSidebar(parent: HTMLElement, opts: SidebarOptions): HTMLElement {
+  onFileSelect = opts.onSelect;
+  onShare = opts.onShare ?? null;
+  onSettings = opts.onSettings ?? null;
+  onSwitchVault = opts.onSwitchVault ?? null;
 
   container = document.createElement('div');
   container.id = 'sidebar';
@@ -34,7 +44,7 @@ export function createSidebar(
   header.className = 'sidebar-header';
 
   const title = document.createElement('span');
-  title.textContent = 'Files';
+  title.textContent = opts.vaultName ?? 'Files';
   header.appendChild(title);
 
   const buttons = document.createElement('div');
@@ -47,7 +57,7 @@ export function createSidebar(
   newBtn.addEventListener('click', handleNewFile);
   buttons.appendChild(newBtn);
 
-  if (onShareCb) {
+  if (opts.onShare) {
     const shareBtn = document.createElement('button');
     shareBtn.className = 'sidebar-btn';
     shareBtn.textContent = '\u{1F517}'; // 🔗
@@ -59,6 +69,24 @@ export function createSidebar(
     buttons.appendChild(shareBtn);
   }
 
+  if (opts.onSwitchVault) {
+    const switchBtn = document.createElement('button');
+    switchBtn.className = 'sidebar-btn';
+    switchBtn.textContent = '\u{1F4C1}'; // 📁
+    switchBtn.title = 'Switch vault';
+    switchBtn.addEventListener('click', () => onSwitchVault?.());
+    buttons.appendChild(switchBtn);
+  }
+
+  if (opts.onSettings) {
+    const settingsBtn = document.createElement('button');
+    settingsBtn.className = 'sidebar-btn';
+    settingsBtn.textContent = '\u2699'; // ⚙
+    settingsBtn.title = 'Settings';
+    settingsBtn.addEventListener('click', () => onSettings?.());
+    buttons.appendChild(settingsBtn);
+  }
+
   header.appendChild(buttons);
 
   container.appendChild(header);
@@ -67,6 +95,19 @@ export function createSidebar(
   const tree = document.createElement('div');
   tree.className = 'sidebar-tree';
   container.appendChild(tree);
+
+  // Sync status indicator
+  if (opts.showSyncStatus) {
+    const statusBar = document.createElement('div');
+    statusBar.className = 'sidebar-sync-status';
+    const dot = document.createElement('span');
+    dot.className = 'sidebar-sync-dot';
+    statusBar.appendChild(dot);
+    const label = document.createElement('span');
+    label.textContent = 'Disconnected';
+    statusBar.appendChild(label);
+    container.appendChild(statusBar);
+  }
 
   // Close context menu on click elsewhere
   document.addEventListener('click', () => {
@@ -77,7 +118,35 @@ export function createSidebar(
   return container;
 }
 
-/** Refresh the file tree from the server. */
+/** Update the sync status indicator. */
+export function setSyncStatus(status: 'connected' | 'disconnected' | 'connecting' | 'no-remote'): void {
+  if (!container) return;
+  const bar = container.querySelector('.sidebar-sync-status');
+  if (!bar) return;
+  const dot = bar.querySelector('.sidebar-sync-dot') as HTMLElement;
+  const label = bar.querySelector('span:last-child') as HTMLElement;
+  if (dot) {
+    dot.dataset.status = status;
+  }
+  if (label) {
+    const labels: Record<string, string> = {
+      connected: 'Synced',
+      disconnected: 'Offline',
+      connecting: 'Connecting...',
+      'no-remote': 'No remote configured',
+    };
+    label.textContent = labels[status] ?? status;
+  }
+}
+
+/** Remove the sidebar from the DOM. */
+export function destroySidebar(): void {
+  container?.remove();
+  container = null;
+  currentPath = null;
+}
+
+/** Refresh the file tree. */
 export async function refreshSidebar(): Promise<void> {
   if (!container) return;
   const tree = container.querySelector('.sidebar-tree');

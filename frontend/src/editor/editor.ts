@@ -146,6 +146,8 @@ export interface EditorOptions {
   readOnly?: boolean;
   /** API key for authenticating WebSocket sync connections. */
   apiKey?: string;
+  /** Called on document changes (for local vault auto-save). */
+  onDocChange?: (content: string) => void;
 }
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorView {
@@ -162,8 +164,17 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
   // Add Yjs sync if configured
   if (options.syncDocPath && options.syncServerUrl) {
-    const sync = initSync(options.syncDocPath, options.syncServerUrl, options.apiKey);
+    const sync = initSync(options.syncDocPath, options.syncServerUrl, options.apiKey, options.initialDoc);
     extensions.push(sync.extension);
+  }
+
+  if (options.onDocChange) {
+    const cb = options.onDocChange;
+    extensions.push(EditorView.updateListener.of((update) => {
+      if (update.docChanged) {
+        cb(update.state.doc.toString());
+      }
+    }));
   }
 
   if (options.readOnly) {
@@ -171,7 +182,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   }
 
   const state = EditorState.create({
-    doc: options.syncDocPath ? '' : (options.initialDoc ?? SAMPLE_MD),
+    doc: options.initialDoc ?? (options.syncDocPath ? '' : SAMPLE_MD),
     extensions,
   });
 

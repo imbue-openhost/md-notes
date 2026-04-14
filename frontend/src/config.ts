@@ -5,6 +5,7 @@
 declare global {
   interface Window {
     __TAURI__?: unknown;
+    __TAURI_INTERNALS__?: unknown;
     __SHARE_CONFIG__?: {
       uuid: string;
       docPath: string;
@@ -14,7 +15,8 @@ declare global {
 }
 
 /** True when running inside a Tauri native app. */
-export const isTauri = typeof window !== 'undefined' && !!window.__TAURI__;
+export const isTauri = typeof window !== 'undefined' &&
+  !!(window.__TAURI_INTERNALS__ || window.__TAURI__);
 
 /** True when running on the Vite dev server. */
 export const isDevServer =

@@ -28,8 +28,18 @@ async def handle_not_found(exc: FileNotFoundError):
 
 @bp.route("", methods=["GET"])
 async def list_all():
-    """GET /api/files — recursive directory listing."""
-    tree = list_files(VAULT_PATH)
+    """GET /api/files — recursive directory listing.
+
+    Optional query param: ?root=subdir to list a subdirectory.
+    """
+    root = request.args.get("root", "")
+    base = VAULT_PATH
+    if root:
+        base = (VAULT_PATH / root).resolve()
+        if not str(base).startswith(str(VAULT_PATH.resolve())):
+            return jsonify(error="Invalid root"), 403
+        base.mkdir(parents=True, exist_ok=True)
+    tree = list_files(base)
     return jsonify(tree)
 
 

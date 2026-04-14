@@ -53,11 +53,29 @@ export function initSync(
   docPath: string,
   serverUrl: string,
   apiKey?: string,
+  initialContent?: string,
 ): { extension: Extension; getText: () => string } {
   destroySync();
 
   ydoc = new Y.Doc();
   ytext = ydoc.getText('content');
+
+  // IndexedDB persistence — loads cached Yjs state from previous sessions.
+  // Must be created BEFORE WebsocketProvider so IDB state is loaded first.
+  idbPersistence = new IndexeddbPersistence(`mdnotes-${docPath}`, ydoc);
+
+  // After IDB loads, if Y.Text is still empty (first-time sync for this doc),
+  // populate from local file content. This avoids the duplication problem:
+  // - If IDB has cached state → Y.Text already has content → skip insert
+  // - If server later sends matching state → same Yjs history → clean merge
+  // - If this is truly first time → insert local content → server gets it via sync
+  if (initialContent) {
+    idbPersistence.once('synced', () => {
+      if (ytext && ytext.length === 0) {
+        ytext.insert(0, initialContent);
+      }
+    });
+  }
 
   // y-websocket appends roomname to the serverUrl, producing:
   // ws://<host>/ws/sync/<docPath>
@@ -67,9 +85,6 @@ export function initSync(
     params.token = apiKey;
   }
   provider = new WebsocketProvider(wsUrl, docPath, ydoc, { params });
-
-  // IndexedDB persistence for offline support
-  idbPersistence = new IndexeddbPersistence(`mdnotes-${docPath}`, ydoc);
 
   provider.on('status', (event: { status: string }) => {
     notifyStatus(event.status as ConnectionStatus);
