@@ -1,5 +1,6 @@
 import { createResource, For, Show, type Component } from 'solid-js';
-import { createShareLink, listShareLinks, deleteShareLink, type ShareLink } from '../api/client';
+import { Dialog } from '@kobalte/core';
+import { createShareLink, listShareLinks, deleteShareLink } from '../api/client';
 
 interface Props {
   path: string;
@@ -30,60 +31,66 @@ export const ShareModal: Component<Props> = (props) => {
   }
 
   return (
-    <div class="share-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
-      <div class="share-modal">
-        <div class="share-modal-title">Share: {props.path.replace(/\.md$/, '')}</div>
-        <div class="share-modal-body">
-          <Show when={!links.loading} fallback="Loading...">
-            <Show when={links() && links()!.length > 0} fallback={
-              <div class="share-modal-empty">No active share links.</div>
-            }>
-              <div class="share-link-list">
-                <For each={links()!}>{(link) => {
-                  const url = `${window.location.origin}/share/${link.uuid}`;
-                  return (
-                    <div class="share-link-row">
-                      <div class="share-link-info">
-                        <span class={`share-link-badge ${link.permission === 'write' ? 'share-link-badge-write' : ''}`}>
-                          {link.permission === 'write' ? 'Can edit' : 'View only'}
-                        </span>
-                        <span class="share-link-date">
-                          {new Date(link.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <input
-                        class="share-modal-link"
-                        type="text"
-                        value={url}
-                        readOnly
-                        onClick={(e) => e.currentTarget.select()}
-                      />
-                      <div class="share-link-actions">
-                        <button
-                          class="share-modal-btn share-modal-btn-sm"
-                          onClick={(e) => copyToClipboard(url, e.currentTarget)}
-                        >Copy</button>
-                        <button
-                          class="share-modal-btn share-modal-btn-sm share-modal-btn-danger"
-                          onClick={() => handleRevoke(link.uuid)}
-                        >Revoke</button>
-                      </div>
-                    </div>
-                  );
-                }}</For>
-              </div>
-            </Show>
+    <Dialog.Root open onOpenChange={(open) => { if (!open) props.onClose(); }}>
+      <Dialog.Portal>
+        <div class="settings-modal-overlay">
+          <Dialog.Content class="share-modal" onInteractOutside={props.onClose}>
+            <Dialog.Title class="share-modal-title">
+              Share: {props.path.replace(/\.md$/, '')}
+            </Dialog.Title>
+            <div class="share-modal-body">
+              <Show when={!links.loading} fallback="Loading...">
+                <Show when={links() && links()!.length > 0} fallback={
+                  <div class="share-modal-empty">No active share links.</div>
+                }>
+                  <div class="share-link-list">
+                    <For each={links()!}>{(link) => {
+                      const url = `${window.location.origin}/share/${link.uuid}`;
+                      return (
+                        <div class="share-link-row">
+                          <div class="share-link-info">
+                            <span class={`share-link-badge ${link.permission === 'write' ? 'share-link-badge-write' : ''}`}>
+                              {link.permission === 'write' ? 'Can edit' : 'View only'}
+                            </span>
+                            <span class="share-link-date">
+                              {new Date(link.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <input
+                            class="share-modal-link"
+                            type="text"
+                            value={url}
+                            readOnly
+                            onClick={(e) => e.currentTarget.select()}
+                          />
+                          <div class="share-link-actions">
+                            <button
+                              class="share-modal-btn share-modal-btn-sm"
+                              onClick={(e) => copyToClipboard(url, e.currentTarget)}
+                            >Copy</button>
+                            <button
+                              class="share-modal-btn share-modal-btn-sm share-modal-btn-danger"
+                              onClick={() => handleRevoke(link.uuid)}
+                            >Revoke</button>
+                          </div>
+                        </div>
+                      );
+                    }}</For>
+                  </div>
+                </Show>
 
-            <div class="share-new-section">
-              <div class="share-modal-label">Create new link</div>
-              <div class="share-modal-buttons">
-                <button class="share-modal-btn" onClick={() => handleCreate('read')}>View only</button>
-                <button class="share-modal-btn share-modal-btn-primary" onClick={() => handleCreate('write')}>Can edit</button>
-              </div>
+                <div class="share-new-section">
+                  <div class="share-modal-label">Create new link</div>
+                  <div class="share-modal-buttons">
+                    <button class="share-modal-btn" onClick={() => handleCreate('read')}>View only</button>
+                    <button class="share-modal-btn share-modal-btn-primary" onClick={() => handleCreate('write')}>Can edit</button>
+                  </div>
+                </div>
+              </Show>
             </div>
-          </Show>
+          </Dialog.Content>
         </div>
-      </div>
-    </div>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 };

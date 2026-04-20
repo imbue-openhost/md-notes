@@ -340,9 +340,8 @@ li.open > .sidebar-children {
   50% { opacity: 0.4; }
 }
 
-/* ── Context menu ─────────────────────────────────────────── */
+/* ── Context menu (Kobalte) ───────────────────────────────── */
 .sidebar-context-menu {
-  position: fixed;
   background: hsl(var(--background));
   border: 1px solid hsl(var(--border));
   border-radius: 6px;
@@ -356,9 +355,11 @@ li.open > .sidebar-children {
   padding: 6px 12px;
   font-size: 13px;
   cursor: pointer;
+  outline: none;
 }
 
-.sidebar-context-item:hover {
+.sidebar-context-item:hover,
+.sidebar-context-item[data-highlighted] {
   background: hsl(var(--muted));
 }
 

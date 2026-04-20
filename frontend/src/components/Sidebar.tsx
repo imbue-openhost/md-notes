@@ -1,4 +1,5 @@
 import { createSignal, createResource, For, Show, onMount, onCleanup, type Component } from 'solid-js';
+import { ContextMenu } from '@kobalte/core';
 import type { FileEntry } from '../api/types';
 import { listFiles, createFile, deleteFile, renameFile } from '../api/vault-ops';
 import { InputDialog } from './InputDialog';
@@ -29,18 +30,10 @@ const SYNC_LABELS: Record<string, string> = {
 export const Sidebar: Component<Props> = (props) => {
   const [files, { refetch }] = createResource(listFiles);
   const [dialog, setDialog] = createSignal<{ label: string; defaultValue?: string; resolve: (v: string | null) => void } | null>(null);
-  const [contextMenu, setContextMenu] = createSignal<{ x: number; y: number; items: { label: string; action: () => void }[] } | null>(null);
 
   function showInputDialog(label: string, defaultValue = ''): Promise<string | null> {
     return new Promise((resolve) => setDialog({ label, defaultValue, resolve }));
   }
-
-  function closeContextMenu() { setContextMenu(null); }
-
-  onMount(() => {
-    document.addEventListener('click', closeContextMenu);
-    onCleanup(() => document.removeEventListener('click', closeContextMenu));
-  });
 
   async function handleNewFile() {
     const name = await showInputDialog('File name (e.g., note.md)');
@@ -96,25 +89,22 @@ export const Sidebar: Component<Props> = (props) => {
     const [open, setOpen] = createSignal(false);
     return (
       <li classList={{ open: open() }}>
-        <div
-          class="sidebar-item"
-          data-path={p.entry.path}
-          data-type="dir"
-          onClick={() => setOpen(!open())}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setContextMenu({
-              x: e.clientX, y: e.clientY,
-              items: [
-                { label: 'New file here...', action: () => handleNewFileInDir(p.entry.path) },
-                { label: 'Delete folder', action: () => handleDelete(p.entry.path, p.entry.name) },
-              ],
-            });
-          }}
-        >
-          <span class="sidebar-arrow">{open() ? '\u25BC' : '\u25B6'}</span>
-          <span>{p.entry.name}</span>
-        </div>
+        <ContextMenu.Root>
+          <ContextMenu.Trigger as="div" class="sidebar-item" data-path={p.entry.path} data-type="dir" onClick={() => setOpen(!open())}>
+            <span class="sidebar-arrow">{open() ? '\u25BC' : '\u25B6'}</span>
+            <span>{p.entry.name}</span>
+          </ContextMenu.Trigger>
+          <ContextMenu.Portal>
+            <ContextMenu.Content class="sidebar-context-menu">
+              <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleNewFileInDir(p.entry.path)}>
+                New file here...
+              </ContextMenu.Item>
+              <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleDelete(p.entry.path, p.entry.name)}>
+                Delete folder
+              </ContextMenu.Item>
+            </ContextMenu.Content>
+          </ContextMenu.Portal>
+        </ContextMenu.Root>
         <Show when={p.entry.children && p.entry.children.length > 0}>
           <ul class="sidebar-children">
             <For each={p.entry.children!}>{(child) => FileTreeItem(child)}</For>
@@ -127,26 +117,29 @@ export const Sidebar: Component<Props> = (props) => {
   const FileItem: Component<{ entry: FileEntry }> = (p) => {
     return (
       <li>
-        <div
-          class="sidebar-item"
-          classList={{ active: p.entry.path === props.currentPath }}
-          data-path={p.entry.path}
-          data-type="file"
-          onClick={() => props.onSelect(p.entry.path)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setContextMenu({
-              x: e.clientX, y: e.clientY,
-              items: [
-                { label: 'Rename...', action: () => handleRename(p.entry.path, p.entry.name) },
-                { label: 'Delete', action: () => handleDelete(p.entry.path, p.entry.name) },
-              ],
-            });
-          }}
-        >
-          <span class="sidebar-icon">{'\uD83D\uDCC4'}</span>
-          <span>{p.entry.name.replace(/\.md$/, '')}</span>
-        </div>
+        <ContextMenu.Root>
+          <ContextMenu.Trigger
+            as="div"
+            class="sidebar-item"
+            classList={{ active: p.entry.path === props.currentPath }}
+            data-path={p.entry.path}
+            data-type="file"
+            onClick={() => props.onSelect(p.entry.path)}
+          >
+            <span class="sidebar-icon">{'\uD83D\uDCC4'}</span>
+            <span>{p.entry.name.replace(/\.md$/, '')}</span>
+          </ContextMenu.Trigger>
+          <ContextMenu.Portal>
+            <ContextMenu.Content class="sidebar-context-menu">
+              <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleRename(p.entry.path, p.entry.name)}>
+                Rename...
+              </ContextMenu.Item>
+              <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleDelete(p.entry.path, p.entry.name)}>
+                Delete
+              </ContextMenu.Item>
+            </ContextMenu.Content>
+          </ContextMenu.Portal>
+        </ContextMenu.Root>
       </li>
     );
   };
@@ -197,18 +190,6 @@ export const Sidebar: Component<Props> = (props) => {
           </div>
         </Show>
       </div>
-
-      <Show when={contextMenu()}>
-        {(menu) => (
-          <div class="sidebar-context-menu" style={{ left: `${menu().x}px`, top: `${menu().y}px` }}>
-            <For each={menu().items}>{(item) => (
-              <div class="sidebar-context-item" onClick={(e) => { e.stopPropagation(); setContextMenu(null); item.action(); }}>
-                {item.label}
-              </div>
-            )}</For>
-          </div>
-        )}
-      </Show>
 
       <Show when={dialog()}>
         {(d) => (
