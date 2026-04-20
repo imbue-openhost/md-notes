@@ -1,5 +1,8 @@
 /**
- * Editor — sets up the CodeMirror 6 instance with all extensions.
+ * Editor — creates CodeMirror 6 instances with all extensions.
+ *
+ * Each call to createEditor() returns an independent EditorInstance
+ * with its own view and cleanup. No global state.
  */
 
 import { EditorState, type Extension } from '@codemirror/state';
@@ -10,7 +13,6 @@ import { languages } from '@codemirror/language-data';
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 
-// Live preview (inlined from codemirror-live-markdown)
 import {
   collapseOnSelectionFacet,
   mouseSelectingField,
@@ -23,23 +25,14 @@ import {
   editorTheme,
 } from './live-preview/index';
 
-// Local extensions
 import { markdownFolding } from './folding';
 import { vimMode } from './vim';
-import { initSync, destroySync } from './sync';
+import { createSyncSession, type SyncSession } from './sync';
 
-let editorView: EditorView | null = null;
-
-/**
- * Build the full extension set for the markdown editor.
- */
 function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
   return [
-    // Vim mode first so it captures keys before other keymaps
     vimMode(vimrcContent),
 
-    // Core editing — skip CM6 history when Yjs sync is active
-    // (yCollab provides its own Y.UndoManager)
     ...(useSync ? [] : [history()]),
     EditorView.lineWrapping,
     drawSelection(),
@@ -47,34 +40,20 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     highlightSelectionMatches(),
     bracketMatching(),
 
-    // Keymaps
     keymap.of([
       ...defaultKeymap,
       ...(useSync ? [] : historyKeymap),
       ...searchKeymap,
     ]),
 
-    // Markdown language support
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
 
-    // Live preview
     collapseOnSelectionFacet.of(true),
     mouseSelectingField,
     editorTheme,
-    // livePreviewPlugin disabled: its mark decorations with visibility:hidden
-    // trigger CM6 InlineCoordsScan overflow regardless of update strategy.
-    // markdownStylePlugin provides heading/bold/italic/code styling without
-    // the show/hide toggle behavior.
     markdownStylePlugin,
-    // NOTE: codeBlockField(), imageField(), and linkPlugin() are disabled.
-    // They use Decoration.replace() which triggers CM6 InlineCoordsScan
-    // stack overflow during vim j/k navigation. The overflow crashes vim's
-    // key handler, causing keys to fall through as text insertion.
-    // The mark-based plugins (livePreviewPlugin, markdownStylePlugin) still
-    // provide live preview for inline formatting (bold, italic, headings, etc.).
 
-    // Prevent browser from capturing Escape before vim gets it
     EditorView.domEventHandlers({
       keydown: (event) => {
         if (event.key === 'Escape') {
@@ -93,45 +72,34 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
       },
     }),
 
-    // Folding
     markdownFolding(),
   ];
 }
 
-/**
- * Create and mount the editor in the given container element.
- */
 export interface EditorOptions {
   initialDoc?: string;
   vimrcContent?: string;
-  /** If set, enables Yjs sync for this document path. */
   syncDocPath?: string;
-  /** Server URL for Yjs sync (e.g., "http://localhost:8080"). */
   syncServerUrl?: string;
-  /** If true, editor is read-only (for read-only share links). */
   readOnly?: boolean;
-  /** API key for authenticating WebSocket sync connections. */
   apiKey?: string;
-  /** Called on document changes (for local vault auto-save). */
   onDocChange?: (content: string) => void;
 }
 
-export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorView {
-  editorContainer = container;
-  currentOptions = options;
+export interface EditorInstance {
+  view: EditorView;
+  destroy: () => void;
+}
 
-  if (editorView) {
-    destroySync();
-    editorView.destroy();
-  }
-
+export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorInstance {
   const useSync = !!(options.syncDocPath && options.syncServerUrl);
   const extensions = buildExtensions(options.vimrcContent, useSync);
 
-  // Add Yjs sync if configured
+  let syncSession: SyncSession | null = null;
+
   if (options.syncDocPath && options.syncServerUrl) {
-    const sync = initSync(options.syncDocPath, options.syncServerUrl, options.apiKey, options.initialDoc);
-    extensions.push(sync.extension);
+    syncSession = createSyncSession(options.syncDocPath, options.syncServerUrl, options.apiKey, options.initialDoc);
+    extensions.push(syncSession.extension);
   }
 
   if (options.onDocChange) {
@@ -152,57 +120,16 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     extensions,
   });
 
-  editorView = new EditorView({
+  const view = new EditorView({
     state,
     parent: container,
   });
 
-  return editorView;
-}
-
-/**
- * Replace the editor content with new text (e.g., when opening a file).
- */
-export function setEditorContent(content: string): void {
-  if (!editorView) return;
-  editorView.dispatch({
-    changes: { from: 0, to: editorView.state.doc.length, insert: content },
-  });
-}
-
-/**
- * Get the current editor document as a string.
- */
-export function getEditorContent(): string {
-  return editorView?.state.doc.toString() ?? '';
-}
-
-// Store the container so openDocument() can re-create the editor.
-let editorContainer: HTMLElement | null = null;
-let currentOptions: EditorOptions = {};
-
-/**
- * Open a document by path via Yjs sync, tearing down any existing session.
- */
-export function openDocument(
-  path: string,
-  serverUrl: string,
-  opts: Pick<EditorOptions, 'vimrcContent' | 'readOnly'> = {},
-): EditorView {
-  if (!editorContainer) {
-    throw new Error('Editor not initialised — call createEditor() first');
-  }
-  return createEditor(editorContainer, {
-    ...currentOptions,
-    ...opts,
-    syncDocPath: path,
-    syncServerUrl: serverUrl,
-  });
-}
-
-/**
- * Get the current EditorView instance.
- */
-export function getEditorView(): EditorView | null {
-  return editorView;
+  return {
+    view,
+    destroy: () => {
+      syncSession?.destroy();
+      view.destroy();
+    },
+  };
 }

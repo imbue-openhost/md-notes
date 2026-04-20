@@ -1,6 +1,7 @@
 import './style.css';
 import { createEditor } from './editor/editor';
 import { createSidebar, destroySidebar, refreshSidebar, setCurrentFile, setSyncStatus, setSyncStatusText } from './ui/sidebar';
+import { createLayout, destroyLayout, openFile, splitPane } from './ui/editor-layout';
 import { onConnectionStatus, onConnectionError } from './editor/sync';
 import { setApiBaseUrl, setApiKey, createShareLink, listShareLinks, deleteShareLink, listVaults, createVault, deleteVault, getServerApiKey, getServerVimrc, saveServerVimrc } from './api/client';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
@@ -19,7 +20,6 @@ const app = document.getElementById('app')!;
 let activeServerUrl = serverUrl;
 let activeApiKey = '';
 let activeVimrc = DEFAULT_VIMRC;
-let editorContainer: HTMLElement;
 let currentDocPath: string | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -53,7 +53,6 @@ async function loadTauriConfig(): Promise<TauriConfig | null> {
     if (activeApiKey) {
       setApiKey(activeApiKey);
     }
-    // Load vimrc from ~/.md_notes/.vimrc (created with defaults on first run)
     try {
       activeVimrc = await invoke<string>('get_vimrc');
     } catch { /* fall back to bundled default */ }
@@ -84,7 +83,6 @@ if (shareConfig) {
     app.textContent = `Boot error: ${e}`;
   });
 
-  // Listen for native menu events
   if (isTauri) {
     import('@tauri-apps/api/event').then(({ listen }) => {
       listen('settings', () => handleSettings());
@@ -100,16 +98,13 @@ async function boot(): Promise<void> {
     const config = await loadTauriConfig();
     if (!config) { openVaultPicker([]); return; }
 
-    // Auto-open last vault if available
     if (config.last_vault_id) {
       const vault = config.vaults.find((v) => v.id === config.last_vault_id);
       if (vault) { openVault(vault); return; }
     }
 
-    // Show picker
     openVaultPicker(config.vaults);
   } else {
-    // Browser mode — OpenHost handles auth via X-OpenHost-Is-Owner header.
     try {
       const savedVimrc = await getServerVimrc();
       if (savedVimrc) activeVimrc = savedVimrc;
@@ -168,7 +163,6 @@ function openVaultPicker(vaults: VaultConfig[]): void {
       try {
         const vault = await invoke<VaultConfig>('add_vault', { name, path, sync });
         if (sync && activeServerUrl) {
-          // Register with server so the web UI sees the vault by name immediately.
           createVault(vault.name, vault.id).catch((e) => {
             console.warn('Failed to register vault with server:', e);
           });
@@ -227,6 +221,7 @@ async function runFileSync(vault: VaultConfig): Promise<void> {
 
 function switchVault(): void {
   destroySidebar();
+  destroyLayout();
   if (isTauri) {
     loadTauriConfig().then((config) => {
       openVaultPicker(config?.vaults ?? []);
@@ -243,13 +238,9 @@ let unsubSyncError: (() => void) | null = null;
 let lastSyncError: string | null = null;
 
 function openEditor(vault?: VaultConfig): void {
-  editorContainer = document.createElement('div');
-  editorContainer.id = 'editor-container';
-
   const isSync = vault?.sync ?? true;
   const hasRemote = !!activeServerUrl;
 
-  // Clean up previous sync status listener
   unsubSyncStatus?.();
   unsubSyncStatus = null;
   unsubSyncError?.();
@@ -284,39 +275,50 @@ function openEditor(vault?: VaultConfig): void {
     }
   }
 
-  app.appendChild(editorContainer);
+  const editorArea = document.createElement('div');
+  editorArea.id = 'editor-container';
+  app.appendChild(editorArea);
 
-  createEditor(editorContainer, { vimrcContent: activeVimrc });
+  createLayout(editorArea, {
+    createEditor: (path, container) => makeEditorForPath(path, container, vault),
+    onActiveFileChange: (path) => {
+      currentDocPath = path;
+      setCurrentFile(path);
+    },
+  });
 }
 
-function handleFileSelect(path: string): void {
-  currentDocPath = path;
-  setCurrentFile(path);
-
-  const vault = getActiveVault();
-
-  if (isTauri && vault) {
-    // Desktop app — always read from local disk
-    handleFileSelectTauri(path, vault);
-  } else {
-    // Browser — use Yjs sync only, scoped under the vault id
-    const syncDocPath = vault?.id ? `${vault.id}/${path}` : path;
-    createEditor(editorContainer, {
-      vimrcContent: activeVimrc,
-      syncDocPath,
-      syncServerUrl: activeServerUrl,
-    });
+// Keyboard shortcut for splitting — single global listener
+function handleLayoutKeydown(e: KeyboardEvent): void {
+  if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+    e.preventDefault();
+    splitPane();
   }
 }
+document.addEventListener('keydown', handleLayoutKeydown);
 
-async function handleFileSelectTauri(path: string, vault: VaultConfig): Promise<void> {
-  try {
-    const content = await invoke<string>('read_local_file', {
-      vaultPath: vault.path,
-      path,
-    });
+function makeEditorForPath(path: string, container: HTMLElement, vault?: VaultConfig) {
+  if (isTauri && vault) {
+    return makeEditorForPathTauri(path, container, vault);
+  }
 
-    // Always auto-save to local disk
+  const syncDocPath = vault?.id ? `${vault.id}/${path}` : path;
+  return createEditor(container, {
+    vimrcContent: activeVimrc,
+    syncDocPath,
+    syncServerUrl: activeServerUrl,
+  });
+}
+
+function makeEditorForPathTauri(path: string, container: HTMLElement, vault: VaultConfig) {
+  // For Tauri, we need to read the file first. Return a placeholder and
+  // replace it once the async read completes.
+  const placeholder = createEditor(container, { vimrcContent: activeVimrc });
+
+  invoke<string>('read_local_file', { vaultPath: vault.path, path }).then((content) => {
+    placeholder.destroy();
+    container.innerHTML = '';
+
     const onDocChange = (newContent: string) => {
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
@@ -328,10 +330,10 @@ async function handleFileSelectTauri(path: string, vault: VaultConfig): Promise<
       }, 1000);
     };
 
+    let instance;
     if (vault.sync && activeServerUrl) {
-      // Synced vault with remote configured — local content + Yjs sync
       const syncDocPath = vault.id ? `${vault.id}/${path}` : path;
-      createEditor(editorContainer, {
+      instance = createEditor(container, {
         vimrcContent: activeVimrc,
         initialDoc: content,
         syncDocPath,
@@ -340,16 +342,27 @@ async function handleFileSelectTauri(path: string, vault: VaultConfig): Promise<
         onDocChange,
       });
     } else {
-      // Local-only vault
-      createEditor(editorContainer, {
+      instance = createEditor(container, {
         vimrcContent: activeVimrc,
         initialDoc: content,
         onDocChange,
       });
     }
-  } catch (e) {
-    alert(`Failed to open file: ${e}`);
-  }
+
+    // Patch the tab's instance so destroy() cleans up correctly.
+    // The layout holds a reference to the original placeholder instance;
+    // we need to swap it out.
+    placeholder.view = instance.view;
+    placeholder.destroy = instance.destroy;
+  }).catch((e) => {
+    container.textContent = `Failed to open file: ${e}`;
+  });
+
+  return placeholder;
+}
+
+function handleFileSelect(path: string): void {
+  openFile(path);
 }
 
 function handleShare(path: string): void {
@@ -362,11 +375,10 @@ function handleSettings(): void {
       const vault = getActiveVault();
       const path = currentDocPath;
       if (vault) {
-        // Re-bootstrap so the new server URL takes effect: rebuild sidebar
-        // (share button + sync status) and recreate editor with sync.
         destroySidebar();
+        destroyLayout();
         openVault(vault);
-        if (path) handleFileSelect(path);
+        if (path) openFile(path);
       } else {
         refreshSidebar().catch(() => {});
       }
@@ -558,7 +570,6 @@ function showShareModal(path: string): void {
 async function renderShareBody(path: string, body: HTMLElement): Promise<void> {
   body.innerHTML = '';
 
-  // For synced vaults, share links use the vault-prefixed path
   const vault = getActiveVault();
   const serverPath = vault && vault.id ? `${vault.id}/${path}` : path;
 
@@ -570,7 +581,6 @@ async function renderShareBody(path: string, body: HTMLElement): Promise<void> {
     return;
   }
 
-  // Existing links
   if (links.length > 0) {
     const list = document.createElement('div');
     list.className = 'share-link-list';
@@ -595,13 +605,13 @@ async function renderShareBody(path: string, body: HTMLElement): Promise<void> {
 
       row.appendChild(info);
 
-      const input = document.createElement('input');
-      input.className = 'share-modal-link';
-      input.type = 'text';
-      input.value = url;
-      input.readOnly = true;
-      input.addEventListener('click', () => input.select());
-      row.appendChild(input);
+      const inputEl = document.createElement('input');
+      inputEl.className = 'share-modal-link';
+      inputEl.type = 'text';
+      inputEl.value = url;
+      inputEl.readOnly = true;
+      inputEl.addEventListener('click', () => inputEl.select());
+      row.appendChild(inputEl);
 
       const actions = document.createElement('div');
       actions.className = 'share-link-actions';
@@ -640,7 +650,6 @@ async function renderShareBody(path: string, body: HTMLElement): Promise<void> {
     body.appendChild(empty);
   }
 
-  // Create new link section
   const newSection = document.createElement('div');
   newSection.className = 'share-new-section';
 

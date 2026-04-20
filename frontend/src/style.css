@@ -31,15 +31,159 @@ body {
 
 #editor-container {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-#editor-container .cm-editor {
+/* ── Editor layout (tabs + split panes) ──────────────────── */
+.editor-layout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  overflow: hidden;
+}
+
+.pane-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.editor-tab-content {
+  height: 100%;
+  width: 100%;
+}
+
+.editor-tab-content .cm-editor {
   height: 100%;
 }
 
-#editor-container .cm-scroller {
+.editor-tab-content .cm-scroller {
   overflow: auto;
+}
+
+/* ── Tab bar ─────────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  background: hsl(var(--muted));
+  border-bottom: 1px solid hsl(var(--border));
+  min-height: 33px;
+  overflow: hidden;
+}
+
+.tab-list {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  border-right: 1px solid hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.tab:hover {
+  background: hsl(var(--border) / 0.5);
+}
+
+.tab-active {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--background));
+  margin-bottom: -1px;
+}
+
+.tab-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-close {
+  font-size: 14px;
+  line-height: 1;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.tab:hover .tab-close,
+.tab-active .tab-close {
+  opacity: 0.6;
+}
+
+.tab-close:hover {
+  opacity: 1 !important;
+  background: hsl(var(--border));
+}
+
+.tab-bar-actions {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.tab-bar-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: hsl(var(--muted-foreground));
+  letter-spacing: -3px;
+}
+
+.tab-bar-btn:hover {
+  background: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+/* ── Split divider ───────────────────────────────────────── */
+.split-divider {
+  width: 3px;
+  cursor: col-resize;
+  background: hsl(var(--border));
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.split-divider:hover {
+  background: hsl(var(--primary));
+}
+
+/* ── Active pane indicator ───────────────────────────────── */
+.pane-active > .tab-bar {
+  border-bottom-color: hsl(var(--primary));
 }
 
 /* ── Sidebar ──────────────────────────────────────────────── */
