@@ -35,43 +35,43 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
-function filesBase(vaultId: string): string {
-  return `/api/vaults/${encodeURIComponent(vaultId)}/files`;
+function filesBase(vaultName: string): string {
+  return `/api/vaults/${encodeURIComponent(vaultName)}/files`;
 }
 
-export async function listFiles(vaultId: string): Promise<FileEntry[]> {
-  const res = await apiFetch(filesBase(vaultId));
+export async function listFiles(vaultName: string): Promise<FileEntry[]> {
+  const res = await apiFetch(filesBase(vaultName));
   return res.json();
 }
 
-export async function readFile(vaultId: string, path: string): Promise<string> {
-  const res = await apiFetch(`${filesBase(vaultId)}/${encodeURIComponent(path)}`);
+export async function readFile(vaultName: string, path: string): Promise<string> {
+  const res = await apiFetch(`${filesBase(vaultName)}/${encodeURIComponent(path)}`);
   return res.text();
 }
 
 export async function createFile(
-  vaultId: string,
+  vaultName: string,
   path: string,
   content = '',
   type: 'file' | 'dir' = 'file',
 ): Promise<void> {
-  await apiFetch(`${filesBase(vaultId)}/${encodeURIComponent(path)}`, {
+  await apiFetch(`${filesBase(vaultName)}/${encodeURIComponent(path)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content, type }),
   });
 }
 
-export async function renameFile(vaultId: string, oldPath: string, newPath: string): Promise<void> {
-  await apiFetch(`${filesBase(vaultId)}/${encodeURIComponent(oldPath)}`, {
+export async function renameFile(vaultName: string, oldPath: string, newPath: string): Promise<void> {
+  await apiFetch(`${filesBase(vaultName)}/${encodeURIComponent(oldPath)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ newPath }),
   });
 }
 
-export async function deleteFile(vaultId: string, path: string): Promise<void> {
-  await apiFetch(`${filesBase(vaultId)}/${encodeURIComponent(path)}`, {
+export async function deleteFile(vaultName: string, path: string): Promise<void> {
+  await apiFetch(`${filesBase(vaultName)}/${encodeURIComponent(path)}`, {
     method: 'DELETE',
   });
 }
@@ -79,7 +79,6 @@ export async function deleteFile(vaultId: string, path: string): Promise<void> {
 // ── Vaults ────────────────────────────────────────────────────────────────
 
 export interface RemoteVault {
-  id: string;
   name: string;
   created_at: string;
 }
@@ -89,26 +88,26 @@ export async function listVaults(): Promise<RemoteVault[]> {
   return res.json();
 }
 
-export async function createVault(name: string, id?: string): Promise<RemoteVault> {
+export async function createVault(name: string): Promise<RemoteVault> {
   const res = await apiFetch('/api/vaults', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, id }),
-  });
-  return res.json();
-}
-
-export async function renameVault(id: string, name: string): Promise<RemoteVault> {
-  const res = await apiFetch(`/api/vaults/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
   });
   return res.json();
 }
 
-export async function deleteVault(id: string): Promise<void> {
-  await apiFetch(`/api/vaults/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export async function renameVault(oldName: string, newName: string): Promise<RemoteVault> {
+  const res = await apiFetch(`/api/vaults/${encodeURIComponent(oldName)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: newName }),
+  });
+  return res.json();
+}
+
+export async function deleteVault(name: string): Promise<void> {
+  await apiFetch(`/api/vaults/${encodeURIComponent(name)}`, { method: 'DELETE' });
 }
 
 // ── Share links ───────────────────────────────────────────────────────────

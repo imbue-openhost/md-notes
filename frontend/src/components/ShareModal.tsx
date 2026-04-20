@@ -4,12 +4,12 @@ import { createShareLink, listShareLinks, deleteShareLink } from '../api/client'
 
 interface Props {
   path: string;
-  vaultId?: string;
+  vaultName?: string;
   onClose: () => void;
 }
 
 export const ShareModal: Component<Props> = (props) => {
-  const serverPath = () => props.vaultId ? `${props.vaultId}/${props.path}` : props.path;
+  const serverPath = () => props.vaultName ? `${props.vaultName}/${props.path}` : props.path;
   const [links, { refetch }] = createResource(serverPath, (sp) => listShareLinks(sp));
 
   async function handleCreate(permission: 'read' | 'write') {

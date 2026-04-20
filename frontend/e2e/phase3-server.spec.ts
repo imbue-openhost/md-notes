@@ -17,7 +17,7 @@ const VAULT_PATH = '/tmp/test-vault-pw';
 const SERVER_PORT = 8081;
 
 let serverProcess: ChildProcess | null = null;
-let vaultId: string;
+let vaultName: string;
 
 function api(path: string): string {
   return `http://localhost:${SERVER_PORT}${path}`;
@@ -25,7 +25,7 @@ function api(path: string): string {
 
 function filesApi(path: string = ''): string {
   const suffix = path ? `/${path}` : '';
-  return api(`/api/vaults/${vaultId}/files${suffix}`);
+  return api(`/api/vaults/${vaultName}/files${suffix}`);
 }
 
 test.beforeAll(async () => {
@@ -64,9 +64,9 @@ test.beforeAll(async () => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: 'Test' }),
   });
-  vaultId = (await created.json()).id;
+  vaultName = (await created.json()).name;
 
-  const vaultDir = join(VAULT_PATH, vaultId);
+  const vaultDir = join(VAULT_PATH, vaultName);
   mkdirSync(join(vaultDir, 'subfolder'), { recursive: true });
   writeFileSync(join(vaultDir, 'hello.md'), '# Hello World\n\nThis is a test note.');
   writeFileSync(join(vaultDir, 'subfolder', 'nested.md'), '# Nested Note');

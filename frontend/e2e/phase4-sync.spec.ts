@@ -8,7 +8,7 @@ const VAULT_PATH = '/tmp/test-vault-sync';
 const SERVER_PORT = 8082;
 
 let serverProcess: ChildProcess | null = null;
-let vaultId: string;
+let vaultName: string;
 
 function api(path: string): string {
   return `http://localhost:${SERVER_PORT}${path}`;
@@ -48,9 +48,9 @@ test.describe('Phase 4: Yjs Sync', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'Sync' }),
     });
-    vaultId = (await created.json()).id;
+    vaultName = (await created.json()).name;
 
-    const vaultDir = join(VAULT_PATH, vaultId);
+    const vaultDir = join(VAULT_PATH, vaultName);
     mkdirSync(vaultDir, { recursive: true });
     writeFileSync(join(vaultDir, 'sync-test.md'), '# Sync Test\n\nOriginal content.');
   });

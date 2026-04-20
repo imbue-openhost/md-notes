@@ -83,10 +83,10 @@ def _init_room_doc(room: YRoom, room_name: str) -> None:
     if room_name in _initialised_rooms:
         return
 
-    # Auto-register the vault on first sync. Room paths are <vault_id>/<rel_path>.
+    # Auto-register the vault on first sync. Room paths are <vault_name>/<rel_path>.
     if "/" in room_name:
-        vault_id = room_name.split("/", 1)[0]
-        upsert_vault(vault_id)
+        vault_name = room_name.split("/", 1)[0]
+        upsert_vault(vault_name)
 
     file_path = _doc_path_from_room(room_name)
     try:

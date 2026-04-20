@@ -11,7 +11,7 @@ interface Props {
   vaults: VaultConfig[];
   onSelect: (vault: VaultConfig) => void;
   onAdd: (name: string, path: string, sync: boolean) => void;
-  onRemove: (id: string) => void;
+  onRemove: (name: string) => void;
 }
 
 export const VaultPicker: Component<Props> = (props) => {
@@ -64,7 +64,7 @@ export const VaultPicker: Component<Props> = (props) => {
                     onClick={(e) => {
                       e.stopPropagation();
                       if (confirm(`Remove "${vault.name}" from the list? Files on disk will not be deleted.`))
-                        props.onRemove(vault.id);
+                        props.onRemove(vault.name);
                     }}
                   >
                     &times;

@@ -6,7 +6,6 @@ export interface FileEntry {
 }
 
 export interface VaultConfig {
-  id: string;
   name: string;
   path: string;
   sync: boolean;

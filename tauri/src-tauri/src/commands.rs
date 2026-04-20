@@ -1,15 +1,11 @@
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
 use std::fs;
-use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
 // ── Config types ─────────────────────────────────────────────────────────
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VaultConfig {
-    pub id: String,
     pub name: String,
     pub path: String,
     pub sync: bool,
@@ -23,8 +19,8 @@ pub struct SavedConfig {
     pub api_key: Option<String>,
     #[serde(default)]
     pub vaults: Vec<VaultConfig>,
-    #[serde(default)]
-    pub last_vault_id: Option<String>,
+    #[serde(default, alias = "last_vault_id")]
+    pub last_vault: Option<String>,
     /// Legacy field — migrated to vaults on first read.
     #[serde(default, skip_serializing)]
     pub vault_path: Option<String>,
@@ -35,7 +31,7 @@ pub struct AppConfig {
     pub server_url: String,
     pub api_key: String,
     pub vaults: Vec<VaultConfig>,
-    pub last_vault_id: Option<String>,
+    pub last_vault: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -72,13 +68,6 @@ fn write_saved_config(config: &SavedConfig) -> Result<(), String> {
     let json =
         serde_json::to_string_pretty(config).map_err(|e| format!("Serialize error: {}", e))?;
     fs::write(&path, json).map_err(|e| format!("Write error: {}", e))
-}
-
-fn generate_vault_id(path: &str) -> String {
-    let mut hasher = DefaultHasher::new();
-    path.hash(&mut hasher);
-    SystemTime::now().hash(&mut hasher);
-    format!("{:016x}", hasher.finish())
 }
 
 fn md_notes_dir() -> PathBuf {
@@ -118,15 +107,21 @@ pub fn get_config() -> AppConfig {
         if let Some(ref vp) = saved.vault_path {
             if !vp.is_empty() {
                 let vault = VaultConfig {
-                    id: generate_vault_id(vp),
                     name: "Notes".to_string(),
                     path: vp.clone(),
                     sync: true,
                 };
-                saved.last_vault_id = Some(vault.id.clone());
+                saved.last_vault = Some(vault.name.clone());
                 saved.vaults.push(vault);
                 let _ = write_saved_config(&saved);
             }
+        }
+    }
+
+    // Fix up last_vault if it doesn't match any vault name (migration from old ID-based configs)
+    if let Some(ref lv) = saved.last_vault {
+        if !saved.vaults.iter().any(|v| v.name == *lv) {
+            saved.last_vault = saved.vaults.first().map(|v| v.name.clone());
         }
     }
 
@@ -134,7 +129,7 @@ pub fn get_config() -> AppConfig {
         server_url: saved.server_url.unwrap_or_default(),
         api_key: saved.api_key.unwrap_or_default(),
         vaults: saved.vaults,
-        last_vault_id: saved.last_vault_id,
+        last_vault: saved.last_vault,
     }
 }
 
@@ -165,31 +160,30 @@ pub fn save_config(server_url: Option<String>, api_key: Option<String>) -> Resul
 pub fn add_vault(name: String, path: String, sync: bool) -> Result<VaultConfig, String> {
     let mut saved = load_saved_config();
     let vault = VaultConfig {
-        id: generate_vault_id(&path),
         name,
         path,
         sync,
     };
     saved.vaults.push(vault.clone());
-    saved.last_vault_id = Some(vault.id.clone());
+    saved.last_vault = Some(vault.name.clone());
     write_saved_config(&saved)?;
     Ok(vault)
 }
 
 #[tauri::command]
-pub fn remove_vault(id: String) -> Result<(), String> {
+pub fn remove_vault(name: String) -> Result<(), String> {
     let mut saved = load_saved_config();
-    saved.vaults.retain(|v| v.id != id);
-    if saved.last_vault_id.as_deref() == Some(&id) {
-        saved.last_vault_id = saved.vaults.first().map(|v| v.id.clone());
+    saved.vaults.retain(|v| v.name != name);
+    if saved.last_vault.as_deref() == Some(&name) {
+        saved.last_vault = saved.vaults.first().map(|v| v.name.clone());
     }
     write_saved_config(&saved)
 }
 
 #[tauri::command]
-pub fn set_last_vault(id: String) -> Result<(), String> {
+pub fn set_last_vault(name: String) -> Result<(), String> {
     let mut saved = load_saved_config();
-    saved.last_vault_id = Some(id);
+    saved.last_vault = Some(name);
     write_saved_config(&saved)
 }
 

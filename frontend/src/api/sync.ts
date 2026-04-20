@@ -48,7 +48,7 @@ export async function syncVault(
   try {
     const [localTree, remoteTree] = await Promise.all([
       invoke<FileEntry[]>('list_local_files', { vaultPath: vault.path }),
-      api.listFiles(vault.id),
+      api.listFiles(vault.name),
     ]);
     localPaths = flattenTree(localTree);
     remotePaths = flattenTree(remoteTree);
@@ -69,7 +69,7 @@ export async function syncVault(
     try {
       const [localContent, remoteContent] = await Promise.all([
         invoke<string>('read_local_file', { vaultPath: vault.path, path }),
-        api.readFile(vault.id, path),
+        api.readFile(vault.name, path),
       ]);
       if (localContent !== remoteContent) {
         toDownload.push({ path, content: remoteContent });
@@ -95,7 +95,7 @@ export async function syncVault(
     onProgress?.({ phase: 'uploading', current: completed, total: totalOps, message: `Uploading ${path}` });
     try {
       const content = await invoke<string>('read_local_file', { vaultPath: vault.path, path });
-      await api.createFile(vault.id, path, content);
+      await api.createFile(vault.name, path, content);
     } catch {
       // Skip individual failures
     }
@@ -106,7 +106,7 @@ export async function syncVault(
   for (const path of remoteOnly) {
     onProgress?.({ phase: 'downloading', current: completed, total: totalOps, message: `Downloading ${path}` });
     try {
-      const content = await api.readFile(vault.id, path);
+      const content = await api.readFile(vault.name, path);
       await invoke('write_local_file', { vaultPath: vault.path, path, content });
     } catch {
       // Skip individual failures

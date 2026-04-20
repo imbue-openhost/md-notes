@@ -21,7 +21,7 @@ interface TauriConfig {
   server_url: string;
   api_key: string;
   vaults: VaultConfig[];
-  last_vault_id: string | null;
+  last_vault: string | null;
 }
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -85,8 +85,8 @@ export const App: Component = () => {
     if (isTauri) {
       const config = await loadTauriConfig();
       if (!config) { setShowVaultPicker(true); return; }
-      if (config.last_vault_id) {
-        const v = config.vaults.find((v) => v.id === config.last_vault_id);
+      if (config.last_vault) {
+        const v = config.vaults.find((v) => v.name === config.last_vault);
         if (v) { openVault(v); return; }
       }
       setVaultList(config.vaults);
@@ -98,7 +98,7 @@ export const App: Component = () => {
       } catch {}
       try { await loadWebVaults(); } catch (e) {
         console.warn('Backend unreachable:', e);
-        openVault({ id: '', name: '', path: '', sync: true });
+        openVault({ name: '', path: '', sync: true });
       }
     }
   }
@@ -107,7 +107,7 @@ export const App: Component = () => {
     let vaults: VaultConfig[] = [];
     try {
       const remote = await listVaults();
-      vaults = remote.map((v) => ({ id: v.id, name: v.name, path: '', sync: true }));
+      vaults = remote.map((v) => ({ name: v.name, path: '', sync: true }));
     } catch (e) { console.error('Failed to load vaults:', e); }
     setVaultList(vaults);
     setShowVaultPicker(true);
@@ -145,8 +145,8 @@ export const App: Component = () => {
       setSyncStatusVal('no-remote');
     }
 
-    if (v.sync && activeServerUrl() && v.id) {
-      createVault(v.name, v.id).catch(() => {});
+    if (v.sync && activeServerUrl() && v.name) {
+      createVault(v.name).catch(() => {});
       if (isTauri && activeApiKey()) runFileSync(v);
     }
   }
@@ -187,7 +187,7 @@ export const App: Component = () => {
     const v = vault();
     if (isTauri && v) return makeEditorForPathTauri(path, container, v);
 
-    const syncDocPath = v?.id ? `${v.id}/${path}` : path;
+    const syncDocPath = v?.name ? `${v.name}/${path}` : path;
     return createEditor(container, {
       vimrcContent: activeVimrc(),
       syncDocPath,
@@ -211,7 +211,7 @@ export const App: Component = () => {
 
       let instance: EditorInstance;
       if (v.sync && activeServerUrl()) {
-        const syncDocPath = v.id ? `${v.id}/${path}` : path;
+        const syncDocPath = v.name ? `${v.name}/${path}` : path;
         instance = createEditor(container, {
           vimrcContent: activeVimrc(),
           initialDoc: content,
@@ -237,7 +237,7 @@ export const App: Component = () => {
   }
 
   function handleVaultSelect(v: VaultConfig) {
-    if (isTauri) invoke('set_last_vault', { id: v.id }).catch(() => {});
+    if (isTauri) invoke('set_last_vault', { name: v.name }).catch(() => {});
     openVault(v);
   }
 
@@ -245,22 +245,22 @@ export const App: Component = () => {
     if (isTauri) {
       const v = await invoke<VaultConfig>('add_vault', { name, path, sync });
       if (sync && activeServerUrl()) {
-        createVault(v.name, v.id).catch(() => {});
+        createVault(v.name).catch(() => {});
       }
       openVault(v);
     } else {
       const created = await createVault(name);
-      openVault({ id: created.id, name: created.name, path: '', sync: true });
+      openVault({ name: created.name, path: '', sync: true });
     }
   }
 
-  async function handleVaultRemove(id: string) {
+  async function handleVaultRemove(name: string) {
     if (isTauri) {
-      await invoke('remove_vault', { id });
+      await invoke('remove_vault', { name });
       const config = await loadTauriConfig();
       setVaultList(config?.vaults ?? []);
     } else {
-      await deleteVault(id);
+      await deleteVault(name);
       await loadWebVaults();
     }
   }
@@ -334,7 +334,7 @@ export const App: Component = () => {
       <Show when={shareModalPath()}>
         <ShareModal
           path={shareModalPath()!}
-          vaultId={vault()?.id}
+          vaultName={vault()?.name}
           onClose={() => setShareModalPath(null)}
         />
       </Show>

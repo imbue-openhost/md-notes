@@ -8,7 +8,7 @@ const VAULT_PATH = '/tmp/test-vault-share';
 const SERVER_PORT = 8083;
 
 let serverProcess: ChildProcess | null = null;
-let vaultId: string;
+let vaultName: string;
 let docPath: string;
 
 test.describe('Phase 5: Sharing', () => {
@@ -45,11 +45,11 @@ test.describe('Phase 5: Sharing', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'Share' }),
     });
-    vaultId = (await created.json()).id;
-    docPath = `${vaultId}/shared-doc.md`;
+    vaultName = (await created.json()).name;
+    docPath = `${vaultName}/shared-doc.md`;
 
-    mkdirSync(join(VAULT_PATH, vaultId), { recursive: true });
-    writeFileSync(join(VAULT_PATH, vaultId, 'shared-doc.md'), '# Shared Document\n\nThis is shared content.');
+    mkdirSync(join(VAULT_PATH, vaultName), { recursive: true });
+    writeFileSync(join(VAULT_PATH, vaultName, 'shared-doc.md'), '# Shared Document\n\nThis is shared content.');
   });
 
   test.afterAll(async () => {
