@@ -58,7 +58,11 @@ class QuartWebsocketChannel:
             raise StopAsyncIteration
 
     async def send(self, message: bytes) -> None:
-        await self._ws.send(message)
+        try:
+            await self._ws.send(message)
+        except Exception as e:
+            log.debug("WebSocket send error on %s: %s", self._path, e)
+            raise ConnectionError(f"WebSocket closed: {e}") from e
 
     async def recv(self) -> bytes:
         data = await self._ws.receive()

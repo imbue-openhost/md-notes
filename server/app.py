@@ -1,6 +1,6 @@
 """Quart application factory."""
 
-from quart import Quart, request, send_from_directory, jsonify, websocket as ws_ctx
+from quart import Quart, abort, request, send_from_directory, jsonify, websocket as ws_ctx
 from quart_cors import cors
 
 from .config import FRONTEND_DIST, VAULT_PATH, API_KEY
@@ -72,7 +72,7 @@ def create_app() -> Quart:
         if auth == f"Bearer {API_KEY}" or token == API_KEY:
             return
 
-        await ws_ctx.close(4001, "Unauthorized")
+        abort(403)
 
     # Register route blueprints
     from .routes.files import bp as files_bp
