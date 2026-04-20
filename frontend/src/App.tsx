@@ -287,6 +287,22 @@ export const App: Component = () => {
         e.preventDefault();
         layoutHandle?.splitPane();
       }
+      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === 'h') {
+        e.preventDefault();
+        layoutHandle?.focusGroupLeft();
+      }
+      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === 'l') {
+        e.preventDefault();
+        layoutHandle?.focusGroupRight();
+      }
+      if (e.metaKey && e.ctrlKey && e.shiftKey && e.key === 'h') {
+        e.preventDefault();
+        layoutHandle?.focusTabLeft();
+      }
+      if (e.metaKey && e.ctrlKey && e.shiftKey && e.key === 'l') {
+        e.preventDefault();
+        layoutHandle?.focusTabRight();
+      }
     };
     document.addEventListener('keydown', onKey);
     onCleanup(() => document.removeEventListener('keydown', onKey));

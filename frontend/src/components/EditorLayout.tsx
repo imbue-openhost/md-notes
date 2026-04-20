@@ -12,6 +12,10 @@ import type { EditorInstance } from '../editor/editor';
 export interface EditorLayoutHandle {
   openFile: (path: string) => void;
   splitPane: () => void;
+  focusGroupLeft: () => void;
+  focusGroupRight: () => void;
+  focusTabLeft: () => void;
+  focusTabRight: () => void;
 }
 
 type CreateEditorFn = (path: string, container: HTMLElement) => EditorInstance;
@@ -62,6 +66,38 @@ export const EditorLayout: Component<Props> = (props) => {
         params: { filePath },
         position: { referencePanel: active, direction: 'right' },
       });
+    },
+    focusGroupLeft() {
+      if (!api) return;
+      const groups = api.groups;
+      const idx = groups.findIndex((g) => g.api.isActive);
+      if (idx > 0) groups[idx - 1].api.setActive();
+    },
+    focusGroupRight() {
+      if (!api) return;
+      const groups = api.groups;
+      const idx = groups.findIndex((g) => g.api.isActive);
+      if (idx >= 0 && idx < groups.length - 1) groups[idx + 1].api.setActive();
+    },
+    focusTabLeft() {
+      if (!api) return;
+      const group = api.activeGroup;
+      if (!group) return;
+      const panels = group.panels;
+      const active = group.activePanel;
+      if (!active || panels.length < 2) return;
+      const idx = panels.indexOf(active);
+      if (idx > 0) panels[idx - 1].api.setActive();
+    },
+    focusTabRight() {
+      if (!api) return;
+      const group = api.activeGroup;
+      if (!group) return;
+      const panels = group.panels;
+      const active = group.activePanel;
+      if (!active || panels.length < 2) return;
+      const idx = panels.indexOf(active);
+      if (idx < panels.length - 1) panels[idx + 1].api.setActive();
     },
   };
 
