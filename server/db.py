@@ -1,4 +1,4 @@
-"""SQLite database for share links and vaults."""
+"""SQLite database for share links and settings."""
 
 import sqlite3
 import uuid
@@ -20,12 +20,6 @@ def init_db(path: Path) -> None:
             uuid       TEXT PRIMARY KEY,
             doc_path   TEXT NOT NULL,
             permission TEXT NOT NULL CHECK (permission IN ('read', 'write')),
-            created_at TEXT NOT NULL
-        )
-    """)
-    _conn.execute("""
-        CREATE TABLE IF NOT EXISTS vaults (
-            name       TEXT PRIMARY KEY,
             created_at TEXT NOT NULL
         )
     """)
@@ -83,55 +77,6 @@ def close_db() -> None:
     if _conn:
         _conn.close()
         _conn = None
-
-
-# ── Vaults ────────────────────────────────────────────────────────────────
-
-
-def list_vaults() -> list[dict]:
-    rows = _get_conn().execute(
-        "SELECT name, created_at FROM vaults ORDER BY created_at"
-    ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def get_vault(name: str) -> dict | None:
-    row = _get_conn().execute(
-        "SELECT name, created_at FROM vaults WHERE name = ?", (name,)
-    ).fetchone()
-    return dict(row) if row else None
-
-
-def create_vault(name: str) -> dict:
-    now = datetime.now(timezone.utc).isoformat()
-    _get_conn().execute(
-        "INSERT INTO vaults (name, created_at) VALUES (?, ?)",
-        (name, now),
-    )
-    _get_conn().commit()
-    return {"name": name, "created_at": now}
-
-
-def upsert_vault(name: str) -> dict:
-    """Insert vault if missing. Used for auto-registration on first sync."""
-    existing = get_vault(name)
-    if existing:
-        return existing
-    return create_vault(name)
-
-
-def rename_vault(old_name: str, new_name: str) -> bool:
-    cur = _get_conn().execute(
-        "UPDATE vaults SET name = ? WHERE name = ?", (new_name, old_name)
-    )
-    _get_conn().commit()
-    return cur.rowcount > 0
-
-
-def delete_vault(name: str) -> bool:
-    cur = _get_conn().execute("DELETE FROM vaults WHERE name = ?", (name,))
-    _get_conn().commit()
-    return cur.rowcount > 0
 
 
 def get_setting(key: str) -> str | None:

@@ -63,8 +63,10 @@ export const VaultPicker: Component<Props> = (props) => {
                     title="Remove vault"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm(`Remove "${vault.name}" from the list? Files on disk will not be deleted.`))
-                        props.onRemove(vault.name);
+                      const msg = isTauri
+                        ? `Remove "${vault.name}" from the list? Files on disk will not be deleted.`
+                        : `Delete vault "${vault.name}"? All files will be permanently deleted.`;
+                      if (confirm(msg)) props.onRemove(vault.name);
                     }}
                   >
                     &times;

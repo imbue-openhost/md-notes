@@ -80,7 +80,6 @@ export async function deleteFile(vaultName: string, path: string): Promise<void>
 
 export interface RemoteVault {
   name: string;
-  created_at: string;
 }
 
 export async function listVaults(): Promise<RemoteVault[]> {

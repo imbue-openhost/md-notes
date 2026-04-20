@@ -10,7 +10,6 @@ from pycrdt import Doc, Text
 from pycrdt.websocket import WebsocketServer, YRoom
 
 from ..config import VAULT_PATH
-from ..db import upsert_vault
 from ..vault import read_file, write_file, PathTraversalError
 
 log = logging.getLogger(__name__)
@@ -83,10 +82,10 @@ def _init_room_doc(room: YRoom, room_name: str) -> None:
     if room_name in _initialised_rooms:
         return
 
-    # Auto-register the vault on first sync. Room paths are <vault_name>/<rel_path>.
+    # Ensure the vault directory exists on first sync. Room paths are <vault_name>/<rel_path>.
     if "/" in room_name:
         vault_name = room_name.split("/", 1)[0]
-        upsert_vault(vault_name)
+        (VAULT_PATH / vault_name).mkdir(parents=True, exist_ok=True)
 
     file_path = _doc_path_from_room(room_name)
     try:

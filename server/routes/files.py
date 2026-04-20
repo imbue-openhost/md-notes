@@ -3,7 +3,6 @@
 from quart import Blueprint, jsonify, request
 
 from ..config import VAULT_PATH
-from ..db import get_vault
 from ..vault import (
     PathTraversalError,
     create_directory,
@@ -28,11 +27,10 @@ async def handle_not_found(exc: FileNotFoundError):
 
 
 def _vault_root(vault_name: str):
-    """Return the on-disk root for a vault, or None if unknown."""
-    if not get_vault(vault_name):
-        return None
+    """Return the on-disk root for a vault, or None if the directory doesn't exist."""
     root = VAULT_PATH / vault_name
-    root.mkdir(parents=True, exist_ok=True)
+    if not root.is_dir():
+        return None
     return root
 
 
