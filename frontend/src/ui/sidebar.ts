@@ -118,7 +118,7 @@ export function createSidebar(parent: HTMLElement, opts: SidebarOptions): HTMLEl
   return container;
 }
 
-export type SyncStatus = 'connected' | 'disconnected' | 'connecting' | 'no-remote' | 'error';
+export type SyncStatus = 'connected' | 'disconnected' | 'connecting' | 'no-remote' | 'error' | 'syncing';
 
 /** Update the sync status indicator. Pass `errorMessage` for `'error'` status to show on click. */
 export function setSyncStatus(status: SyncStatus, errorMessage?: string): void {
@@ -137,6 +137,7 @@ export function setSyncStatus(status: SyncStatus, errorMessage?: string): void {
       connecting: 'Connecting...',
       'no-remote': 'No remote configured',
       error: 'Connection error (click for details)',
+      syncing: 'Syncing files...',
     };
     label.textContent = labels[status] ?? status;
   }
@@ -149,6 +150,17 @@ export function setSyncStatus(status: SyncStatus, errorMessage?: string): void {
     bar.style.cursor = '';
     bar.onclick = null;
   }
+}
+
+/** Update the sync status bar with custom text (e.g. progress info). */
+export function setSyncStatusText(text: string, dotStatus: SyncStatus = 'syncing'): void {
+  if (!container) return;
+  const bar = container.querySelector('.sidebar-sync-status') as HTMLElement | null;
+  if (!bar) return;
+  const dot = bar.querySelector('.sidebar-sync-dot') as HTMLElement;
+  const label = bar.querySelector('span:last-child') as HTMLElement;
+  if (dot) dot.dataset.status = dotStatus;
+  if (label) label.textContent = text;
 }
 
 /** Remove the sidebar from the DOM. */
@@ -295,10 +307,62 @@ function showContextMenu(x: number, y: number, items: MenuItem[]): void {
   document.body.appendChild(menu);
 }
 
+// ── Input dialog (replaces prompt() which doesn't work in Tauri) ─────────
+
+function showInputDialog(label: string, defaultValue = ''): Promise<string | null> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'settings-modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'settings-modal';
+
+    const title = document.createElement('div');
+    title.className = 'settings-modal-title';
+    title.textContent = label;
+    modal.appendChild(title);
+
+    const input = document.createElement('input');
+    input.className = 'settings-input';
+    input.type = 'text';
+    input.value = defaultValue;
+    modal.appendChild(input);
+
+    const buttons = document.createElement('div');
+    buttons.className = 'settings-buttons';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'share-modal-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', () => { overlay.remove(); resolve(null); });
+    buttons.appendChild(cancelBtn);
+
+    const okBtn = document.createElement('button');
+    okBtn.className = 'share-modal-btn share-modal-btn-primary';
+    okBtn.textContent = 'OK';
+    okBtn.addEventListener('click', () => { overlay.remove(); resolve(input.value); });
+    buttons.appendChild(okBtn);
+
+    modal.appendChild(buttons);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) { overlay.remove(); resolve(null); }
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { overlay.remove(); resolve(input.value); }
+      if (e.key === 'Escape') { overlay.remove(); resolve(null); }
+    });
+
+    document.body.appendChild(overlay);
+    input.focus();
+    input.select();
+  });
+}
+
 // ── File operations ───────────────────────────────────────────────────────
 
 async function handleNewFile(): Promise<void> {
-  const name = prompt('File name (e.g., note.md):');
+  const name = await showInputDialog('File name (e.g., note.md)');
   if (!name) return;
   const fileName = name.endsWith('.md') ? name : `${name}.md`;
   try {
@@ -311,7 +375,7 @@ async function handleNewFile(): Promise<void> {
 }
 
 async function handleNewFileInDir(dirPath: string): Promise<void> {
-  const name = prompt('File name (e.g., note.md):');
+  const name = await showInputDialog('File name (e.g., note.md)');
   if (!name) return;
   const fileName = name.endsWith('.md') ? name : `${name}.md`;
   const fullPath = `${dirPath}/${fileName}`;
@@ -325,10 +389,9 @@ async function handleNewFileInDir(dirPath: string): Promise<void> {
 }
 
 async function handleRename(path: string, name: string): Promise<void> {
-  const newName = prompt('New name:', name);
+  const newName = await showInputDialog('New name', name);
   if (!newName || newName === name) return;
 
-  // Build new path by replacing the last path component
   const parts = path.split('/');
   parts[parts.length - 1] = newName.endsWith('.md') ? newName : `${newName}.md`;
   const newPath = parts.join('/');
@@ -345,7 +408,8 @@ async function handleRename(path: string, name: string): Promise<void> {
 }
 
 async function handleDelete(path: string, name: string): Promise<void> {
-  if (!confirm(`Delete "${name}"?`)) return;
+  const confirmed = await showInputDialog(`Type "delete" to confirm deleting "${name}"`);
+  if (confirmed !== 'delete') return;
   try {
     await deleteFile(path);
     await refreshSidebar();

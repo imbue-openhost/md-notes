@@ -79,14 +79,6 @@ export function initSync(
   apiKey?: string,
   initialContent?: string,
 ): { extension: Extension; getText: () => string } {
-  if (!apiKey) {
-    notifyError('API key not set — configure it in Settings');
-    return {
-      extension: [],
-      getText: () => initialContent ?? '',
-    };
-  }
-
   destroySync();
 
   ydoc = new Y.Doc();

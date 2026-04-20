@@ -28,6 +28,7 @@ async def create():
         return jsonify(error="name is required"), 400
     vault_id = data.get("id")
     if vault_id and get_vault(vault_id):
+        rename_vault(vault_id, name)
         return jsonify(get_vault(vault_id)), 200
     vault = create_vault(name, vault_id=vault_id)
     (VAULT_PATH / vault["id"]).mkdir(parents=True, exist_ok=True)

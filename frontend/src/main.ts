@@ -1,6 +1,6 @@
 import './style.css';
 import { createEditor } from './editor/editor';
-import { createSidebar, destroySidebar, refreshSidebar, setCurrentFile, setSyncStatus } from './ui/sidebar';
+import { createSidebar, destroySidebar, refreshSidebar, setCurrentFile, setSyncStatus, setSyncStatusText } from './ui/sidebar';
 import { onConnectionStatus, onConnectionError } from './editor/sync';
 import { setApiBaseUrl, setApiKey, createShareLink, listShareLinks, deleteShareLink, listVaults, createVault, deleteVault, getServerApiKey } from './api/client';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
@@ -8,6 +8,7 @@ import { isDevServer, isTauri, serverUrl, getShareConfig } from './config';
 import { showSettingsModal } from './ui/settings';
 import { showVaultPicker } from './ui/vault-picker';
 import type { VaultConfig } from './api/types';
+import { syncVault } from './api/sync';
 
 import DEFAULT_VIMRC from './default.vimrc?raw';
 
@@ -107,8 +108,13 @@ async function boot(): Promise<void> {
     // Show picker
     openVaultPicker(config.vaults);
   } else {
-    // Browser mode — fetch server-managed vaults and show picker
-    await openWebVaultPicker();
+    // Browser mode — OpenHost handles auth via X-OpenHost-Is-Owner header.
+    try {
+      await openWebVaultPicker();
+    } catch (e) {
+      console.warn('Backend unreachable, opening sample editor:', e);
+      openEditor();
+    }
   }
 }
 
@@ -187,6 +193,31 @@ function openVault(vault: VaultConfig): void {
   app.innerHTML = '';
   openEditor(vault);
   refreshSidebar().catch(() => {});
+
+  if (vault.sync && activeServerUrl && vault.id) {
+    createVault(vault.name, vault.id).catch(() => {});
+
+    if (isTauri && activeApiKey) {
+      runFileSync(vault);
+    }
+  }
+}
+
+async function runFileSync(vault: VaultConfig): Promise<void> {
+  try {
+    await syncVault(vault, (progress) => {
+      if (progress.phase === 'done') {
+        setSyncStatus('connected');
+        refreshSidebar().catch(() => {});
+      } else if (progress.phase === 'error') {
+        setSyncStatus('error', progress.message);
+      } else {
+        setSyncStatusText(progress.message);
+      }
+    });
+  } catch (e) {
+    setSyncStatus('error', `Sync failed: ${e}`);
+  }
 }
 
 function switchVault(): void {
@@ -226,10 +257,10 @@ function openEditor(vault?: VaultConfig): void {
     onSwitchVault: switchVault,
     onSettings: isTauri ? handleSettings : handleWebSettings,
     vaultName: vault?.name,
-    showSyncStatus: isSync,
+    showSyncStatus: isTauri && isSync,
   });
 
-  if (isSync) {
+  if (isTauri && isSync) {
     if (hasRemote) {
       unsubSyncStatus = onConnectionStatus((status) => {
         if (lastSyncError && status !== 'connected') {
@@ -269,7 +300,6 @@ function handleFileSelect(path: string): void {
       vimrcContent: activeVimrc,
       syncDocPath,
       syncServerUrl: activeServerUrl,
-      apiKey: activeApiKey || undefined,
     });
   }
 }
