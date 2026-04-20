@@ -283,29 +283,34 @@ export const App: Component = () => {
     }
 
     const onKey = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
       if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
         e.preventDefault();
         layoutHandle?.splitPane();
       }
-      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === 'h') {
+      if (e.ctrlKey && !e.metaKey && !e.shiftKey && key === 'h') {
         e.preventDefault();
+        e.stopPropagation();
         layoutHandle?.focusGroupLeft();
       }
-      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === 'l') {
+      if (e.ctrlKey && !e.metaKey && !e.shiftKey && key === 'l') {
         e.preventDefault();
+        e.stopPropagation();
         layoutHandle?.focusGroupRight();
       }
-      if (e.metaKey && e.ctrlKey && e.shiftKey && e.key === 'h') {
+      if (e.metaKey && e.ctrlKey && e.shiftKey && key === 'h') {
         e.preventDefault();
+        e.stopPropagation();
         layoutHandle?.focusTabLeft();
       }
-      if (e.metaKey && e.ctrlKey && e.shiftKey && e.key === 'l') {
+      if (e.metaKey && e.ctrlKey && e.shiftKey && key === 'l') {
         e.preventDefault();
+        e.stopPropagation();
         layoutHandle?.focusTabRight();
       }
     };
-    document.addEventListener('keydown', onKey);
-    onCleanup(() => document.removeEventListener('keydown', onKey));
+    document.addEventListener('keydown', onKey, true);
+    onCleanup(() => document.removeEventListener('keydown', onKey, true));
   });
 
   onCleanup(() => {
