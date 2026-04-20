@@ -12,6 +12,10 @@
     "moduleDetection": "force",
     "noEmit": true,
 
+    /* SolidJS JSX */
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+
     /* Linting */
     "noUnusedLocals": false,
     "noUnusedParameters": false,

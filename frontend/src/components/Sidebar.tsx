@@ -1,0 +1,224 @@
+import { createSignal, createResource, For, Show, onMount, onCleanup, type Component } from 'solid-js';
+import type { FileEntry } from '../api/types';
+import { listFiles, createFile, deleteFile, renameFile } from '../api/vault-ops';
+import { InputDialog } from './InputDialog';
+
+export type SyncStatus = 'connected' | 'disconnected' | 'connecting' | 'no-remote' | 'error' | 'syncing';
+
+interface Props {
+  vaultName?: string;
+  onSelect: (path: string) => void;
+  onShare?: (path: string) => void;
+  onSwitchVault?: () => void;
+  onSettings?: () => void;
+  showSyncStatus?: boolean;
+  syncStatus?: SyncStatus;
+  syncErrorMsg?: string;
+  currentPath: string | null;
+}
+
+const SYNC_LABELS: Record<string, string> = {
+  connected: 'Synced',
+  disconnected: 'Offline',
+  connecting: 'Connecting...',
+  'no-remote': 'No remote configured',
+  error: 'Connection error (click for details)',
+  syncing: 'Syncing files...',
+};
+
+export const Sidebar: Component<Props> = (props) => {
+  const [files, { refetch }] = createResource(listFiles);
+  const [dialog, setDialog] = createSignal<{ label: string; defaultValue?: string; resolve: (v: string | null) => void } | null>(null);
+  const [contextMenu, setContextMenu] = createSignal<{ x: number; y: number; items: { label: string; action: () => void }[] } | null>(null);
+
+  function showInputDialog(label: string, defaultValue = ''): Promise<string | null> {
+    return new Promise((resolve) => setDialog({ label, defaultValue, resolve }));
+  }
+
+  function closeContextMenu() { setContextMenu(null); }
+
+  onMount(() => {
+    document.addEventListener('click', closeContextMenu);
+    onCleanup(() => document.removeEventListener('click', closeContextMenu));
+  });
+
+  async function handleNewFile() {
+    const name = await showInputDialog('File name (e.g., note.md)');
+    if (!name) return;
+    const fileName = name.endsWith('.md') ? name : `${name}.md`;
+    try {
+      await createFile(fileName);
+      refetch();
+      props.onSelect(fileName);
+    } catch (e) { alert(`Failed to create file: ${e}`); }
+  }
+
+  async function handleNewFileInDir(dirPath: string) {
+    const name = await showInputDialog('File name (e.g., note.md)');
+    if (!name) return;
+    const fileName = name.endsWith('.md') ? name : `${name}.md`;
+    const fullPath = `${dirPath}/${fileName}`;
+    try {
+      await createFile(fullPath);
+      refetch();
+      props.onSelect(fullPath);
+    } catch (e) { alert(`Failed to create file: ${e}`); }
+  }
+
+  async function handleRename(path: string, name: string) {
+    const newName = await showInputDialog('New name', name);
+    if (!newName || newName === name) return;
+    const parts = path.split('/');
+    parts[parts.length - 1] = newName.endsWith('.md') ? newName : `${newName}.md`;
+    const newPath = parts.join('/');
+    try {
+      await renameFile(path, newPath);
+      refetch();
+      if (props.currentPath === path) props.onSelect(newPath);
+    } catch (e) { alert(`Failed to rename: ${e}`); }
+  }
+
+  async function handleDelete(path: string, name: string) {
+    const confirmed = await showInputDialog(`Type "delete" to confirm deleting "${name}"`);
+    if (confirmed !== 'delete') return;
+    try {
+      await deleteFile(path);
+      refetch();
+    } catch (e) { alert(`Failed to delete: ${e}`); }
+  }
+
+  function FileTreeItem(entry: FileEntry) {
+    if (entry.type === 'dir') return <FolderItem entry={entry} />;
+    return <FileItem entry={entry} />;
+  }
+
+  const FolderItem: Component<{ entry: FileEntry }> = (p) => {
+    const [open, setOpen] = createSignal(false);
+    return (
+      <li classList={{ open: open() }}>
+        <div
+          class="sidebar-item"
+          data-path={p.entry.path}
+          data-type="dir"
+          onClick={() => setOpen(!open())}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setContextMenu({
+              x: e.clientX, y: e.clientY,
+              items: [
+                { label: 'New file here...', action: () => handleNewFileInDir(p.entry.path) },
+                { label: 'Delete folder', action: () => handleDelete(p.entry.path, p.entry.name) },
+              ],
+            });
+          }}
+        >
+          <span class="sidebar-arrow">{open() ? '\u25BC' : '\u25B6'}</span>
+          <span>{p.entry.name}</span>
+        </div>
+        <Show when={p.entry.children && p.entry.children.length > 0}>
+          <ul class="sidebar-children">
+            <For each={p.entry.children!}>{(child) => FileTreeItem(child)}</For>
+          </ul>
+        </Show>
+      </li>
+    );
+  };
+
+  const FileItem: Component<{ entry: FileEntry }> = (p) => {
+    return (
+      <li>
+        <div
+          class="sidebar-item"
+          classList={{ active: p.entry.path === props.currentPath }}
+          data-path={p.entry.path}
+          data-type="file"
+          onClick={() => props.onSelect(p.entry.path)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setContextMenu({
+              x: e.clientX, y: e.clientY,
+              items: [
+                { label: 'Rename...', action: () => handleRename(p.entry.path, p.entry.name) },
+                { label: 'Delete', action: () => handleDelete(p.entry.path, p.entry.name) },
+              ],
+            });
+          }}
+        >
+          <span class="sidebar-icon">{'\uD83D\uDCC4'}</span>
+          <span>{p.entry.name.replace(/\.md$/, '')}</span>
+        </div>
+      </li>
+    );
+  };
+
+  return (
+    <>
+      <div id="sidebar">
+        <div class="sidebar-header">
+          <span>{props.vaultName ?? 'Files'}</span>
+          <div class="sidebar-header-buttons">
+            <button class="sidebar-btn" title="New file" onClick={handleNewFile}>+</button>
+            <Show when={props.onShare}>
+              <button
+                class="sidebar-btn"
+                title="Share current file"
+                onClick={() => {
+                  if (props.currentPath) props.onShare!(props.currentPath);
+                  else alert('Open a file first.');
+                }}
+              >{'\u{1F517}'}</button>
+            </Show>
+            <Show when={props.onSwitchVault}>
+              <button class="sidebar-btn" title="Switch vault" onClick={props.onSwitchVault}>{'\u{1F4C1}'}</button>
+            </Show>
+            <Show when={props.onSettings}>
+              <button class="sidebar-btn" title="Settings" onClick={props.onSettings}>{'\u2699\uFE0F'}</button>
+            </Show>
+          </div>
+        </div>
+
+        <div class="sidebar-tree">
+          <Show when={files()} fallback={<div class="sidebar-error">Loading...</div>}>
+            <ul>
+              <For each={files()!}>{(entry) => FileTreeItem(entry)}</For>
+            </ul>
+          </Show>
+        </div>
+
+        <Show when={props.showSyncStatus}>
+          <div
+            class="sidebar-sync-status"
+            title={props.syncErrorMsg ?? ''}
+            style={props.syncStatus === 'error' ? { cursor: 'pointer' } : {}}
+            onClick={() => { if (props.syncStatus === 'error' && props.syncErrorMsg) alert(props.syncErrorMsg); }}
+          >
+            <span class="sidebar-sync-dot" data-status={props.syncStatus ?? 'disconnected'} />
+            <span>{SYNC_LABELS[props.syncStatus ?? 'disconnected'] ?? props.syncStatus}</span>
+          </div>
+        </Show>
+      </div>
+
+      <Show when={contextMenu()}>
+        {(menu) => (
+          <div class="sidebar-context-menu" style={{ left: `${menu().x}px`, top: `${menu().y}px` }}>
+            <For each={menu().items}>{(item) => (
+              <div class="sidebar-context-item" onClick={(e) => { e.stopPropagation(); setContextMenu(null); item.action(); }}>
+                {item.label}
+              </div>
+            )}</For>
+          </div>
+        )}
+      </Show>
+
+      <Show when={dialog()}>
+        {(d) => (
+          <InputDialog
+            label={d().label}
+            defaultValue={d().defaultValue}
+            onResult={(v) => { d().resolve(v); setDialog(null); }}
+          />
+        )}
+      </Show>
+    </>
+  );
+};

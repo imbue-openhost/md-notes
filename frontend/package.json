@@ -28,6 +28,8 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.7.0",
     "codemirror": "^6.0.2",
+    "solid-js": "^1.9.12",
+    "vite-plugin-solid": "^2.11.12",
     "y-codemirror.next": "^0.3.5",
     "y-indexeddb": "^9.0.12",
     "y-websocket": "^3.0.0",
