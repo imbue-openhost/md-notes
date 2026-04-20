@@ -17,13 +17,20 @@ const VAULT_PATH = '/tmp/test-vault-pw';
 const SERVER_PORT = 8081;
 
 let serverProcess: ChildProcess | null = null;
+let vaultId: string;
+
+function api(path: string): string {
+  return `http://localhost:${SERVER_PORT}${path}`;
+}
+
+function filesApi(path: string = ''): string {
+  const suffix = path ? `/${path}` : '';
+  return api(`/api/vaults/${vaultId}/files${suffix}`);
+}
 
 test.beforeAll(async () => {
-  // Create test vault
   rmSync(VAULT_PATH, { recursive: true, force: true });
-  mkdirSync(join(VAULT_PATH, 'subfolder'), { recursive: true });
-  writeFileSync(join(VAULT_PATH, 'hello.md'), '# Hello World\n\nThis is a test note.');
-  writeFileSync(join(VAULT_PATH, 'subfolder', 'nested.md'), '# Nested Note');
+  mkdirSync(VAULT_PATH, { recursive: true });
 
   // Start Quart server
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -42,14 +49,27 @@ test.beforeAll(async () => {
     },
   );
 
-  // Wait for server to be ready
+  // Wait for server to be ready (health is public — no auth)
   for (let i = 0; i < 20; i++) {
     try {
-      const res = await fetch(`http://localhost:${SERVER_PORT}/api/files`);
+      const res = await fetch(api('/health'));
       if (res.ok) break;
     } catch {}
     await new Promise((r) => setTimeout(r, 500));
   }
+
+  // Create the test vault and seed its files
+  const created = await fetch(api('/api/vaults'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Test' }),
+  });
+  vaultId = (await created.json()).id;
+
+  const vaultDir = join(VAULT_PATH, vaultId);
+  mkdirSync(join(vaultDir, 'subfolder'), { recursive: true });
+  writeFileSync(join(vaultDir, 'hello.md'), '# Hello World\n\nThis is a test note.');
+  writeFileSync(join(vaultDir, 'subfolder', 'nested.md'), '# Nested Note');
 });
 
 test.afterAll(async () => {
@@ -59,7 +79,7 @@ test.afterAll(async () => {
 
 test.describe('Phase 3: Server + File Management', () => {
   test('API: list files returns vault contents', async () => {
-    const res = await fetch(`http://localhost:${SERVER_PORT}/api/files`);
+    const res = await fetch(filesApi());
     expect(res.ok).toBe(true);
     const files = await res.json();
     expect(files).toBeInstanceOf(Array);
@@ -69,62 +89,50 @@ test.describe('Phase 3: Server + File Management', () => {
   });
 
   test('API: read file returns content', async () => {
-    const res = await fetch(`http://localhost:${SERVER_PORT}/api/files/hello.md`);
+    const res = await fetch(filesApi('hello.md'));
     expect(res.ok).toBe(true);
     const text = await res.text();
     expect(text).toContain('# Hello World');
   });
 
   test('API: create and delete file', async () => {
-    // Create
-    const createRes = await fetch(`http://localhost:${SERVER_PORT}/api/files/new-note.md`, {
+    const createRes = await fetch(filesApi('new-note.md'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: '# New Note' }),
     });
     expect(createRes.status).toBe(201);
 
-    // Verify exists
-    const readRes = await fetch(`http://localhost:${SERVER_PORT}/api/files/new-note.md`);
+    const readRes = await fetch(filesApi('new-note.md'));
     expect(readRes.ok).toBe(true);
-    const text = await readRes.text();
-    expect(text).toBe('# New Note');
+    expect(await readRes.text()).toBe('# New Note');
 
-    // Delete
-    const deleteRes = await fetch(`http://localhost:${SERVER_PORT}/api/files/new-note.md`, {
-      method: 'DELETE',
-    });
+    const deleteRes = await fetch(filesApi('new-note.md'), { method: 'DELETE' });
     expect(deleteRes.ok).toBe(true);
   });
 
   test('API: rename file', async () => {
-    // Create
-    await fetch(`http://localhost:${SERVER_PORT}/api/files/rename-me.md`, {
+    await fetch(filesApi('rename-me.md'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: '# Rename Test' }),
     });
 
-    // Rename
-    const renameRes = await fetch(`http://localhost:${SERVER_PORT}/api/files/rename-me.md`, {
+    const renameRes = await fetch(filesApi('rename-me.md'), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newPath: 'renamed.md' }),
     });
     expect(renameRes.ok).toBe(true);
 
-    // Verify new name
-    const readRes = await fetch(`http://localhost:${SERVER_PORT}/api/files/renamed.md`);
+    const readRes = await fetch(filesApi('renamed.md'));
     expect(readRes.ok).toBe(true);
 
-    // Cleanup
-    await fetch(`http://localhost:${SERVER_PORT}/api/files/renamed.md`, { method: 'DELETE' });
+    await fetch(filesApi('renamed.md'), { method: 'DELETE' });
   });
 
   test('API: path traversal is blocked', async () => {
-    // Use URL-encoded dots to avoid browser normalisation
-    const res = await fetch(`http://localhost:${SERVER_PORT}/api/files/..%2F..%2Fetc%2Fpasswd`);
-    // Should get 403 (traversal blocked) or 404 (not found) — not 200
+    const res = await fetch(filesApi('..%2F..%2Fetc%2Fpasswd'));
     expect([403, 404]).toContain(res.status);
     if (res.status === 200) {
       const text = await res.text();
@@ -133,25 +141,21 @@ test.describe('Phase 3: Server + File Management', () => {
   });
 
   test('API: frontend is served', async () => {
-    const res = await fetch(`http://localhost:${SERVER_PORT}/`);
+    const res = await fetch(api('/'));
     expect(res.ok).toBe(true);
     const html = await res.text();
     expect(html).toContain('<!doctype html>');
   });
 
-  test('sidebar shows file tree when API is available', async ({ page }) => {
-    // Load the app served by the Quart server (which has the API)
-    await page.goto(`http://localhost:${SERVER_PORT}/`);
+  test('sidebar shows file tree after selecting vault', async ({ page }) => {
+    await page.goto(api('/'));
+    // Web boot lands on the vault picker — pick the test vault
+    await page.locator('.vault-picker-item-name', { hasText: 'Test' }).click();
     await page.waitForSelector('.cm-editor', { timeout: 5000 });
-
-    // Wait for sidebar to load file tree
     await page.waitForTimeout(500);
 
-    // The sidebar should exist and contain files from the test vault
     const sidebar = page.locator('#sidebar');
     await expect(sidebar).toBeVisible();
-
-    // Check that file names appear in the sidebar
     await expect(sidebar).toContainText('hello');
   });
 });

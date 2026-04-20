@@ -30,40 +30,6 @@ import { initSync, destroySync } from './sync';
 
 let editorView: EditorView | null = null;
 
-const SAMPLE_MD = `# Welcome to md-notes
-
-This is a **live preview** markdown editor with _vim mode_ enabled.
-
-## Features
-
-- **Bold** and *italic* text
-- [Links](https://example.com) render inline
-- Code blocks with syntax highlighting
-- Header-based folding (click the gutter)
-
-### Code Example
-
-\`\`\`javascript
-function hello(name) {
-  console.log(\`Hello, \${name}!\`);
-  return true;
-}
-\`\`\`
-
-### Lists
-
-1. First item
-2. Second item
-3. Third item
-
-> Blockquotes are styled too.
-
----
-
-Inline \`code\` works as well. Try moving your cursor around to see the
-live preview toggle between source and rendered output.
-`;
-
 /**
  * Build the full extension set for the markdown editor.
  */
@@ -182,7 +148,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   }
 
   const state = EditorState.create({
-    doc: options.initialDoc ?? (options.syncDocPath ? '' : SAMPLE_MD),
+    doc: options.initialDoc ?? '',
     extensions,
   });
 

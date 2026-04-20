@@ -20,6 +20,8 @@ pub struct SavedConfig {
     #[serde(default)]
     pub server_url: Option<String>,
     #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
     pub vaults: Vec<VaultConfig>,
     #[serde(default)]
     pub last_vault_id: Option<String>,
@@ -31,6 +33,7 @@ pub struct SavedConfig {
 #[derive(Serialize)]
 pub struct AppConfig {
     pub server_url: String,
+    pub api_key: String,
     pub vaults: Vec<VaultConfig>,
     pub last_vault_id: Option<String>,
 }
@@ -129,6 +132,7 @@ pub fn get_config() -> AppConfig {
 
     AppConfig {
         server_url: saved.server_url.unwrap_or_default(),
+        api_key: saved.api_key.unwrap_or_default(),
         vaults: saved.vaults,
         last_vault_id: saved.last_vault_id,
     }
@@ -148,9 +152,10 @@ pub fn get_vimrc() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn save_config(server_url: Option<String>) -> Result<(), String> {
+pub fn save_config(server_url: Option<String>, api_key: Option<String>) -> Result<(), String> {
     let mut saved = load_saved_config();
     saved.server_url = server_url;
+    saved.api_key = api_key;
     write_saved_config(&saved)
 }
 

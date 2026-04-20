@@ -8,12 +8,13 @@ const VAULT_PATH = '/tmp/test-vault-share';
 const SERVER_PORT = 8083;
 
 let serverProcess: ChildProcess | null = null;
+let vaultId: string;
+let docPath: string;
 
 test.describe('Phase 5: Sharing', () => {
   test.beforeAll(async () => {
     rmSync(VAULT_PATH, { recursive: true, force: true });
     mkdirSync(VAULT_PATH, { recursive: true });
-    writeFileSync(join(VAULT_PATH, 'shared-doc.md'), '# Shared Document\n\nThis is shared content.');
 
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const projectRoot = join(__dirname, '..', '..');
@@ -33,11 +34,22 @@ test.describe('Phase 5: Sharing', () => {
 
     for (let i = 0; i < 20; i++) {
       try {
-        const res = await fetch(`http://localhost:${SERVER_PORT}/api/files`);
+        const res = await fetch(`http://localhost:${SERVER_PORT}/health`);
         if (res.ok) break;
       } catch {}
       await new Promise((r) => setTimeout(r, 500));
     }
+
+    const created = await fetch(`http://localhost:${SERVER_PORT}/api/vaults`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Share' }),
+    });
+    vaultId = (await created.json()).id;
+    docPath = `${vaultId}/shared-doc.md`;
+
+    mkdirSync(join(VAULT_PATH, vaultId), { recursive: true });
+    writeFileSync(join(VAULT_PATH, vaultId, 'shared-doc.md'), '# Shared Document\n\nThis is shared content.');
   });
 
   test.afterAll(async () => {
@@ -50,7 +62,7 @@ test.describe('Phase 5: Sharing', () => {
     const createRes = await fetch(`http://localhost:${SERVER_PORT}/api/share`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ docPath: 'shared-doc.md', permission: 'read' }),
+      body: JSON.stringify({ docPath, permission: 'read' }),
     });
     expect(createRes.status).toBe(201);
     const { uuid: readUuid } = await createRes.json();
@@ -60,13 +72,13 @@ test.describe('Phase 5: Sharing', () => {
     const writeRes = await fetch(`http://localhost:${SERVER_PORT}/api/share`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ docPath: 'shared-doc.md', permission: 'write' }),
+      body: JSON.stringify({ docPath, permission: 'write' }),
     });
     expect(writeRes.status).toBe(201);
     const { uuid: writeUuid } = await writeRes.json();
 
     // List links
-    const listRes = await fetch(`http://localhost:${SERVER_PORT}/api/share?docPath=shared-doc.md`);
+    const listRes = await fetch(`http://localhost:${SERVER_PORT}/api/share?docPath=${encodeURIComponent(docPath)}`);
     const links = await listRes.json();
     expect(links.length).toBe(2);
 
@@ -80,7 +92,7 @@ test.describe('Phase 5: Sharing', () => {
     const res = await fetch(`http://localhost:${SERVER_PORT}/api/share`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ docPath: 'shared-doc.md', permission: 'read' }),
+      body: JSON.stringify({ docPath, permission: 'read' }),
     });
     const { uuid } = await res.json();
 
@@ -100,7 +112,7 @@ test.describe('Phase 5: Sharing', () => {
     const res = await fetch(`http://localhost:${SERVER_PORT}/api/share`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ docPath: 'shared-doc.md', permission: 'read' }),
+      body: JSON.stringify({ docPath, permission: 'read' }),
     });
     const { uuid } = await res.json();
     await fetch(`http://localhost:${SERVER_PORT}/api/share/${uuid}`, { method: 'DELETE' });

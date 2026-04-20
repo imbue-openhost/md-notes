@@ -27,18 +27,23 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
   return invoke<T>(cmd, args);
 }
 
+function requireVaultId(): string {
+  if (!activeVault?.id) throw new Error('No active vault');
+  return activeVault.id;
+}
+
 export async function listFiles(): Promise<FileEntry[]> {
   if (isTauri && activeVault) {
     return invoke<FileEntry[]>('list_local_files', { vaultPath: activeVault.path });
   }
-  return api.listFiles(activeVault?.id || undefined);
+  return api.listFiles(requireVaultId());
 }
 
 export async function readFile(path: string): Promise<string> {
   if (isTauri && activeVault) {
     return invoke<string>('read_local_file', { vaultPath: activeVault.path, path });
   }
-  return api.readFile(path);
+  return api.readFile(requireVaultId(), path);
 }
 
 export async function createFile(path: string, content = '', type: 'file' | 'dir' = 'file'): Promise<void> {
@@ -51,7 +56,7 @@ export async function createFile(path: string, content = '', type: 'file' | 'dir
     });
     return;
   }
-  await api.createFile(path, content, type);
+  await api.createFile(requireVaultId(), path, content, type);
 }
 
 export async function renameFile(oldPath: string, newPath: string): Promise<void> {
@@ -63,7 +68,7 @@ export async function renameFile(oldPath: string, newPath: string): Promise<void
     });
     return;
   }
-  await api.renameFile(oldPath, newPath);
+  await api.renameFile(requireVaultId(), oldPath, newPath);
 }
 
 export async function deleteFile(path: string): Promise<void> {
@@ -71,5 +76,5 @@ export async function deleteFile(path: string): Promise<void> {
     await invoke('delete_local_file', { vaultPath: activeVault.path, path });
     return;
   }
-  await api.deleteFile(path);
+  await api.deleteFile(requireVaultId(), path);
 }

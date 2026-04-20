@@ -7,6 +7,7 @@ import { isTauri } from '../config';
 
 interface AppConfig {
   server_url: string;
+  api_key: string;
 }
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -44,6 +45,11 @@ export async function showSettingsModal(onSaved?: () => void): Promise<void> {
   const serverGroup = createField('Remote server', config.server_url, 'http://localhost:8080');
   form.appendChild(serverGroup.group);
 
+  // API Key
+  const apiKeyGroup = createField('API key', config.api_key, '');
+  apiKeyGroup.input.type = 'password';
+  form.appendChild(apiKeyGroup.group);
+
   modal.appendChild(form);
 
   // Buttons
@@ -61,8 +67,9 @@ export async function showSettingsModal(onSaved?: () => void): Promise<void> {
   saveBtn.textContent = 'Save';
   saveBtn.addEventListener('click', async () => {
     const serverUrl = serverGroup.input.value.trim() || undefined;
+    const apiKey = apiKeyGroup.input.value.trim() || undefined;
     try {
-      await invoke('save_config', { serverUrl });
+      await invoke('save_config', { serverUrl, apiKey });
       overlay.remove();
       onSaved?.();
     } catch (e) {

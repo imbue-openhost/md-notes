@@ -81,7 +81,7 @@ export function createSidebar(parent: HTMLElement, opts: SidebarOptions): HTMLEl
   if (opts.onSettings) {
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'sidebar-btn';
-    settingsBtn.textContent = '\u2699'; // ⚙
+    settingsBtn.textContent = '\u2699\uFE0F'; // ⚙️
     settingsBtn.title = 'Settings';
     settingsBtn.addEventListener('click', () => onSettings?.());
     buttons.appendChild(settingsBtn);
@@ -118,10 +118,12 @@ export function createSidebar(parent: HTMLElement, opts: SidebarOptions): HTMLEl
   return container;
 }
 
-/** Update the sync status indicator. */
-export function setSyncStatus(status: 'connected' | 'disconnected' | 'connecting' | 'no-remote'): void {
+export type SyncStatus = 'connected' | 'disconnected' | 'connecting' | 'no-remote' | 'error';
+
+/** Update the sync status indicator. Pass `errorMessage` for `'error'` status to show on click. */
+export function setSyncStatus(status: SyncStatus, errorMessage?: string): void {
   if (!container) return;
-  const bar = container.querySelector('.sidebar-sync-status');
+  const bar = container.querySelector('.sidebar-sync-status') as HTMLElement | null;
   if (!bar) return;
   const dot = bar.querySelector('.sidebar-sync-dot') as HTMLElement;
   const label = bar.querySelector('span:last-child') as HTMLElement;
@@ -134,8 +136,18 @@ export function setSyncStatus(status: 'connected' | 'disconnected' | 'connecting
       disconnected: 'Offline',
       connecting: 'Connecting...',
       'no-remote': 'No remote configured',
+      error: 'Connection error (click for details)',
     };
     label.textContent = labels[status] ?? status;
+  }
+  if (status === 'error' && errorMessage) {
+    bar.title = errorMessage;
+    bar.style.cursor = 'pointer';
+    bar.onclick = () => alert(errorMessage);
+  } else {
+    bar.title = '';
+    bar.style.cursor = '';
+    bar.onclick = null;
   }
 }
 

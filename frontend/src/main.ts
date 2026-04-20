@@ -1,8 +1,8 @@
 import './style.css';
 import { createEditor } from './editor/editor';
 import { createSidebar, destroySidebar, refreshSidebar, setCurrentFile, setSyncStatus } from './ui/sidebar';
-import { onConnectionStatus } from './editor/sync';
-import { setApiBaseUrl, createShareLink, listShareLinks, deleteShareLink } from './api/client';
+import { onConnectionStatus, onConnectionError } from './editor/sync';
+import { setApiBaseUrl, setApiKey, createShareLink, listShareLinks, deleteShareLink, listVaults, createVault, deleteVault, getServerApiKey } from './api/client';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
 import { isDevServer, isTauri, serverUrl, getShareConfig } from './config';
 import { showSettingsModal } from './ui/settings';
@@ -15,6 +15,7 @@ const app = document.getElementById('app')!;
 
 /** Resolved server URL — updated from Tauri config if running as desktop app. */
 let activeServerUrl = serverUrl;
+let activeApiKey = '';
 let activeVimrc = DEFAULT_VIMRC;
 let editorContainer: HTMLElement;
 let currentDocPath: string | null = null;
@@ -28,6 +29,7 @@ if (isDevServer) {
 
 interface TauriConfig {
   server_url: string;
+  api_key: string;
   vaults: VaultConfig[];
   last_vault_id: string | null;
 }
@@ -42,8 +44,12 @@ async function loadTauriConfig(): Promise<TauriConfig | null> {
   try {
     const config = await invoke<TauriConfig>('get_config');
     activeServerUrl = config.server_url || '';
+    activeApiKey = config.api_key || '';
     if (activeServerUrl) {
       setApiBaseUrl(activeServerUrl);
+    }
+    if (activeApiKey) {
+      setApiKey(activeApiKey);
     }
     // Load vimrc from ~/.md_notes/.vimrc (created with defaults on first run)
     try {
@@ -101,11 +107,41 @@ async function boot(): Promise<void> {
     // Show picker
     openVaultPicker(config.vaults);
   } else {
-    // Browser mode — single implicit vault, no picker
-    setActiveVault({ id: '', name: 'Files', path: '', sync: true });
-    openEditor();
-    refreshSidebar().catch(() => {});
+    // Browser mode — fetch server-managed vaults and show picker
+    await openWebVaultPicker();
   }
+}
+
+async function openWebVaultPicker(): Promise<void> {
+  let vaults: VaultConfig[] = [];
+  try {
+    const remote = await listVaults();
+    vaults = remote.map((v) => ({ id: v.id, name: v.name, path: '', sync: true }));
+  } catch (e) {
+    console.error('Failed to load vaults:', e);
+  }
+
+  app.innerHTML = '';
+  const picker = showVaultPicker(vaults, {
+    onSelect: (vault) => openVault(vault),
+    onAdd: async (name) => {
+      try {
+        const created = await createVault(name);
+        openVault({ id: created.id, name: created.name, path: '', sync: true });
+      } catch (e) {
+        alert(`Failed to add vault: ${e}`);
+      }
+    },
+    onRemove: async (id) => {
+      try {
+        await deleteVault(id);
+        await openWebVaultPicker();
+      } catch (e) {
+        alert(`Failed to remove vault: ${e}`);
+      }
+    },
+  });
+  app.appendChild(picker);
 }
 
 // ── Vault picker ─────────────────────────────────────────────────────────
@@ -120,6 +156,12 @@ function openVaultPicker(vaults: VaultConfig[]): void {
     onAdd: async (name, path, sync) => {
       try {
         const vault = await invoke<VaultConfig>('add_vault', { name, path, sync });
+        if (sync && activeServerUrl) {
+          // Register with server so the web UI sees the vault by name immediately.
+          createVault(vault.name, vault.id).catch((e) => {
+            console.warn('Failed to register vault with server:', e);
+          });
+        }
         openVault(vault);
       } catch (e) {
         alert(`Failed to add vault: ${e}`);
@@ -149,14 +191,20 @@ function openVault(vault: VaultConfig): void {
 
 function switchVault(): void {
   destroySidebar();
-  loadTauriConfig().then((config) => {
-    openVaultPicker(config?.vaults ?? []);
-  });
+  if (isTauri) {
+    loadTauriConfig().then((config) => {
+      openVaultPicker(config?.vaults ?? []);
+    });
+  } else {
+    openWebVaultPicker().catch((e) => console.error(e));
+  }
 }
 
 // ── Editor setup ─────────────────────────────────────────────────────────
 
 let unsubSyncStatus: (() => void) | null = null;
+let unsubSyncError: (() => void) | null = null;
+let lastSyncError: string | null = null;
 
 function openEditor(vault?: VaultConfig): void {
   editorContainer = document.createElement('div');
@@ -168,19 +216,33 @@ function openEditor(vault?: VaultConfig): void {
   // Clean up previous sync status listener
   unsubSyncStatus?.();
   unsubSyncStatus = null;
+  unsubSyncError?.();
+  unsubSyncError = null;
+  lastSyncError = null;
 
   createSidebar(app, {
     onSelect: handleFileSelect,
     onShare: isSync && hasRemote ? handleShare : undefined,
-    onSwitchVault: isTauri ? switchVault : undefined,
-    onSettings: isTauri ? handleSettings : undefined,
+    onSwitchVault: switchVault,
+    onSettings: isTauri ? handleSettings : handleWebSettings,
     vaultName: vault?.name,
     showSyncStatus: isSync,
   });
 
   if (isSync) {
     if (hasRemote) {
-      unsubSyncStatus = onConnectionStatus((status) => setSyncStatus(status));
+      unsubSyncStatus = onConnectionStatus((status) => {
+        if (lastSyncError && status !== 'connected') {
+          setSyncStatus('error', lastSyncError);
+        } else {
+          if (status === 'connected') lastSyncError = null;
+          setSyncStatus(status);
+        }
+      });
+      unsubSyncError = onConnectionError((message) => {
+        lastSyncError = message;
+        setSyncStatus('error', message);
+      });
     } else {
       setSyncStatus('no-remote');
     }
@@ -188,8 +250,7 @@ function openEditor(vault?: VaultConfig): void {
 
   app.appendChild(editorContainer);
 
-  // Start with the sample doc (no sync)
-  createEditor(editorContainer, { vimrcContent: DEFAULT_VIMRC });
+  createEditor(editorContainer, { vimrcContent: activeVimrc });
 }
 
 function handleFileSelect(path: string): void {
@@ -202,11 +263,13 @@ function handleFileSelect(path: string): void {
     // Desktop app — always read from local disk
     handleFileSelectTauri(path, vault);
   } else {
-    // Browser — use Yjs sync only
+    // Browser — use Yjs sync only, scoped under the vault id
+    const syncDocPath = vault?.id ? `${vault.id}/${path}` : path;
     createEditor(editorContainer, {
       vimrcContent: activeVimrc,
-      syncDocPath: path,
+      syncDocPath,
       syncServerUrl: activeServerUrl,
+      apiKey: activeApiKey || undefined,
     });
   }
 }
@@ -238,6 +301,7 @@ async function handleFileSelectTauri(path: string, vault: VaultConfig): Promise<
         initialDoc: content,
         syncDocPath,
         syncServerUrl: activeServerUrl,
+        apiKey: activeApiKey || undefined,
         onDocChange,
       });
     } else {
@@ -259,8 +323,92 @@ function handleShare(path: string): void {
 
 function handleSettings(): void {
   showSettingsModal(() => {
-    loadTauriConfig().then(() => refreshSidebar().catch(() => {}));
+    loadTauriConfig().then(() => {
+      const vault = getActiveVault();
+      const path = currentDocPath;
+      if (vault) {
+        // Re-bootstrap so the new server URL takes effect: rebuild sidebar
+        // (share button + sync status) and recreate editor with sync.
+        destroySidebar();
+        openVault(vault);
+        if (path) handleFileSelect(path);
+      } else {
+        refreshSidebar().catch(() => {});
+      }
+    });
   });
+}
+
+async function handleWebSettings(): Promise<void> {
+  document.querySelector('.settings-modal-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'settings-modal-overlay';
+  const modal = document.createElement('div');
+  modal.className = 'settings-modal';
+
+  const title = document.createElement('div');
+  title.className = 'settings-modal-title';
+  title.textContent = 'Settings';
+  modal.appendChild(title);
+
+  const form = document.createElement('div');
+  form.className = 'settings-form';
+
+  const group = document.createElement('div');
+  group.className = 'settings-field';
+
+  const label = document.createElement('label');
+  label.className = 'settings-label';
+  label.textContent = 'API key (for desktop app)';
+  group.appendChild(label);
+
+  const row = document.createElement('div');
+  row.style.display = 'flex';
+  row.style.gap = '6px';
+
+  const input = document.createElement('input');
+  input.className = 'settings-input';
+  input.type = 'password';
+  input.readOnly = true;
+  input.value = 'Loading...';
+  row.appendChild(input);
+
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'share-modal-btn share-modal-btn-sm';
+  copyBtn.textContent = 'Copy';
+  copyBtn.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(input.value);
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+  });
+  row.appendChild(copyBtn);
+
+  group.appendChild(row);
+  form.appendChild(group);
+  modal.appendChild(form);
+
+  const buttons = document.createElement('div');
+  buttons.className = 'settings-buttons';
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'share-modal-btn';
+  closeBtn.textContent = 'Close';
+  closeBtn.addEventListener('click', () => overlay.remove());
+  buttons.appendChild(closeBtn);
+  modal.appendChild(buttons);
+
+  overlay.appendChild(modal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+
+  try {
+    const key = await getServerApiKey();
+    input.value = key || '(no key configured)';
+  } catch (e) {
+    input.value = `Error: ${e}`;
+  }
 }
 
 // ── Share modal ──────────────────────────────────────────────────────────

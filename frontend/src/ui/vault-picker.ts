@@ -3,9 +3,11 @@
  */
 
 import type { VaultConfig } from '../api/types';
+import { isTauri } from '../config';
 
 export interface VaultPickerCallbacks {
   onSelect: (vault: VaultConfig) => void;
+  /** path is empty in browser mode (server-managed). sync is always true in browser. */
   onAdd: (name: string, path: string, sync: boolean) => void;
   onRemove: (id: string) => void;
 }
@@ -99,53 +101,55 @@ export function showVaultPicker(
   nameInput.placeholder = 'Vault name (e.g., Personal)';
   addSection.appendChild(nameInput);
 
-  // Folder picker row
-  const pathRow = document.createElement('div');
-  pathRow.className = 'vault-picker-path-row';
-
-  const pathDisplay = document.createElement('div');
-  pathDisplay.className = 'vault-picker-path-display';
-  pathDisplay.textContent = 'No folder selected';
-  pathRow.appendChild(pathDisplay);
-
   let selectedPath = '';
+  let browseBtn: HTMLButtonElement | null = null;
+  let syncCheck: HTMLInputElement | null = null;
 
-  const browseBtn = document.createElement('button');
-  browseBtn.className = 'share-modal-btn';
-  browseBtn.textContent = 'Browse...';
-  browseBtn.addEventListener('click', async () => {
-    try {
-      const folder = await pickFolder();
-      if (folder) {
-        selectedPath = folder;
-        pathDisplay.textContent = folder;
-        pathDisplay.classList.add('vault-picker-path-selected');
-        // Auto-fill name from folder name if empty
-        if (!nameInput.value.trim()) {
-          const folderName = folder.split('/').pop() || folder;
-          nameInput.value = folderName.charAt(0).toUpperCase() + folderName.slice(1);
+  if (isTauri) {
+    // Folder picker row (desktop only — browser vaults are server-managed)
+    const pathRow = document.createElement('div');
+    pathRow.className = 'vault-picker-path-row';
+
+    const pathDisplay = document.createElement('div');
+    pathDisplay.className = 'vault-picker-path-display';
+    pathDisplay.textContent = 'No folder selected';
+    pathRow.appendChild(pathDisplay);
+
+    browseBtn = document.createElement('button');
+    browseBtn.className = 'share-modal-btn';
+    browseBtn.textContent = 'Browse...';
+    browseBtn.addEventListener('click', async () => {
+      try {
+        const folder = await pickFolder();
+        if (folder) {
+          selectedPath = folder;
+          pathDisplay.textContent = folder;
+          pathDisplay.classList.add('vault-picker-path-selected');
+          if (!nameInput.value.trim()) {
+            const folderName = folder.split('/').pop() || folder;
+            nameInput.value = folderName.charAt(0).toUpperCase() + folderName.slice(1);
+          }
         }
+      } catch (e) {
+        console.error('Folder picker error:', e);
+        alert(`Failed to open folder picker: ${e}`);
       }
-    } catch (e) {
-      console.error('Folder picker error:', e);
-      alert(`Failed to open folder picker: ${e}`);
-    }
-  });
-  pathRow.appendChild(browseBtn);
+    });
+    pathRow.appendChild(browseBtn);
+    addSection.appendChild(pathRow);
 
-  addSection.appendChild(pathRow);
-
-  // Sync toggle
-  const syncRow = document.createElement('label');
-  syncRow.className = 'vault-picker-sync-row';
-  const syncCheck = document.createElement('input');
-  syncCheck.type = 'checkbox';
-  syncCheck.checked = true;
-  syncRow.appendChild(syncCheck);
-  const syncLabel = document.createElement('span');
-  syncLabel.textContent = 'Sync to remote server';
-  syncRow.appendChild(syncLabel);
-  addSection.appendChild(syncRow);
+    // Sync toggle (desktop only — browser is always synced)
+    const syncRow = document.createElement('label');
+    syncRow.className = 'vault-picker-sync-row';
+    syncCheck = document.createElement('input');
+    syncCheck.type = 'checkbox';
+    syncCheck.checked = true;
+    syncRow.appendChild(syncCheck);
+    const syncLabel = document.createElement('span');
+    syncLabel.textContent = 'Sync to remote server';
+    syncRow.appendChild(syncLabel);
+    addSection.appendChild(syncRow);
+  }
 
   // Add button
   const addBtn = document.createElement('button');
@@ -154,8 +158,8 @@ export function showVaultPicker(
   addBtn.addEventListener('click', () => {
     const name = nameInput.value.trim();
     if (!name) { nameInput.focus(); return; }
-    if (!selectedPath) { browseBtn.click(); return; }
-    callbacks.onAdd(name, selectedPath, syncCheck.checked);
+    if (isTauri && !selectedPath) { browseBtn?.click(); return; }
+    callbacks.onAdd(name, selectedPath, syncCheck?.checked ?? true);
   });
   addSection.appendChild(addBtn);
 

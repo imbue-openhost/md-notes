@@ -78,12 +78,14 @@ def create_app() -> Quart:
     from .routes.files import bp as files_bp
     from .routes.sync import bp as sync_bp, start_ws_server, stop_ws_server
     from .routes.share import bp as share_bp
+    from .routes.vaults import bp as vaults_bp
     from .db import init_db, close_db
     from .config import DB_PATH
 
     app.register_blueprint(files_bp)
     app.register_blueprint(sync_bp)
     app.register_blueprint(share_bp)
+    app.register_blueprint(vaults_bp)
 
     @app.before_serving
     async def startup():
@@ -94,6 +96,11 @@ def create_app() -> Quart:
     async def shutdown():
         await stop_ws_server()
         close_db()
+
+    # ── API key endpoint ─────────────────────────────────────────────────
+    @app.route("/api/key")
+    async def get_api_key():
+        return jsonify(api_key=API_KEY)
 
     # ── Health check ─────────────────────────────────────────────────────
     @app.route("/health")

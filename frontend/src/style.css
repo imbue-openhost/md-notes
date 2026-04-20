@@ -182,6 +182,10 @@ li.open > .sidebar-children {
   background: hsl(var(--muted-foreground));
 }
 
+.sidebar-sync-dot[data-status="error"] {
+  background: hsl(0 84% 60%);
+}
+
 /* ── Context menu ─────────────────────────────────────────── */
 .sidebar-context-menu {
   position: fixed;

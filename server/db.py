@@ -1,4 +1,4 @@
-"""SQLite database for share links."""
+"""SQLite database for share links and vaults."""
 
 import sqlite3
 import uuid
@@ -20,6 +20,13 @@ def init_db(path: Path) -> None:
             uuid       TEXT PRIMARY KEY,
             doc_path   TEXT NOT NULL,
             permission TEXT NOT NULL CHECK (permission IN ('read', 'write')),
+            created_at TEXT NOT NULL
+        )
+    """)
+    _conn.execute("""
+        CREATE TABLE IF NOT EXISTS vaults (
+            id         TEXT PRIMARY KEY,
+            name       TEXT NOT NULL,
             created_at TEXT NOT NULL
         )
     """)
@@ -70,6 +77,59 @@ def close_db() -> None:
     if _conn:
         _conn.close()
         _conn = None
+
+
+# ── Vaults ────────────────────────────────────────────────────────────────
+
+
+def list_vaults() -> list[dict]:
+    rows = _get_conn().execute(
+        "SELECT id, name, created_at FROM vaults ORDER BY created_at"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_vault(vault_id: str) -> dict | None:
+    row = _get_conn().execute(
+        "SELECT id, name, created_at FROM vaults WHERE id = ?", (vault_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def create_vault(name: str, vault_id: str | None = None) -> dict:
+    vid = vault_id or uuid.uuid4().hex
+    now = datetime.now(timezone.utc).isoformat()
+    _get_conn().execute(
+        "INSERT INTO vaults (id, name, created_at) VALUES (?, ?, ?)",
+        (vid, name, now),
+    )
+    _get_conn().commit()
+    return {"id": vid, "name": name, "created_at": now}
+
+
+def upsert_vault(vault_id: str, name: str | None = None) -> dict:
+    """Insert vault if missing. Used for auto-registration on first sync.
+
+    Does not overwrite an existing name.
+    """
+    existing = get_vault(vault_id)
+    if existing:
+        return existing
+    return create_vault(name or vault_id, vault_id=vault_id)
+
+
+def rename_vault(vault_id: str, name: str) -> bool:
+    cur = _get_conn().execute(
+        "UPDATE vaults SET name = ? WHERE id = ?", (name, vault_id)
+    )
+    _get_conn().commit()
+    return cur.rowcount > 0
+
+
+def delete_vault(vault_id: str) -> bool:
+    cur = _get_conn().execute("DELETE FROM vaults WHERE id = ?", (vault_id,))
+    _get_conn().commit()
+    return cur.rowcount > 0
 
 
 def list_links(doc_path: str | None = None) -> list[dict]:

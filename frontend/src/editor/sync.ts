@@ -15,10 +15,15 @@ let ydoc: Y.Doc | null = null;
 let provider: WebsocketProvider | null = null;
 let idbPersistence: IndexeddbPersistence | null = null;
 let ytext: Y.Text | null = null;
+let consecutiveFailures = 0;
+const MAX_RETRIES = 3;
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 type StatusListener = (status: ConnectionStatus) => void;
+type ErrorListener = (message: string) => void;
 const statusListeners: StatusListener[] = [];
+const errorListeners: ErrorListener[] = [];
+let lastError: string | null = null;
 
 export function onConnectionStatus(listener: StatusListener): () => void {
   statusListeners.push(listener);
@@ -28,9 +33,28 @@ export function onConnectionStatus(listener: StatusListener): () => void {
   };
 }
 
+export function onConnectionError(listener: ErrorListener): () => void {
+  errorListeners.push(listener);
+  return () => {
+    const idx = errorListeners.indexOf(listener);
+    if (idx >= 0) errorListeners.splice(idx, 1);
+  };
+}
+
+export function getLastConnectionError(): string | null {
+  return lastError;
+}
+
 function notifyStatus(status: ConnectionStatus): void {
   for (const listener of statusListeners) {
     listener(status);
+  }
+}
+
+function notifyError(message: string): void {
+  lastError = message;
+  for (const listener of errorListeners) {
+    listener(message);
   }
 }
 
@@ -55,6 +79,14 @@ export function initSync(
   apiKey?: string,
   initialContent?: string,
 ): { extension: Extension; getText: () => string } {
+  if (!apiKey) {
+    notifyError('API key not set — configure it in Settings');
+    return {
+      extension: [],
+      getText: () => initialContent ?? '',
+    };
+  }
+
   destroySync();
 
   ydoc = new Y.Doc();
@@ -87,7 +119,31 @@ export function initSync(
   provider = new WebsocketProvider(wsUrl, docPath, ydoc, { params });
 
   provider.on('status', (event: { status: string }) => {
+    if (event.status === 'connected') {
+      consecutiveFailures = 0;
+    }
     notifyStatus(event.status as ConnectionStatus);
+  });
+
+  provider.on('connection-error', (event: Event) => {
+    const target = (event as { target?: { url?: string } }).target;
+    const url = target?.url ?? wsUrl;
+    consecutiveFailures++;
+    if (consecutiveFailures >= MAX_RETRIES && provider) {
+      provider.disconnect();
+      notifyError(`Could not connect to ${url} after ${MAX_RETRIES} attempts`);
+    }
+  });
+
+  provider.on('connection-close', (event: CloseEvent | null) => {
+    if (event && event.code !== 1000 && event.code !== 1005) {
+      const reason = event.reason || `code ${event.code}`;
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_RETRIES && provider) {
+        provider.disconnect();
+        notifyError(`WebSocket closed: ${reason} (${wsUrl})`);
+      }
+    }
   });
 
   const extension = yCollab(ytext, provider.awareness);
@@ -102,6 +158,7 @@ export function initSync(
  * Tear down the current sync session.
  */
 export function destroySync(): void {
+  consecutiveFailures = 0;
   if (provider) {
     provider.disconnect();
     provider.destroy();
