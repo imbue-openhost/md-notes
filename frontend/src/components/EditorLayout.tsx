@@ -23,12 +23,37 @@ type CreateEditorFn = (path: string, container: HTMLElement) => EditorInstance;
 interface Props {
   createEditor: CreateEditorFn;
   onActiveFileChange: (path: string | null) => void;
+  vaultName: string;
   ref?: (handle: EditorLayoutHandle) => void;
 }
 
 let panelCounter = 0;
 
 const editorInstances = new Map<string, EditorInstance>();
+
+function layoutStorageKey(vaultName: string): string {
+  return `mdnotes-layout-${vaultName}`;
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+function saveLayout(api: DockviewApi, vaultName: string) {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(layoutStorageKey(vaultName), JSON.stringify(api.toJSON()));
+    } catch {}
+  }, 500);
+}
+
+function syncPanelCounter(api: DockviewApi) {
+  let max = panelCounter;
+  for (const panel of api.panels) {
+    const m = panel.id.match(/^file-(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  panelCounter = max;
+}
 
 export const EditorLayout: Component<Props> = (props) => {
   let api: DockviewApi | undefined;
@@ -140,6 +165,16 @@ export const EditorLayout: Component<Props> = (props) => {
         editorInstances.delete(panel.id);
       }
     });
+
+    try {
+      const saved = localStorage.getItem(layoutStorageKey(props.vaultName));
+      if (saved) {
+        api.fromJSON(JSON.parse(saved));
+        syncPanelCounter(api);
+      }
+    } catch {}
+
+    api.onDidLayoutChange(() => saveLayout(api!, props.vaultName));
   }
 
   onCleanup(() => {

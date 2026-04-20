@@ -61,6 +61,7 @@ function getWsUrl(serverUrl: string): string {
 
 export interface SyncSession {
   extension: Extension;
+  undoManager: Y.UndoManager;
   getText: () => string;
   destroy: () => void;
 }
@@ -117,10 +118,12 @@ export function createSyncSession(
     }
   });
 
-  const extension = yCollab(ytext, provider.awareness);
+  const undoManager = new Y.UndoManager(ytext);
+  const extension = yCollab(ytext, provider.awareness, { undoManager });
 
   return {
     extension,
+    undoManager,
     getText: () => ytext.toString(),
     destroy: () => {
       provider.disconnect();

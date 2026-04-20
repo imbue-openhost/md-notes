@@ -109,6 +109,15 @@ export const App: Component = () => {
       const remote = await listVaults();
       vaults = remote.map((v) => ({ name: v.name, path: '', sync: true }));
     } catch (e) { console.error('Failed to load vaults:', e); }
+
+    try {
+      const lastName = localStorage.getItem('mdnotes-last-vault');
+      if (lastName) {
+        const match = vaults.find((v) => v.name === lastName);
+        if (match) { openVault(match); return; }
+      }
+    } catch {}
+
     setVaultList(vaults);
     setShowVaultPicker(true);
   }
@@ -117,6 +126,9 @@ export const App: Component = () => {
     setActiveVault(v);
     setVault(v);
     setShowVaultPicker(false);
+    if (!isTauri && v.name) {
+      try { localStorage.setItem('mdnotes-last-vault', v.name); } catch {}
+    }
 
     unsubSyncStatus?.();
     unsubSyncError?.();
@@ -349,6 +361,7 @@ export const App: Component = () => {
           ref={(h) => { layoutHandle = h; }}
           createEditor={makeEditorForPath}
           onActiveFileChange={setCurrentDocPath}
+          vaultName={vault()!.name}
         />
       </Show>
 
