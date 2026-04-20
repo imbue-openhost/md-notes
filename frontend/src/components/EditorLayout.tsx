@@ -127,6 +127,10 @@ export const EditorLayout: Component<Props> = (props) => {
 
     api.onDidActivePanelChange((panel) => {
       props.onActiveFileChange((panel?.params as any)?.filePath ?? null);
+      if (panel) {
+        const entry = editorInstances.get(panel.id);
+        if (entry?.view) requestAnimationFrame(() => entry.view.focus());
+      }
     });
 
     api.onDidRemovePanel((panel) => {
