@@ -79,6 +79,7 @@ def create_app() -> Quart:
     from .routes.sync import bp as sync_bp, start_ws_server, stop_ws_server
     from .routes.share import bp as share_bp
     from .routes.vaults import bp as vaults_bp
+    from .routes.settings import bp as settings_bp
     from .db import init_db, close_db
     from .config import DB_PATH
 
@@ -86,6 +87,7 @@ def create_app() -> Quart:
     app.register_blueprint(sync_bp)
     app.register_blueprint(share_bp)
     app.register_blueprint(vaults_bp)
+    app.register_blueprint(settings_bp)
 
     @app.before_serving
     async def startup():

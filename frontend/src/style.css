@@ -450,6 +450,28 @@ li.open > .sidebar-children {
   margin-top: 16px;
 }
 
+.settings-modal-wide {
+  min-width: 500px;
+  max-width: 600px;
+}
+
+.settings-vimrc {
+  min-height: 280px;
+  resize: vertical;
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.settings-vimrc-errors {
+  font-size: 12px;
+  font-family: monospace;
+  color: hsl(0 84% 60%);
+  white-space: pre-wrap;
+  display: none;
+}
+
 /* ── Vault picker ──────────────────────────────────────────── */
 .vault-picker {
   display: flex;

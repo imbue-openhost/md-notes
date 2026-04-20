@@ -30,6 +30,13 @@ def init_db(path: Path) -> None:
             created_at TEXT NOT NULL
         )
     """)
+    _conn.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key        TEXT PRIMARY KEY,
+            value      TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
     _conn.commit()
 
 
@@ -130,6 +137,23 @@ def delete_vault(vault_id: str) -> bool:
     cur = _get_conn().execute("DELETE FROM vaults WHERE id = ?", (vault_id,))
     _get_conn().commit()
     return cur.rowcount > 0
+
+
+def get_setting(key: str) -> str | None:
+    row = _get_conn().execute(
+        "SELECT value FROM settings WHERE key = ?", (key,)
+    ).fetchone()
+    return row["value"] if row else None
+
+
+def set_setting(key: str, value: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    _get_conn().execute(
+        "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)"
+        " ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        (key, value, now),
+    )
+    _get_conn().commit()
 
 
 def list_links(doc_path: str | None = None) -> list[dict]:

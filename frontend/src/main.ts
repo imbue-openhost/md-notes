@@ -2,13 +2,14 @@ import './style.css';
 import { createEditor } from './editor/editor';
 import { createSidebar, destroySidebar, refreshSidebar, setCurrentFile, setSyncStatus, setSyncStatusText } from './ui/sidebar';
 import { onConnectionStatus, onConnectionError } from './editor/sync';
-import { setApiBaseUrl, setApiKey, createShareLink, listShareLinks, deleteShareLink, listVaults, createVault, deleteVault, getServerApiKey } from './api/client';
+import { setApiBaseUrl, setApiKey, createShareLink, listShareLinks, deleteShareLink, listVaults, createVault, deleteVault, getServerApiKey, getServerVimrc, saveServerVimrc } from './api/client';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
 import { isDevServer, isTauri, serverUrl, getShareConfig } from './config';
 import { showSettingsModal } from './ui/settings';
 import { showVaultPicker } from './ui/vault-picker';
 import type { VaultConfig } from './api/types';
 import { syncVault } from './api/sync';
+import { parseVimrc } from './editor/vim';
 
 import DEFAULT_VIMRC from './default.vimrc?raw';
 
@@ -109,6 +110,10 @@ async function boot(): Promise<void> {
     openVaultPicker(config.vaults);
   } else {
     // Browser mode — OpenHost handles auth via X-OpenHost-Is-Owner header.
+    try {
+      const savedVimrc = await getServerVimrc();
+      if (savedVimrc) activeVimrc = savedVimrc;
+    } catch { /* use default */ }
     try {
       await openWebVaultPicker();
     } catch (e) {
@@ -375,7 +380,7 @@ async function handleWebSettings(): Promise<void> {
   const overlay = document.createElement('div');
   overlay.className = 'settings-modal-overlay';
   const modal = document.createElement('div');
-  modal.className = 'settings-modal';
+  modal.className = 'settings-modal settings-modal-wide';
 
   const title = document.createElement('div');
   title.className = 'settings-modal-title';
@@ -385,59 +390,139 @@ async function handleWebSettings(): Promise<void> {
   const form = document.createElement('div');
   form.className = 'settings-form';
 
-  const group = document.createElement('div');
-  group.className = 'settings-field';
+  // ── API key section ──
+  const apiGroup = document.createElement('div');
+  apiGroup.className = 'settings-field';
 
-  const label = document.createElement('label');
-  label.className = 'settings-label';
-  label.textContent = 'API key (for desktop app)';
-  group.appendChild(label);
+  const apiLabel = document.createElement('label');
+  apiLabel.className = 'settings-label';
+  apiLabel.textContent = 'API key (for desktop app)';
+  apiGroup.appendChild(apiLabel);
 
-  const row = document.createElement('div');
-  row.style.display = 'flex';
-  row.style.gap = '6px';
+  const apiRow = document.createElement('div');
+  apiRow.style.display = 'flex';
+  apiRow.style.gap = '6px';
 
-  const input = document.createElement('input');
-  input.className = 'settings-input';
-  input.type = 'password';
-  input.readOnly = true;
-  input.value = 'Loading...';
-  row.appendChild(input);
+  const apiInput = document.createElement('input');
+  apiInput.className = 'settings-input';
+  apiInput.type = 'password';
+  apiInput.readOnly = true;
+  apiInput.value = 'Loading...';
+  apiRow.appendChild(apiInput);
 
   const copyBtn = document.createElement('button');
   copyBtn.className = 'share-modal-btn share-modal-btn-sm';
   copyBtn.textContent = 'Copy';
   copyBtn.addEventListener('click', async () => {
-    await navigator.clipboard.writeText(input.value);
+    await navigator.clipboard.writeText(apiInput.value);
     copyBtn.textContent = 'Copied!';
     setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
   });
-  row.appendChild(copyBtn);
+  apiRow.appendChild(copyBtn);
 
-  group.appendChild(row);
-  form.appendChild(group);
+  apiGroup.appendChild(apiRow);
+  form.appendChild(apiGroup);
+
+  // ── Keyboard shortcuts section ──
+  const vimrcGroup = document.createElement('div');
+  vimrcGroup.className = 'settings-field';
+
+  const vimrcLabel = document.createElement('label');
+  vimrcLabel.className = 'settings-label';
+  vimrcLabel.textContent = 'Keyboard shortcuts (vimrc)';
+  vimrcGroup.appendChild(vimrcLabel);
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'settings-input settings-vimrc';
+  textarea.spellcheck = false;
+  textarea.value = 'Loading...';
+  vimrcGroup.appendChild(textarea);
+
+  const errorsEl = document.createElement('div');
+  errorsEl.className = 'settings-vimrc-errors';
+  vimrcGroup.appendChild(errorsEl);
+
+  const vimrcButtons = document.createElement('div');
+  vimrcButtons.style.display = 'flex';
+  vimrcButtons.style.gap = '6px';
+
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'share-modal-btn share-modal-btn-sm';
+  resetBtn.textContent = 'Reset to defaults';
+  resetBtn.addEventListener('click', () => {
+    textarea.value = DEFAULT_VIMRC;
+    validateVimrc(textarea.value, errorsEl);
+  });
+  vimrcButtons.appendChild(resetBtn);
+
+  vimrcGroup.appendChild(vimrcButtons);
+  form.appendChild(vimrcGroup);
   modal.appendChild(form);
 
+  // Validate on input
+  textarea.addEventListener('input', () => {
+    validateVimrc(textarea.value, errorsEl);
+  });
+
+  // ── Bottom buttons ──
   const buttons = document.createElement('div');
   buttons.className = 'settings-buttons';
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'share-modal-btn';
-  closeBtn.textContent = 'Close';
-  closeBtn.addEventListener('click', () => overlay.remove());
-  buttons.appendChild(closeBtn);
-  modal.appendChild(buttons);
 
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'share-modal-btn';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', () => overlay.remove());
+  buttons.appendChild(cancelBtn);
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'share-modal-btn share-modal-btn-primary';
+  saveBtn.textContent = 'Save';
+  saveBtn.addEventListener('click', async () => {
+    try {
+      await saveServerVimrc(textarea.value);
+      activeVimrc = textarea.value;
+      overlay.remove();
+      // Re-open current file to apply new keybindings
+      if (currentDocPath) {
+        handleFileSelect(currentDocPath);
+      }
+    } catch (e) {
+      alert(`Failed to save: ${e}`);
+    }
+  });
+  buttons.appendChild(saveBtn);
+
+  modal.appendChild(buttons);
   overlay.appendChild(modal);
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) overlay.remove();
   });
   document.body.appendChild(overlay);
 
+  // Load data
   try {
     const key = await getServerApiKey();
-    input.value = key || '(no key configured)';
-  } catch (e) {
-    input.value = `Error: ${e}`;
+    apiInput.value = key || '(no key configured)';
+  } catch {
+    apiInput.value = '(unavailable)';
+  }
+
+  try {
+    const saved = await getServerVimrc();
+    textarea.value = saved ?? DEFAULT_VIMRC;
+    validateVimrc(textarea.value, errorsEl);
+  } catch {
+    textarea.value = DEFAULT_VIMRC;
+  }
+}
+
+function validateVimrc(content: string, errorsEl: HTMLElement): void {
+  const result = parseVimrc(content);
+  if (result.errors.length > 0) {
+    errorsEl.textContent = result.errors.join('\n');
+    errorsEl.style.display = 'block';
+  } else {
+    errorsEl.style.display = 'none';
   }
 }
 

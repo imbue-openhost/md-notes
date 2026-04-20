@@ -150,3 +150,17 @@ export async function getServerApiKey(): Promise<string> {
   const data = await res.json();
   return data.api_key;
 }
+
+export async function getServerVimrc(): Promise<string | null> {
+  const res = await apiFetch('/api/settings/vimrc');
+  const data = await res.json();
+  return data.vimrc;
+}
+
+export async function saveServerVimrc(vimrc: string): Promise<void> {
+  await apiFetch('/api/settings/vimrc', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vimrc }),
+  });
+}
