@@ -6,7 +6,8 @@ to prevent directory traversal.
 
 from pathlib import Path
 from pathlib import PurePosixPath
-from typing import Any
+
+from server.models.files import FileEntry
 
 
 class PathTraversalError(Exception):
@@ -15,7 +16,6 @@ class PathTraversalError(Exception):
 
 def _resolve_and_validate(root: Path, rel_path: str) -> Path:
     """Resolve a relative path against root and verify it stays inside."""
-    # Normalise the relative path (collapse ..)
     clean = PurePosixPath(rel_path)
     resolved = (root / clean).resolve()
     root_resolved = root.resolve()
@@ -24,16 +24,12 @@ def _resolve_and_validate(root: Path, rel_path: str) -> Path:
     return resolved
 
 
-def list_files(root: Path) -> list[dict[str, Any]]:
-    """Return a recursive listing of the vault as a JSON-serialisable tree.
-
-    Each entry: {"name": str, "path": str, "type": "file"|"dir",
-                 "children": [...] | None}
-    """
+def list_files(root: Path) -> list[FileEntry]:
+    """Return a recursive listing of the vault as a tree of FileEntry."""
     root = root.resolve()
 
-    def _walk(directory: Path) -> list[dict[str, Any]]:
-        entries: list[dict[str, Any]] = []
+    def _walk(directory: Path) -> list[FileEntry]:
+        entries: list[FileEntry] = []
         try:
             items = sorted(directory.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
         except PermissionError:
@@ -43,23 +39,9 @@ def list_files(root: Path) -> list[dict[str, Any]]:
                 continue
             rel = str(item.relative_to(root))
             if item.is_dir():
-                entries.append(
-                    {
-                        "name": item.name,
-                        "path": rel,
-                        "type": "dir",
-                        "children": _walk(item),
-                    }
-                )
+                entries.append(FileEntry(name=item.name, path=rel, type="dir", children=_walk(item)))
             elif item.suffix == ".md":
-                entries.append(
-                    {
-                        "name": item.name,
-                        "path": rel,
-                        "type": "file",
-                        "children": None,
-                    }
-                )
+                entries.append(FileEntry(name=item.name, path=rel, type="file", children=None))
         return entries
 
     return _walk(root)
@@ -88,7 +70,7 @@ def delete_file(root: Path, rel_path: str) -> None:
     """Delete a file or empty directory."""
     target = _resolve_and_validate(root, rel_path)
     if target.is_dir():
-        target.rmdir()  # only removes empty dirs
+        target.rmdir()
     else:
         target.unlink()
 

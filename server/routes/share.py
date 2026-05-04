@@ -2,20 +2,31 @@
 
 import json
 import logging
+from typing import Any
 from typing import Self
 
-from quart import Blueprint
-from quart import jsonify
-from quart import request
-from quart import websocket
-from quart.typing import ResponseReturnValue
+from litestar import Controller
+from litestar import MediaType
+from litestar import Response
+from litestar import WebSocket
+from litestar import delete
+from litestar import get
+from litestar import post
+from litestar import websocket
+from litestar.exceptions import ClientException
+from litestar.exceptions import NotFoundException
+from litestar.status_codes import HTTP_201_CREATED
 
 from server.config import FRONTEND_DIST
 from server.db import create_link
 from server.db import delete_link
 from server.db import get_link
 from server.db import list_links
-from server.routes.sync import QuartWebsocketChannel
+from server.models.common import OkResponse
+from server.models.share import CreateShareBody
+from server.models.share import CreateShareResponse
+from server.models.share import ShareLink
+from server.routes.sync import LitestarWebsocketChannel
 from server.routes.sync import _init_room_doc
 from server.routes.sync import _initialised_rooms
 from server.routes.sync import _save_room
@@ -24,89 +35,66 @@ from server.routes.sync import serve_document
 
 log = logging.getLogger(__name__)
 
-bp = Blueprint("share", __name__)
-
 
 # ── REST API ──────────────────────────────────────────────────────────────
 
 
-@bp.route("/api/share", methods=["POST"])
-async def create_share() -> ResponseReturnValue:
-    """Create a share link.
+class ShareController(Controller):
+    path = "/api/share"
 
-    Body JSON: {"docPath": "path/to/file.md", "permission": "read"|"write"}
-    Returns: {"uuid": "..."}
-    """
-    data = await request.get_json()
-    doc_path = data.get("docPath")
-    permission = data.get("permission", "read")
-    if not doc_path:
-        return jsonify(error="docPath is required"), 400
-    if permission not in ("read", "write"):
-        return jsonify(error="permission must be 'read' or 'write'"), 400
+    @post("/", status_code=HTTP_201_CREATED)
+    async def create_share(self, data: CreateShareBody) -> CreateShareResponse:
+        if not data.docPath:
+            raise ClientException(detail="docPath is required")
+        if data.permission not in ("read", "write"):
+            raise ClientException(detail="permission must be 'read' or 'write'")
+        link_uuid = create_link(data.docPath, data.permission)
+        return CreateShareResponse(uuid=link_uuid)
 
-    link_uuid = create_link(doc_path, permission)
-    return jsonify(uuid=link_uuid), 201
+    @delete("/{link_uuid:str}", status_code=200)
+    async def revoke_share(self, link_uuid: str) -> OkResponse:
+        if not delete_link(link_uuid):
+            raise NotFoundException(detail="not found")
+        return OkResponse()
 
-
-@bp.route("/api/share/<link_uuid>", methods=["DELETE"])
-async def revoke_share(link_uuid: str) -> ResponseReturnValue:
-    """Revoke a share link."""
-    if delete_link(link_uuid):
-        return jsonify(ok=True)
-    return jsonify(error="not found"), 404
-
-
-@bp.route("/api/share", methods=["GET"])
-async def list_shares() -> ResponseReturnValue:
-    """List share links, optionally filtered by docPath query param."""
-    doc_path = request.args.get("docPath")
-    links = list_links(doc_path)
-    return jsonify(links)
+    @get("/")
+    async def list_shares(self, docPath: str | None = None) -> list[ShareLink]:
+        return list_links(docPath)
 
 
 # ── Share page ────────────────────────────────────────────────────────────
 
 
-@bp.route("/share/<link_uuid>")
-async def share_page(link_uuid: str) -> ResponseReturnValue:
-    """Serve the frontend for a shared document."""
+@get("/share/{link_uuid:str}", media_type=MediaType.HTML)
+async def share_page(link_uuid: str) -> Response[str]:
     link = get_link(link_uuid)
     if not link:
-        return "Share link not found or revoked", 404
+        return Response("Share link not found or revoked", status_code=404, media_type=MediaType.TEXT)
 
     index = FRONTEND_DIST / "index.html"
     if not index.exists():
-        return "Frontend not built", 404
+        return Response("Frontend not built", status_code=404, media_type=MediaType.TEXT)
     html = index.read_text()
-    config_data = json.dumps(
-        {
-            "uuid": link["uuid"],
-            "docPath": link["doc_path"],
-            "permission": link["permission"],
-        }
-    )
+    config_data = json.dumps({"uuid": link.uuid, "docPath": link.doc_path, "permission": link.permission})
     config_script = f"<script>window.__SHARE_CONFIG__ = {config_data}</script>"
     html = html.replace("</head>", f"{config_script}</head>")
-    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+    return Response(html, media_type=MediaType.HTML)
 
 
 # ── Shared document WebSocket ─────────────────────────────────────────────
 
-# Yjs sync protocol message types (first byte of the message)
-_MSG_SYNC = 0  # sync protocol messages (step1, step2, update)
-_SYNC_UPDATE = 2  # third byte: it's an update (as opposed to step1=0, step2=1)
+_MSG_SYNC = 0
+_SYNC_UPDATE = 2
 
 
 class ReadOnlyChannel:
     """Wraps a channel to enforce read-only access.
 
-    Allows the initial sync handshake (sync step 1 + step 2) so the
-    client receives the document contents, but drops any subsequent
-    Yjs sync updates from the client. Awareness messages pass through.
+    Allows the initial sync handshake (sync step 1 + step 2) so the client receives the document contents,
+    but drops any subsequent Yjs sync updates from the client. Awareness messages pass through.
     """
 
-    def __init__(self, inner: QuartWebsocketChannel):
+    def __init__(self, inner: LitestarWebsocketChannel):
         self._inner = inner
 
     @property
@@ -121,14 +109,9 @@ class ReadOnlyChannel:
             data = await self._inner.__anext__()
             if len(data) < 2:
                 return data
-            msg_type = data[0]
-            if msg_type == _MSG_SYNC:
-                sub_type = data[1]
-                if sub_type == _SYNC_UPDATE:
-                    # Drop sync updates from read-only clients
-                    log.debug("Dropped update from read-only client")
-                    continue
-            # Allow sync step1/step2 and awareness messages
+            if data[0] == _MSG_SYNC and data[1] == _SYNC_UPDATE:
+                log.debug("Dropped update from read-only client")
+                continue
             return data
 
     async def send(self, message: bytes) -> None:
@@ -138,33 +121,32 @@ class ReadOnlyChannel:
         return await self._inner.recv()
 
 
-@bp.websocket("/ws/share/<link_uuid>")
-async def share_sync(link_uuid: str) -> None:
+@websocket("/ws/share/{link_uuid:str}")
+async def share_sync(socket: WebSocket[Any, Any, Any], link_uuid: str) -> None:
     """Yjs sync for shared documents.
 
-    Read-only links: server drops Yjs update messages from the client,
-    only allowing the initial sync handshake so they receive the doc.
-    Write links: full bidirectional sync.
+    Read-only links: the server drops Yjs update messages from the client, only allowing the initial sync
+    handshake so they receive the doc. Write links: full bidirectional sync.
     """
+    await socket.accept()
+
     link = get_link(link_uuid)
     if not link:
-        await websocket.close(4004, "Share link not found")
+        await socket.close(code=4004, reason="Share link not found")
         return
 
     ws_server = get_ws_server()
     if ws_server is None:
-        await websocket.close(1011, "Sync server not running")
+        await socket.close(code=1011, reason="Sync server not running")
         return
 
-    doc_path = link["doc_path"]
-    permission = link["permission"]
+    doc_path = link.doc_path
 
-    if permission == "read":
-        # Read-only: wrap channel to drop updates
+    if link.permission == "read":
         room = await ws_server.get_room(doc_path)
         _init_room_doc(room, doc_path)
         room.ready = True
-        raw_channel = QuartWebsocketChannel(websocket._get_current_object(), doc_path)  # type: ignore[attr-defined]
+        raw_channel = LitestarWebsocketChannel(socket, doc_path)
         channel = ReadOnlyChannel(raw_channel)
         try:
             await ws_server.serve(channel)
@@ -174,4 +156,4 @@ async def share_sync(link_uuid: str) -> None:
                 await ws_server.delete_room(room=room)
                 _initialised_rooms.discard(doc_path)
     else:
-        await serve_document(ws_server, websocket._get_current_object(), doc_path)  # type: ignore[attr-defined]
+        await serve_document(ws_server, socket, doc_path)

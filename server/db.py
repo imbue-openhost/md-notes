@@ -5,7 +5,8 @@ import uuid
 from datetime import UTC
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+
+from server.models.share import ShareLink
 
 _db_path: Path | None = None
 _conn: sqlite3.Connection | None = None
@@ -41,6 +42,15 @@ def _get_conn() -> sqlite3.Connection:
     return _conn
 
 
+def _row_to_link(row: sqlite3.Row) -> ShareLink:
+    return ShareLink(
+        uuid=row["uuid"],
+        doc_path=row["doc_path"],
+        permission=row["permission"],
+        created_at=row["created_at"],
+    )
+
+
 def create_link(doc_path: str, permission: str = "read") -> str:
     """Create a share link and return its UUID."""
     link_uuid = uuid.uuid4().hex
@@ -53,8 +63,8 @@ def create_link(doc_path: str, permission: str = "read") -> str:
     return link_uuid
 
 
-def get_link(link_uuid: str) -> dict[str, Any] | None:
-    """Look up a share link by UUID. Returns dict or None."""
+def get_link(link_uuid: str) -> ShareLink | None:
+    """Look up a share link by UUID."""
     row = (
         _get_conn()
         .execute(
@@ -65,7 +75,7 @@ def get_link(link_uuid: str) -> dict[str, Any] | None:
     )
     if row is None:
         return None
-    return dict(row)
+    return _row_to_link(row)
 
 
 def delete_link(link_uuid: str) -> bool:
@@ -98,7 +108,7 @@ def set_setting(key: str, value: str) -> None:
     _get_conn().commit()
 
 
-def list_links(doc_path: str | None = None) -> list[dict[str, Any]]:
+def list_links(doc_path: str | None = None) -> list[ShareLink]:
     """List share links, optionally filtered by document path."""
     if doc_path:
         rows = (
@@ -111,4 +121,4 @@ def list_links(doc_path: str | None = None) -> list[dict[str, Any]]:
         )
     else:
         rows = _get_conn().execute("SELECT uuid, doc_path, permission, created_at FROM share_links").fetchall()
-    return [dict(r) for r in rows]
+    return [_row_to_link(r) for r in rows]

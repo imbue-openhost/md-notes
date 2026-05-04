@@ -1,29 +1,24 @@
 """REST endpoints for user settings (vimrc, etc.)."""
 
-from quart import Blueprint
-from quart import jsonify
-from quart import request
-from quart.typing import ResponseReturnValue
+from litestar import Controller
+from litestar import get
+from litestar import put
 
 from server.db import get_setting
 from server.db import set_setting
-
-bp = Blueprint("settings", __name__, url_prefix="/api/settings")
-
-
-@bp.route("/vimrc", methods=["GET"])
-async def get_vimrc() -> ResponseReturnValue:
-    content = get_setting("vimrc")
-    if content is None:
-        return jsonify(vimrc=None)
-    return jsonify(vimrc=content)
+from server.models.common import OkResponse
+from server.models.settings import VimrcBody
+from server.models.settings import VimrcResponse
 
 
-@bp.route("/vimrc", methods=["PUT"])
-async def save_vimrc() -> ResponseReturnValue:
-    data = await request.get_json(silent=True) or {}
-    content = data.get("vimrc")
-    if content is None:
-        return jsonify(error="vimrc is required"), 400
-    set_setting("vimrc", content)
-    return jsonify(ok=True)
+class SettingsController(Controller):
+    path = "/api/settings"
+
+    @get("/vimrc")
+    async def get_vimrc(self) -> VimrcResponse:
+        return VimrcResponse(vimrc=get_setting("vimrc"))
+
+    @put("/vimrc")
+    async def save_vimrc(self, data: VimrcBody) -> OkResponse:
+        set_setting("vimrc", data.vimrc)
+        return OkResponse()

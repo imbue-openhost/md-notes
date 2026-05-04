@@ -2,13 +2,20 @@
 
 from pathlib import Path
 
-from quart import Blueprint
-from quart import jsonify
-from quart import request
-from quart.typing import ResponseReturnValue
+from litestar import Controller
+from litestar import MediaType
+from litestar import delete
+from litestar import get
+from litestar import patch
+from litestar import post
+from litestar.exceptions import NotFoundException
+from litestar.status_codes import HTTP_201_CREATED
 
 from server.config import VAULT_PATH
-from server.vault import PathTraversalError
+from server.models.common import OkResponse
+from server.models.files import CreateFileBody
+from server.models.files import FileEntry
+from server.models.files import RenameBody
 from server.vault import create_directory
 from server.vault import delete_file
 from server.vault import list_files
@@ -16,75 +23,44 @@ from server.vault import read_file
 from server.vault import rename_file
 from server.vault import write_file
 
-bp = Blueprint("files", __name__, url_prefix="/api/vaults/<vault_name>/files")
 
-
-@bp.errorhandler(PathTraversalError)
-async def handle_traversal(exc: PathTraversalError) -> ResponseReturnValue:
-    return jsonify(error=str(exc)), 403
-
-
-@bp.errorhandler(FileNotFoundError)
-async def handle_not_found(exc: FileNotFoundError) -> ResponseReturnValue:
-    return jsonify(error=str(exc)), 404
-
-
-def _vault_root(vault_name: str) -> Path | None:
-    """Return the on-disk root for a vault, or None if the directory doesn't exist."""
+def _vault_root(vault_name: str) -> Path:
     root = VAULT_PATH / vault_name
     if not root.is_dir():
-        return None
+        raise NotFoundException(detail="vault not found")
     return root
 
 
-@bp.route("", methods=["GET"])
-async def list_all(vault_name: str) -> ResponseReturnValue:
-    root = _vault_root(vault_name)
-    if root is None:
-        return jsonify(error="vault not found"), 404
-    return jsonify(list_files(root))
+class FilesController(Controller):
+    path = "/api/vaults/{vault_name:str}/files"
 
+    @get("/")
+    async def list_all(self, vault_name: str) -> list[FileEntry]:
+        return list_files(_vault_root(vault_name))
 
-@bp.route("/<path:filepath>", methods=["GET"])
-async def get_file(vault_name: str, filepath: str) -> ResponseReturnValue:
-    root = _vault_root(vault_name)
-    if root is None:
-        return jsonify(error="vault not found"), 404
-    content = read_file(root, filepath)
-    return content, 200, {"Content-Type": "text/plain; charset=utf-8"}
+    @get("/{filepath:path}", media_type=MediaType.TEXT)
+    async def get_file(self, vault_name: str, filepath: str) -> str:
+        root = _vault_root(vault_name)
+        return read_file(root, filepath.lstrip("/"))
 
+    @post("/{filepath:path}", status_code=HTTP_201_CREATED)
+    async def create_file(self, vault_name: str, filepath: str, data: CreateFileBody) -> OkResponse:
+        root = _vault_root(vault_name)
+        rel = filepath.lstrip("/")
+        if data.type == "dir":
+            create_directory(root, rel)
+        else:
+            write_file(root, rel, data.content)
+        return OkResponse()
 
-@bp.route("/<path:filepath>", methods=["POST"])
-async def create_file(vault_name: str, filepath: str) -> ResponseReturnValue:
-    root = _vault_root(vault_name)
-    if root is None:
-        return jsonify(error="vault not found"), 404
-    data = await request.get_json(silent=True) or {}
-    file_type = data.get("type", "file")
-    if file_type == "dir":
-        create_directory(root, filepath)
-    else:
-        write_file(root, filepath, data.get("content", ""))
-    return jsonify(ok=True), 201
+    @patch("/{filepath:path}")
+    async def move_file(self, vault_name: str, filepath: str, data: RenameBody) -> OkResponse:
+        root = _vault_root(vault_name)
+        rename_file(root, filepath.lstrip("/"), data.newPath)
+        return OkResponse()
 
-
-@bp.route("/<path:filepath>", methods=["PATCH"])
-async def move_file(vault_name: str, filepath: str) -> ResponseReturnValue:
-    root = _vault_root(vault_name)
-    if root is None:
-        return jsonify(error="vault not found"), 404
-    data = await request.get_json()
-    new_path = data.get("newPath")
-    if not new_path:
-        return jsonify(error="newPath is required"), 400
-    rename_file(root, filepath, new_path)
-    return jsonify(ok=True)
-
-
-@bp.route("/<path:filepath>", methods=["DELETE"])
-async def remove_file(vault_name: str, filepath: str) -> ResponseReturnValue:
-    root = _vault_root(vault_name)
-    if root is None:
-        return jsonify(error="vault not found"), 404
-    delete_file(root, filepath)
-    return jsonify(ok=True)
+    @delete("/{filepath:path}", status_code=200)
+    async def remove_file(self, vault_name: str, filepath: str) -> OkResponse:
+        root = _vault_root(vault_name)
+        delete_file(root, filepath.lstrip("/"))
+        return OkResponse()
