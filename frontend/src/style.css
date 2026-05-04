@@ -37,6 +37,10 @@ body {
 }
 
 /* ── Dockview overrides ──────────────────────────────────── */
+.dv-content-container {
+  position: relative;
+}
+
 #editor-container .cm-editor {
   height: 100%;
 }

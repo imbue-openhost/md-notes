@@ -1,0 +1,3 @@
+- read the style guide in style_guide.md
+- on first init, ensure pre-commit hooks are installed (`pre-commit install`). this runs ruff and mypy on commit.
+- please ask before doing anything that affects low level system stuff on this machine, or anything using sudo.
