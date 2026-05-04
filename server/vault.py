@@ -4,7 +4,9 @@ All path arguments are relative to the vault root and validated
 to prevent directory traversal.
 """
 
-from pathlib import Path, PurePosixPath
+from pathlib import Path
+from pathlib import PurePosixPath
+from typing import Any
 
 
 class PathTraversalError(Exception):
@@ -22,7 +24,7 @@ def _resolve_and_validate(root: Path, rel_path: str) -> Path:
     return resolved
 
 
-def list_files(root: Path) -> list[dict]:
+def list_files(root: Path) -> list[dict[str, Any]]:
     """Return a recursive listing of the vault as a JSON-serialisable tree.
 
     Each entry: {"name": str, "path": str, "type": "file"|"dir",
@@ -30,8 +32,8 @@ def list_files(root: Path) -> list[dict]:
     """
     root = root.resolve()
 
-    def _walk(directory: Path) -> list[dict]:
-        entries: list[dict] = []
+    def _walk(directory: Path) -> list[dict[str, Any]]:
+        entries: list[dict[str, Any]] = []
         try:
             items = sorted(directory.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
         except PermissionError:
@@ -41,19 +43,23 @@ def list_files(root: Path) -> list[dict]:
                 continue
             rel = str(item.relative_to(root))
             if item.is_dir():
-                entries.append({
-                    "name": item.name,
-                    "path": rel,
-                    "type": "dir",
-                    "children": _walk(item),
-                })
+                entries.append(
+                    {
+                        "name": item.name,
+                        "path": rel,
+                        "type": "dir",
+                        "children": _walk(item),
+                    }
+                )
             elif item.suffix == ".md":
-                entries.append({
-                    "name": item.name,
-                    "path": rel,
-                    "type": "file",
-                    "children": None,
-                })
+                entries.append(
+                    {
+                        "name": item.name,
+                        "path": rel,
+                        "type": "file",
+                        "children": None,
+                    }
+                )
         return entries
 
     return _walk(root)

@@ -26,6 +26,7 @@ else:
 # Frontend dist directory (built by Vite)
 FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 
+
 # API key for authenticating the Tauri app and programmatic access.
 # All routes except /share/ require this key.
 # If not set via env var, auto-generate and save to app data dir on first run.
@@ -39,7 +40,8 @@ def _load_or_generate_api_key() -> str:
         key_file = Path(_app_data_dir) / "api_key.txt"
         if key_file.exists():
             return key_file.read_text().strip()
-        import secrets
+        import secrets  # noqa: PLC0415
+
         key = secrets.token_urlsafe(32)
         Path(_app_data_dir).mkdir(parents=True, exist_ok=True)
         key_file.write_text(key + "\n")

@@ -1,9 +1,27 @@
 """Quart application factory."""
 
-from quart import Quart, abort, request, send_from_directory, jsonify, websocket as ws_ctx
+from quart import Quart
+from quart import abort
+from quart import jsonify
+from quart import request
+from quart import send_from_directory
+from quart import websocket as ws_ctx
+from quart.typing import ResponseReturnValue
 from quart_cors import cors
 
-from .config import FRONTEND_DIST, VAULT_PATH, API_KEY
+from server.config import API_KEY
+from server.config import DB_PATH
+from server.config import FRONTEND_DIST
+from server.config import VAULT_PATH
+from server.db import close_db
+from server.db import init_db
+from server.routes.files import bp as files_bp
+from server.routes.settings import bp as settings_bp
+from server.routes.share import bp as share_bp
+from server.routes.sync import bp as sync_bp
+from server.routes.sync import start_ws_server
+from server.routes.sync import stop_ws_server
+from server.routes.vaults import bp as vaults_bp
 
 
 def create_app() -> Quart:
@@ -17,7 +35,7 @@ def create_app() -> Quart:
 
     # ── Auth middleware ──────────────────────────────────────────────────
     @app.before_request
-    async def check_auth():
+    async def check_auth() -> ResponseReturnValue | None:
         """Require API key for all routes except /share/ and static assets.
 
         The key can be sent as:
@@ -28,30 +46,28 @@ def create_app() -> Quart:
         (the router already authenticated them).
         """
         if not API_KEY:
-            return  # No key configured — open access (local dev)
+            return None  # No key configured — open access (local dev)
 
         path = request.path
 
         # Public routes: share pages, static assets, health check
-        if (path.startswith("/share/") or
-            path.startswith("/assets/") or
-            path == "/health"):
-            return
+        if path.startswith("/share/") or path.startswith("/assets/") or path == "/health":
+            return None
 
         # OpenHost router already authenticated the owner
         if request.headers.get("X-OpenHost-Is-Owner") == "true":
-            return
+            return None
 
         # Check API key
         auth = request.headers.get("Authorization", "")
         token = request.args.get("token", "")
         if auth == f"Bearer {API_KEY}" or token == API_KEY:
-            return
+            return None
 
         return jsonify(error="Unauthorized"), 401
 
     @app.before_websocket
-    async def check_ws_auth():
+    async def check_ws_auth() -> None:
         """Same auth check for WebSocket connections."""
         if not API_KEY:
             return
@@ -74,15 +90,6 @@ def create_app() -> Quart:
 
         abort(403)
 
-    # Register route blueprints
-    from .routes.files import bp as files_bp
-    from .routes.sync import bp as sync_bp, start_ws_server, stop_ws_server
-    from .routes.share import bp as share_bp
-    from .routes.vaults import bp as vaults_bp
-    from .routes.settings import bp as settings_bp
-    from .db import init_db, close_db
-    from .config import DB_PATH
-
     app.register_blueprint(files_bp)
     app.register_blueprint(sync_bp)
     app.register_blueprint(share_bp)
@@ -90,35 +97,35 @@ def create_app() -> Quart:
     app.register_blueprint(settings_bp)
 
     @app.before_serving
-    async def startup():
+    async def startup() -> None:
         init_db(DB_PATH)
         await start_ws_server()
 
     @app.after_serving
-    async def shutdown():
+    async def shutdown() -> None:
         await stop_ws_server()
         close_db()
 
     # ── API key endpoint ─────────────────────────────────────────────────
     @app.route("/api/key")
-    async def get_api_key():
+    async def get_api_key() -> ResponseReturnValue:
         return jsonify(api_key=API_KEY)
 
     # ── Health check ─────────────────────────────────────────────────────
     @app.route("/health")
-    async def health():
+    async def health() -> ResponseReturnValue:
         return "ok"
 
     # ── Serve frontend static files ──────────────────────────────────────
     @app.route("/")
-    async def serve_index():
+    async def serve_index() -> ResponseReturnValue:
         index = FRONTEND_DIST / "index.html"
         if index.exists():
             return await send_from_directory(str(FRONTEND_DIST), "index.html")
         return "Frontend not built. Run `npm run build` in frontend/.", 404
 
     @app.route("/assets/<path:filepath>")
-    async def serve_assets(filepath: str):
+    async def serve_assets(filepath: str) -> ResponseReturnValue:
         """Serve Vite build assets."""
         return await send_from_directory(str(FRONTEND_DIST / "assets"), filepath)
 

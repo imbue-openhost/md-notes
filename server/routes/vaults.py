@@ -5,9 +5,12 @@ Vaults are auto-discovered from subdirectories of VAULT_PATH.
 
 import shutil
 
-from quart import Blueprint, jsonify, request
+from quart import Blueprint
+from quart import jsonify
+from quart import request
+from quart.typing import ResponseReturnValue
 
-from ..config import VAULT_PATH
+from server.config import VAULT_PATH
 
 bp = Blueprint("vaults", __name__, url_prefix="/api/vaults")
 
@@ -17,7 +20,7 @@ def _is_valid_name(name: str) -> bool:
 
 
 @bp.route("", methods=["GET"])
-async def list_all():
+async def list_all() -> ResponseReturnValue:
     vaults = []
     if VAULT_PATH.exists():
         for d in sorted(VAULT_PATH.iterdir()):
@@ -27,7 +30,7 @@ async def list_all():
 
 
 @bp.route("", methods=["POST"])
-async def create():
+async def create() -> ResponseReturnValue:
     """Create a vault. Body: {"name": "..."}."""
     data = await request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
@@ -41,7 +44,7 @@ async def create():
 
 
 @bp.route("/<vault_name>", methods=["PATCH"])
-async def rename(vault_name: str):
+async def rename(vault_name: str) -> ResponseReturnValue:
     data = await request.get_json(silent=True) or {}
     new_name = (data.get("name") or "").strip()
     if not new_name or not _is_valid_name(new_name):
@@ -57,7 +60,7 @@ async def rename(vault_name: str):
 
 
 @bp.route("/<vault_name>", methods=["DELETE"])
-async def remove(vault_name: str):
+async def remove(vault_name: str) -> ResponseReturnValue:
     """Delete a vault and all its files."""
     vault_dir = VAULT_PATH / vault_name
     if not vault_dir.is_dir():

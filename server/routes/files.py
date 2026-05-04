@@ -1,32 +1,35 @@
 """REST endpoints for file operations, scoped per vault."""
 
-from quart import Blueprint, jsonify, request
+from pathlib import Path
 
-from ..config import VAULT_PATH
-from ..vault import (
-    PathTraversalError,
-    create_directory,
-    delete_file,
-    list_files,
-    read_file,
-    rename_file,
-    write_file,
-)
+from quart import Blueprint
+from quart import jsonify
+from quart import request
+from quart.typing import ResponseReturnValue
+
+from server.config import VAULT_PATH
+from server.vault import PathTraversalError
+from server.vault import create_directory
+from server.vault import delete_file
+from server.vault import list_files
+from server.vault import read_file
+from server.vault import rename_file
+from server.vault import write_file
 
 bp = Blueprint("files", __name__, url_prefix="/api/vaults/<vault_name>/files")
 
 
 @bp.errorhandler(PathTraversalError)
-async def handle_traversal(exc: PathTraversalError):
+async def handle_traversal(exc: PathTraversalError) -> ResponseReturnValue:
     return jsonify(error=str(exc)), 403
 
 
 @bp.errorhandler(FileNotFoundError)
-async def handle_not_found(exc: FileNotFoundError):
+async def handle_not_found(exc: FileNotFoundError) -> ResponseReturnValue:
     return jsonify(error=str(exc)), 404
 
 
-def _vault_root(vault_name: str):
+def _vault_root(vault_name: str) -> Path | None:
     """Return the on-disk root for a vault, or None if the directory doesn't exist."""
     root = VAULT_PATH / vault_name
     if not root.is_dir():
@@ -35,7 +38,7 @@ def _vault_root(vault_name: str):
 
 
 @bp.route("", methods=["GET"])
-async def list_all(vault_name: str):
+async def list_all(vault_name: str) -> ResponseReturnValue:
     root = _vault_root(vault_name)
     if root is None:
         return jsonify(error="vault not found"), 404
@@ -43,7 +46,7 @@ async def list_all(vault_name: str):
 
 
 @bp.route("/<path:filepath>", methods=["GET"])
-async def get_file(vault_name: str, filepath: str):
+async def get_file(vault_name: str, filepath: str) -> ResponseReturnValue:
     root = _vault_root(vault_name)
     if root is None:
         return jsonify(error="vault not found"), 404
@@ -52,7 +55,7 @@ async def get_file(vault_name: str, filepath: str):
 
 
 @bp.route("/<path:filepath>", methods=["POST"])
-async def create_file(vault_name: str, filepath: str):
+async def create_file(vault_name: str, filepath: str) -> ResponseReturnValue:
     root = _vault_root(vault_name)
     if root is None:
         return jsonify(error="vault not found"), 404
@@ -66,7 +69,7 @@ async def create_file(vault_name: str, filepath: str):
 
 
 @bp.route("/<path:filepath>", methods=["PATCH"])
-async def move_file(vault_name: str, filepath: str):
+async def move_file(vault_name: str, filepath: str) -> ResponseReturnValue:
     root = _vault_root(vault_name)
     if root is None:
         return jsonify(error="vault not found"), 404
@@ -79,7 +82,7 @@ async def move_file(vault_name: str, filepath: str):
 
 
 @bp.route("/<path:filepath>", methods=["DELETE"])
-async def remove_file(vault_name: str, filepath: str):
+async def remove_file(vault_name: str, filepath: str) -> ResponseReturnValue:
     root = _vault_root(vault_name)
     if root is None:
         return jsonify(error="vault not found"), 404

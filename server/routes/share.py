@@ -2,12 +2,25 @@
 
 import json
 import logging
+from typing import Self
 
-from quart import Blueprint, jsonify, request, websocket
+from quart import Blueprint
+from quart import jsonify
+from quart import request
+from quart import websocket
+from quart.typing import ResponseReturnValue
 
-from ..config import FRONTEND_DIST
-from ..db import create_link, delete_link, get_link, list_links
-from .sync import get_ws_server, serve_document, QuartWebsocketChannel, _init_room_doc, _save_room, _initialised_rooms
+from server.config import FRONTEND_DIST
+from server.db import create_link
+from server.db import delete_link
+from server.db import get_link
+from server.db import list_links
+from server.routes.sync import QuartWebsocketChannel
+from server.routes.sync import _init_room_doc
+from server.routes.sync import _initialised_rooms
+from server.routes.sync import _save_room
+from server.routes.sync import get_ws_server
+from server.routes.sync import serve_document
 
 log = logging.getLogger(__name__)
 
@@ -16,8 +29,9 @@ bp = Blueprint("share", __name__)
 
 # ── REST API ──────────────────────────────────────────────────────────────
 
+
 @bp.route("/api/share", methods=["POST"])
-async def create_share():
+async def create_share() -> ResponseReturnValue:
     """Create a share link.
 
     Body JSON: {"docPath": "path/to/file.md", "permission": "read"|"write"}
@@ -36,7 +50,7 @@ async def create_share():
 
 
 @bp.route("/api/share/<link_uuid>", methods=["DELETE"])
-async def revoke_share(link_uuid: str):
+async def revoke_share(link_uuid: str) -> ResponseReturnValue:
     """Revoke a share link."""
     if delete_link(link_uuid):
         return jsonify(ok=True)
@@ -44,7 +58,7 @@ async def revoke_share(link_uuid: str):
 
 
 @bp.route("/api/share", methods=["GET"])
-async def list_shares():
+async def list_shares() -> ResponseReturnValue:
     """List share links, optionally filtered by docPath query param."""
     doc_path = request.args.get("docPath")
     links = list_links(doc_path)
@@ -53,8 +67,9 @@ async def list_shares():
 
 # ── Share page ────────────────────────────────────────────────────────────
 
+
 @bp.route("/share/<link_uuid>")
-async def share_page(link_uuid: str):
+async def share_page(link_uuid: str) -> ResponseReturnValue:
     """Serve the frontend for a shared document."""
     link = get_link(link_uuid)
     if not link:
@@ -64,11 +79,13 @@ async def share_page(link_uuid: str):
     if not index.exists():
         return "Frontend not built", 404
     html = index.read_text()
-    config_data = json.dumps({
-        "uuid": link["uuid"],
-        "docPath": link["doc_path"],
-        "permission": link["permission"],
-    })
+    config_data = json.dumps(
+        {
+            "uuid": link["uuid"],
+            "docPath": link["doc_path"],
+            "permission": link["permission"],
+        }
+    )
     config_script = f"<script>window.__SHARE_CONFIG__ = {config_data}</script>"
     html = html.replace("</head>", f"{config_script}</head>")
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
@@ -77,8 +94,8 @@ async def share_page(link_uuid: str):
 # ── Shared document WebSocket ─────────────────────────────────────────────
 
 # Yjs sync protocol message types (first byte of the message)
-_MSG_SYNC = 0        # sync protocol messages (step1, step2, update)
-_SYNC_UPDATE = 2     # third byte: it's an update (as opposed to step1=0, step2=1)
+_MSG_SYNC = 0  # sync protocol messages (step1, step2, update)
+_SYNC_UPDATE = 2  # third byte: it's an update (as opposed to step1=0, step2=1)
 
 
 class ReadOnlyChannel:
@@ -96,7 +113,7 @@ class ReadOnlyChannel:
     def path(self) -> str:
         return self._inner.path
 
-    def __aiter__(self):
+    def __aiter__(self) -> Self:
         return self
 
     async def __anext__(self) -> bytes:
@@ -122,7 +139,7 @@ class ReadOnlyChannel:
 
 
 @bp.websocket("/ws/share/<link_uuid>")
-async def share_sync(link_uuid: str):
+async def share_sync(link_uuid: str) -> None:
     """Yjs sync for shared documents.
 
     Read-only links: server drops Yjs update messages from the client,
@@ -147,7 +164,7 @@ async def share_sync(link_uuid: str):
         room = await ws_server.get_room(doc_path)
         _init_room_doc(room, doc_path)
         room.ready = True
-        raw_channel = QuartWebsocketChannel(websocket._get_current_object(), doc_path)
+        raw_channel = QuartWebsocketChannel(websocket._get_current_object(), doc_path)  # type: ignore[attr-defined]
         channel = ReadOnlyChannel(raw_channel)
         try:
             await ws_server.serve(channel)
@@ -157,4 +174,4 @@ async def share_sync(link_uuid: str):
                 await ws_server.delete_room(room=room)
                 _initialised_rooms.discard(doc_path)
     else:
-        await serve_document(ws_server, websocket._get_current_object(), doc_path)
+        await serve_document(ws_server, websocket._get_current_object(), doc_path)  # type: ignore[attr-defined]
