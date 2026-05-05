@@ -28,9 +28,9 @@ from pycrdt import Text
 from pycrdt.websocket import WebsocketServer
 from pycrdt.websocket import YRoom
 
-from server.vault import PathTraversalError
-from server.vault import read_file
-from server.vault import write_file
+from server.core.files import PathTraversalError
+from server.core.files import read_file
+from server.core.files import write_file
 
 log = logging.getLogger(__name__)
 

@@ -1,8 +1,4 @@
-"""WebSocket route for Yjs document sync.
-
-Wraps Litestar's ``WebSocket`` in a Channel-protocol adapter and hands it to ``SyncManager``. All sync logic
-lives in ``server.core.sync``.
-"""
+"""WebSocket route for Yjs document sync + the Litestar channel adapter."""
 
 import asyncio
 import logging

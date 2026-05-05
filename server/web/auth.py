@@ -11,7 +11,7 @@ from litestar.types import Receive
 from litestar.types import Scope
 from litestar.types import Send
 
-from server.config import API_KEY
+from server.core.config import API_KEY
 
 _PUBLIC_PREFIXES = ("/share/", "/assets/", "/ws/share/")
 _PUBLIC_PATHS = ("/health",)

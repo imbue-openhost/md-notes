@@ -4,8 +4,8 @@ from litestar import Controller
 from litestar import get
 from litestar import put
 
-from server.db import get_setting
-from server.db import set_setting
+from server.core.db import get_setting
+from server.core.db import set_setting
 from server.models.common import OkResponse
 from server.models.settings import VimrcBody
 from server.models.settings import VimrcResponse

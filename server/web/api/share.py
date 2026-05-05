@@ -1,10 +1,8 @@
-"""Share-link endpoints and the shared-document WebSocket route."""
+"""Share-link REST endpoints and the shared-document WebSocket route."""
 
 from typing import Any
 
 from litestar import Controller
-from litestar import MediaType
-from litestar import Response
 from litestar import WebSocket
 from litestar import delete
 from litestar import get
@@ -14,19 +12,18 @@ from litestar.exceptions import ClientException
 from litestar.exceptions import NotFoundException
 from litestar.status_codes import HTTP_201_CREATED
 
-from server.config import FRONTEND_DIST
+from server.core.db import create_link
+from server.core.db import delete_link
+from server.core.db import get_link
+from server.core.db import list_links
 from server.core.sync import ReadOnlyChannel
 from server.core.sync import SyncManager
 from server.core.sync import SyncNotRunning
-from server.db import create_link
-from server.db import delete_link
-from server.db import get_link
-from server.db import list_links
 from server.models.common import OkResponse
 from server.models.share import CreateShareBody
 from server.models.share import CreateShareResponse
 from server.models.share import ShareLink
-from server.routes.sync import LitestarWebsocketChannel
+from server.web.api.sync import LitestarWebsocketChannel
 
 
 class ShareController(Controller):
@@ -50,15 +47,6 @@ class ShareController(Controller):
     @get("/")
     async def list_shares(self, docPath: str | None = None) -> list[ShareLink]:
         return list_links(docPath)
-
-
-@get("/share/{link_uuid:str}", media_type=MediaType.HTML)
-async def share_page(link_uuid: str) -> Response[str]:
-    """Serve the SPA shell for a share link. The SPA fetches /share/{uuid}/info to bootstrap."""
-    index = FRONTEND_DIST / "index.html"
-    if not index.exists():
-        return Response("Frontend not built", status_code=404, media_type=MediaType.TEXT)
-    return Response(index.read_text(), media_type=MediaType.HTML)
 
 
 @get("/share/{link_uuid:str}/info")

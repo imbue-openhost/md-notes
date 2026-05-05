@@ -8,18 +8,18 @@ from litestar import patch
 from litestar import post
 from litestar.status_codes import HTTP_201_CREATED
 
-from server.config import VAULT_PATH
+from server.core.config import VAULT_PATH
+from server.core.files import create_directory
+from server.core.files import delete_file
+from server.core.files import list_files
+from server.core.files import read_file
+from server.core.files import rename_file
+from server.core.files import write_file
 from server.core.vaults import vault_root
 from server.models.common import OkResponse
 from server.models.files import CreateFileBody
 from server.models.files import FileEntry
 from server.models.files import RenameBody
-from server.vault import create_directory
-from server.vault import delete_file
-from server.vault import list_files
-from server.vault import read_file
-from server.vault import rename_file
-from server.vault import write_file
 
 
 class FilesController(Controller):

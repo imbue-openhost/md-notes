@@ -1,8 +1,4 @@
-"""REST endpoints for vault management.
-
-All logic lives in ``server.core.vaults``; domain exceptions are translated to HTTP responses by the
-exception handlers registered in ``server.app``.
-"""
+"""REST endpoints for vault management."""
 
 from litestar import Controller
 from litestar import delete
@@ -11,7 +7,7 @@ from litestar import patch
 from litestar import post
 from litestar.status_codes import HTTP_201_CREATED
 
-from server.config import VAULT_PATH
+from server.core.config import VAULT_PATH
 from server.core.vaults import create_vault
 from server.core.vaults import delete_vault
 from server.core.vaults import list_vaults

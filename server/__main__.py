@@ -2,8 +2,8 @@
 
 import uvicorn
 
-from server.app import create_app
-from server.config import HOST
-from server.config import PORT
+from server.core.config import HOST
+from server.core.config import PORT
+from server.web.app import create_app
 
 uvicorn.run(create_app(), host=HOST, port=PORT)
