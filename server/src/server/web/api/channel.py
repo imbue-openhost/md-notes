@@ -1,4 +1,4 @@
-"""WebSocket route for Yjs document sync + the Litestar channel adapter."""
+"""Litestar WebSocket → pycrdt Channel adapter."""
 
 import asyncio
 import logging
@@ -6,11 +6,7 @@ from typing import Any
 from typing import Self
 
 from litestar import WebSocket
-from litestar import websocket
 from litestar.exceptions import WebSocketDisconnect
-
-from server.core.sync import SyncManager
-from server.core.sync import SyncNotRunning
 
 log = logging.getLogger(__name__)
 
@@ -49,15 +45,3 @@ class LitestarWebsocketChannel:
 
     async def recv(self) -> bytes:
         return await self._ws.receive_bytes()
-
-
-@websocket("/ws/sync/{filepath:path}")
-async def sync_doc(socket: WebSocket[Any, Any, Any], filepath: str) -> None:
-    """Yjs sync endpoint for a single document."""
-    await socket.accept()
-    manager: SyncManager = socket.app.state.sync_manager
-    channel = LitestarWebsocketChannel(socket, filepath.lstrip("/"))
-    try:
-        await manager.serve(channel)
-    except SyncNotRunning:
-        await socket.close(code=1011, reason="Sync server not running")

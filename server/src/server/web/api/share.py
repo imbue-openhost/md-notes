@@ -1,4 +1,4 @@
-"""Share-link REST endpoints and the shared-document WebSocket route."""
+"""Share-link endpoints: REST API and CRDT WebSocket."""
 
 from typing import Any
 
@@ -23,7 +23,7 @@ from server.models.common import OkResponse
 from server.models.share import CreateShareBody
 from server.models.share import CreateShareResponse
 from server.models.share import ShareLink
-from server.web.api.sync import LitestarWebsocketChannel
+from server.web.api.channel import LitestarWebsocketChannel
 
 
 class ShareController(Controller):
@@ -48,34 +48,32 @@ class ShareController(Controller):
     async def list_shares(self, docPath: str | None = None) -> list[ShareLink]:
         return list_links(docPath)
 
+    @get("/{link_uuid:str}", opt={"public": True})
+    async def get_share(self, link_uuid: str) -> ShareLink:
+        """Public lookup of share-link metadata. The UUID is the capability — no auth required."""
+        link = get_link(link_uuid)
+        if not link:
+            raise NotFoundException(detail="not found")
+        return link
 
-@get("/share/{link_uuid:str}/info")
-async def share_info(link_uuid: str) -> ShareLink:
-    """Public lookup of share-link metadata. The UUID is the capability — no auth required."""
-    link = get_link(link_uuid)
-    if not link:
-        raise NotFoundException(detail="not found")
-    return link
+    @websocket("/{link_uuid:str}/crdt_websocket/{_room:path}", opt={"public": True})
+    async def crdt_websocket(self, socket: WebSocket[Any, Any, Any], link_uuid: str, _room: str) -> None:
+        """Yjs CRDT sync for shared documents.
 
+        Read-only links: server drops Yjs update messages from the client; only the initial sync handshake
+        passes through. Write links: full bidirectional sync.
+        """
+        await socket.accept()
 
-@websocket("/ws/share/{link_uuid:str}")
-async def share_sync(socket: WebSocket[Any, Any, Any], link_uuid: str) -> None:
-    """Yjs sync for shared documents.
+        link = get_link(link_uuid)
+        if not link:
+            await socket.close(code=4004, reason="Share link not found")
+            return
 
-    Read-only links: server drops Yjs update messages from the client; only the initial sync handshake passes
-    through. Write links: full bidirectional sync.
-    """
-    await socket.accept()
-
-    link = get_link(link_uuid)
-    if not link:
-        await socket.close(code=4004, reason="Share link not found")
-        return
-
-    manager: SyncManager = socket.app.state.sync_manager
-    raw = LitestarWebsocketChannel(socket, link.doc_path)
-    channel = ReadOnlyChannel(raw) if link.permission == "read" else raw
-    try:
-        await manager.serve(channel)
-    except SyncNotRunning:
-        await socket.close(code=1011, reason="Sync server not running")
+        manager: SyncManager = socket.app.state.sync_manager
+        raw = LitestarWebsocketChannel(socket, link.doc_path)
+        channel = ReadOnlyChannel(raw) if link.permission == "read" else raw
+        try:
+            await manager.serve(channel)
+        except SyncNotRunning:
+            await socket.close(code=1011, reason="Sync server not running")

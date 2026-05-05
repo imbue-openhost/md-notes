@@ -22,7 +22,7 @@ export function getShareUuid(): string | null {
 
 /** Fetch share-link metadata. The UUID in the URL is the capability — no auth required. */
 export async function fetchShareInfo(uuid: string): Promise<ShareInfo> {
-  const res = await fetch(`${serverUrl}/share/${encodeURIComponent(uuid)}/info`);
+  const res = await fetch(`${serverUrl}/api/share/${encodeURIComponent(uuid)}`);
   if (!res.ok) throw new Error(`Share link not found (${res.status})`);
   return res.json();
 }

@@ -11,6 +11,7 @@ RUN npm run build
 FROM python:3.13-alpine
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+RUN apk add --no-cache caddy
 
 WORKDIR /app
 
@@ -24,8 +25,9 @@ COPY server/src/server/ server/
 # Copy built frontend
 COPY --from=frontend-build /build/frontend/dist frontend/dist
 
-ENV MDNOTES_FRONTEND_DIST=/app/frontend/dist
+# Caddy config
+COPY Caddyfile /etc/caddy/Caddyfile
 
 EXPOSE 8080
 
-CMD ["python", "-u", "-m", "server"]
+CMD sh -c "caddy run --config /etc/caddy/Caddyfile & python -u -m server"

@@ -5,11 +5,12 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from litestar import Litestar
+from litestar import MediaType
 from litestar import Request
 from litestar import Response
+from litestar import get
 from litestar.config.cors import CORSConfig
 from litestar.di import Provide
-from litestar.static_files import create_static_files_router
 
 from server.core.config import Config
 from server.core.db import close_db
@@ -19,17 +20,16 @@ from server.core.sync import SyncManager
 from server.core.vaults import InvalidVaultName
 from server.core.vaults import VaultAlreadyExists
 from server.core.vaults import VaultNotFound
-from server.web.api.files import FilesController
+from server.web.api.docs import DocsController
 from server.web.api.settings import SettingsController
 from server.web.api.share import ShareController
-from server.web.api.share import share_info
-from server.web.api.share import share_sync
-from server.web.api.sync import sync_doc
 from server.web.api.vaults import VaultsController
-from server.web.auth import AuthMiddleware
-from server.web.pages.index import health
-from server.web.pages.index import serve_index
-from server.web.pages.share import share_page
+from server.web.auth import requires_owner
+
+
+@get("/health", media_type=MediaType.TEXT, opt={"public": True})
+async def health() -> str:
+    return "ok"
 
 
 def _path_traversal_handler(request: Request[Any, Any, Any], exc: PathTraversalError) -> Response[dict[str, str]]:
@@ -57,8 +57,6 @@ def _vault_already_exists_handler(
 def create_app(config: Config) -> Litestar:
     config.vault_path.mkdir(parents=True, exist_ok=True)
 
-    assets_router = create_static_files_router(path="/assets", directories=[config.frontend_dist / "assets"])
-
     @asynccontextmanager
     async def lifespan(app: Litestar) -> AsyncIterator[None]:
         init_db(config.db_path)
@@ -73,20 +71,14 @@ def create_app(config: Config) -> Litestar:
 
     app = Litestar(
         route_handlers=[
-            FilesController,
+            DocsController,
             VaultsController,
             ShareController,
             SettingsController,
-            sync_doc,
-            share_sync,
-            share_page,
-            share_info,
             health,
-            serve_index,
-            assets_router,
         ],
         dependencies={"config": Provide(lambda: config, sync_to_thread=False)},
-        middleware=[AuthMiddleware],
+        guards=[requires_owner],
         lifespan=[lifespan],
         cors_config=CORSConfig(allow_origins=["*"]),
         exception_handlers={

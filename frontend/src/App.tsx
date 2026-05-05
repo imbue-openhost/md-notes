@@ -15,12 +15,13 @@ import { WebSettingsModal } from './components/SettingsModal';
 
 import DEFAULT_VIMRC from './default.vimrc?raw';
 
-const ShareEditor: Component<{ info: ShareInfo }> = (props) => {
+const ShareEditor: Component<{ uuid: string; info: ShareInfo }> = (props) => {
   let container!: HTMLDivElement;
   onMount(() => {
     createEditor(container, {
       vimrcContent: DEFAULT_VIMRC,
-      syncDocPath: props.info.doc_path,
+      shareUuid: props.uuid,
+      shareDocPath: props.info.doc_path,
       syncServerUrl: serverUrl,
       readOnly: props.info.permission === 'read',
     });
@@ -39,7 +40,7 @@ const ShareView: Component<{ uuid: string }> = (props) => {
           : <div style={{ padding: '2rem' }}>Loading…</div>
       }
     >
-      {(data) => <ShareEditor info={data()} />}
+      {(data) => <ShareEditor uuid={props.uuid} info={data()} />}
     </Show>
   );
 };
@@ -111,10 +112,10 @@ export const App: Component = () => {
 
   function makeEditorForPath(path: string, container: HTMLElement): EditorInstance {
     const v = vault();
-    const syncDocPath = v?.name ? `${v.name}/${path}` : path;
     return createEditor(container, {
       vimrcContent: activeVimrc(),
-      syncDocPath,
+      syncVault: v?.name || undefined,
+      syncFilePath: path,
       syncServerUrl: serverUrl,
     });
   }

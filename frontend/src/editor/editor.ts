@@ -29,7 +29,7 @@ import { markdownFolding } from './folding';
 import { Vim } from '@replit/codemirror-vim';
 
 import { vimMode } from './vim';
-import { createSyncSession, type SyncSession } from './sync';
+import { createSyncSession, createShareSyncSession, type SyncSession } from './sync';
 
 interface UndoRedoProvider {
   undo(): boolean;
@@ -114,8 +114,11 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
 export interface EditorOptions {
   initialDoc?: string;
   vimrcContent?: string;
-  syncDocPath?: string;
+  syncVault?: string;
+  syncFilePath?: string;
   syncServerUrl?: string;
+  shareUuid?: string;
+  shareDocPath?: string;
   readOnly?: boolean;
   onDocChange?: (content: string) => void;
 }
@@ -126,13 +129,18 @@ export interface EditorInstance {
 }
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorInstance {
-  const useSync = !!(options.syncDocPath && options.syncServerUrl);
+  const useSync = !!(options.syncServerUrl && (options.syncVault || options.shareUuid));
   const extensions = buildExtensions(options.vimrcContent, useSync);
 
   let syncSession: SyncSession | null = null;
 
-  if (options.syncDocPath && options.syncServerUrl) {
-    syncSession = createSyncSession(options.syncDocPath, options.syncServerUrl, options.initialDoc);
+  if (options.syncServerUrl && options.syncVault && options.syncFilePath) {
+    syncSession = createSyncSession(options.syncVault, options.syncFilePath, options.syncServerUrl, options.initialDoc);
+  } else if (options.syncServerUrl && options.shareUuid && options.shareDocPath) {
+    syncSession = createShareSyncSession(options.shareUuid, options.shareDocPath, options.syncServerUrl);
+  }
+
+  if (syncSession) {
     extensions.push(syncSession.extension);
     const um = syncSession.undoManager;
     extensions.push(undoRedoFacet.of({

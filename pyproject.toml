@@ -54,7 +54,8 @@ known-first-party = [
 
 [tool.mypy]
 python_version = "3.12"
-files = ["server/src/server"]
+mypy_path = ["server/src"]
+packages = ["server"]
 strict = true
 ignore_missing_imports = true
 exclude = []

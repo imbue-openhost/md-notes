@@ -1,8 +1,8 @@
 /**
  * Yjs sync — instance-based sync sessions for per-tab document sync.
  *
- * Each call to createSyncSession() returns an independent session with
- * its own Y.Doc, WebSocket provider, and IDB persistence.
+ * Each call to createSyncSession() / createShareSyncSession() returns an
+ * independent session with its own Y.Doc, WebSocket provider, and IDB persistence.
  */
 
 import * as Y from 'yjs';
@@ -66,15 +66,16 @@ export interface SyncSession {
   destroy: () => void;
 }
 
-export function createSyncSession(
-  docPath: string,
-  serverUrl: string,
+function buildSession(
+  wsUrl: string,
+  roomName: string,
+  idbKey: string,
   initialContent?: string,
 ): SyncSession {
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText('content');
 
-  const idbPersistence = new IndexeddbPersistence(`mdnotes-${docPath}`, ydoc);
+  const idbPersistence = new IndexeddbPersistence(idbKey, ydoc);
 
   if (initialContent) {
     idbPersistence.once('synced', () => {
@@ -84,9 +85,8 @@ export function createSyncSession(
     });
   }
 
-  const wsUrl = getWsUrl(serverUrl) + '/ws/sync';
-
-  const provider = new WebsocketProvider(wsUrl, docPath, ydoc);
+  // y-websocket builds URL as `${wsUrl}/${roomName}`
+  const provider = new WebsocketProvider(wsUrl, roomName, ydoc);
   let consecutiveFailures = 0;
 
   provider.on('status', (event: { status: string }) => {
@@ -129,4 +129,25 @@ export function createSyncSession(
       ydoc.destroy();
     },
   };
+}
+
+/** Authenticated doc sync: WS /api/docs/{vault}/crdt_websocket/{filepath} */
+export function createSyncSession(
+  vaultName: string,
+  filePath: string,
+  serverUrl: string,
+  initialContent?: string,
+): SyncSession {
+  const wsUrl = getWsUrl(serverUrl) + `/api/docs/${encodeURIComponent(vaultName)}/crdt_websocket`;
+  return buildSession(wsUrl, filePath, `mdnotes-${vaultName}/${filePath}`, initialContent);
+}
+
+/** Public share sync: WS /api/share/{uuid}/crdt_websocket/{docPath} */
+export function createShareSyncSession(
+  uuid: string,
+  docPath: string,
+  serverUrl: string,
+): SyncSession {
+  const wsUrl = getWsUrl(serverUrl) + `/api/share/${encodeURIComponent(uuid)}/crdt_websocket`;
+  return buildSession(wsUrl, docPath, `mdnotes-share-${uuid}`);
 }

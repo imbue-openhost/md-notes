@@ -8,18 +8,12 @@ import attr
 
 @attr.s(auto_attribs=True, frozen=True)
 class Config:
+    # Root directory containing vault subdirectories (each vault is a folder of .md files)
     vault_path: Path
+    # SQLite database for share links and settings
     db_path: Path
-    frontend_dist: Path
     host: str = "0.0.0.0"
-    port: int = 8080
-
-
-def _resolve_frontend_dist() -> Path:
-    env = os.environ.get("MDNOTES_FRONTEND_DIST")
-    if env:
-        return Path(env)
-    return Path(__file__).resolve().parent.parent.parent.parent.parent / "frontend" / "dist"
+    port: int = 8000
 
 
 def load_config() -> Config:
@@ -34,5 +28,4 @@ def load_config() -> Config:
     return Config(
         vault_path=Path(app_data_dir) / "vault",
         db_path=Path(sqlite_main),
-        frontend_dist=_resolve_frontend_dist(),
     )
