@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup, Show, type Component } from 'solid-js';
+import { createSignal, createResource, onMount, onCleanup, Show, type Component } from 'solid-js';
 import { createEditor, type EditorInstance } from './editor/editor';
 import { onConnectionStatus, onConnectionError, type ConnectionStatus } from './editor/sync';
 import {
@@ -6,7 +6,7 @@ import {
   listVaults, createVault, deleteVault, getServerApiKey, getServerVimrc, saveServerVimrc,
 } from './api/client';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
-import { isDevServer, isTauri, serverUrl, getShareConfig } from './config';
+import { isDevServer, isTauri, serverUrl, getShareUuid, fetchShareInfo, type ShareInfo } from './config';
 import { syncVault } from './api/sync';
 import type { VaultConfig } from './api/types';
 import { VaultPicker } from './components/VaultPicker';
@@ -29,23 +29,38 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
   return invoke<T>(cmd, args);
 }
 
-const ShareView: Component = () => {
-  const shareConfig = getShareConfig()!;
+const ShareEditor: Component<{ info: ShareInfo }> = (props) => {
   let container!: HTMLDivElement;
   onMount(() => {
     createEditor(container, {
       vimrcContent: DEFAULT_VIMRC,
-      syncDocPath: shareConfig.docPath,
+      syncDocPath: props.info.doc_path,
       syncServerUrl: serverUrl,
-      readOnly: shareConfig.permission === 'read',
+      readOnly: props.info.permission === 'read',
     });
   });
   return <div ref={container} id="editor-container" />;
 };
 
+const ShareView: Component<{ uuid: string }> = (props) => {
+  const [info] = createResource(() => props.uuid, fetchShareInfo);
+  return (
+    <Show
+      when={info()}
+      fallback={
+        info.error
+          ? <div style={{ padding: '2rem' }}>Share link not found or revoked.</div>
+          : <div style={{ padding: '2rem' }}>Loading…</div>
+      }
+    >
+      {(data) => <ShareEditor info={data()} />}
+    </Show>
+  );
+};
+
 export const App: Component = () => {
-  const shareConfig = getShareConfig();
-  if (shareConfig) return <ShareView />;
+  const shareUuid = getShareUuid();
+  if (shareUuid) return <ShareView uuid={shareUuid} />;
 
   const [activeServerUrl, setActiveServerUrl] = createSignal(serverUrl);
   const [activeApiKey, setActiveApiKeyVal] = createSignal('');

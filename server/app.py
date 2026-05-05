@@ -17,14 +17,18 @@ from server.config import API_KEY
 from server.config import DB_PATH
 from server.config import FRONTEND_DIST
 from server.config import VAULT_PATH
+from server.core.sync import SyncManager
+from server.core.vaults import InvalidVaultName
+from server.core.vaults import VaultAlreadyExists
+from server.core.vaults import VaultNotFound
 from server.db import close_db
 from server.db import init_db
 from server.routes.files import FilesController
 from server.routes.settings import SettingsController
 from server.routes.share import ShareController
+from server.routes.share import share_info
 from server.routes.share import share_page
 from server.routes.share import share_sync
-from server.routes.sync import SyncManager
 from server.routes.sync import sync_doc
 from server.routes.vaults import VaultsController
 from server.vault import PathTraversalError
@@ -58,6 +62,20 @@ def _file_not_found_handler(request: Request[Any, Any, Any], exc: FileNotFoundEr
     return Response({"error": str(exc)}, status_code=404)
 
 
+def _invalid_vault_name_handler(request: Request[Any, Any, Any], exc: InvalidVaultName) -> Response[dict[str, str]]:
+    return Response({"error": "name is required"}, status_code=400)
+
+
+def _vault_not_found_handler(request: Request[Any, Any, Any], exc: VaultNotFound) -> Response[dict[str, str]]:
+    return Response({"error": "not found"}, status_code=404)
+
+
+def _vault_already_exists_handler(
+    request: Request[Any, Any, Any], exc: VaultAlreadyExists
+) -> Response[dict[str, str]]:
+    return Response({"error": "vault already exists"}, status_code=409)
+
+
 @asynccontextmanager
 async def _lifespan(app: Litestar) -> AsyncIterator[None]:
     init_db(DB_PATH)
@@ -85,6 +103,7 @@ def create_app() -> Litestar:
             sync_doc,
             share_sync,
             share_page,
+            share_info,
             get_api_key,
             health,
             serve_index,
@@ -96,5 +115,8 @@ def create_app() -> Litestar:
         exception_handlers={
             PathTraversalError: _path_traversal_handler,
             FileNotFoundError: _file_not_found_handler,
+            InvalidVaultName: _invalid_vault_name_handler,
+            VaultNotFound: _vault_not_found_handler,
+            VaultAlreadyExists: _vault_already_exists_handler,
         },
     )

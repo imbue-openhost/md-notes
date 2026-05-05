@@ -6,12 +6,13 @@ declare global {
   interface Window {
     __TAURI__?: unknown;
     __TAURI_INTERNALS__?: unknown;
-    __SHARE_CONFIG__?: {
-      uuid: string;
-      docPath: string;
-      permission: 'read' | 'write';
-    };
   }
+}
+
+export interface ShareInfo {
+  uuid: string;
+  doc_path: string;
+  permission: 'read' | 'write';
 }
 
 /** True when running inside a Tauri native app. */
@@ -30,9 +31,18 @@ export const serverUrl = isDevServer
     ? window.location.origin
     : 'http://localhost:8080';
 
-/** Share config injected by the server on /share/<uuid> pages. */
-export function getShareConfig() {
-  return typeof window !== 'undefined' ? window.__SHARE_CONFIG__ : undefined;
+/** UUID extracted from /share/<uuid> URLs, or null for the regular app. */
+export function getShareUuid(): string | null {
+  if (typeof window === 'undefined') return null;
+  const match = window.location.pathname.match(/^\/share\/([^/]+)\/?$/);
+  return match ? match[1] : null;
+}
+
+/** Fetch share-link metadata. The UUID in the URL is the capability — no auth required. */
+export async function fetchShareInfo(uuid: string): Promise<ShareInfo> {
+  const res = await fetch(`${serverUrl}/share/${encodeURIComponent(uuid)}/info`);
+  if (!res.ok) throw new Error(`Share link not found (${res.status})`);
+  return res.json();
 }
 
 /**
