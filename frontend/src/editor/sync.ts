@@ -69,7 +69,6 @@ export interface SyncSession {
 export function createSyncSession(
   docPath: string,
   serverUrl: string,
-  apiKey?: string,
   initialContent?: string,
 ): SyncSession {
   const ydoc = new Y.Doc();
@@ -86,10 +85,8 @@ export function createSyncSession(
   }
 
   const wsUrl = getWsUrl(serverUrl) + '/ws/sync';
-  const params: Record<string, string> = {};
-  if (apiKey) params.token = apiKey;
 
-  const provider = new WebsocketProvider(wsUrl, docPath, ydoc, { params });
+  const provider = new WebsocketProvider(wsUrl, docPath, ydoc);
   let consecutiveFailures = 0;
 
   provider.on('status', (event: { status: string }) => {

@@ -117,7 +117,6 @@ export interface EditorOptions {
   syncDocPath?: string;
   syncServerUrl?: string;
   readOnly?: boolean;
-  apiKey?: string;
   onDocChange?: (content: string) => void;
 }
 
@@ -133,7 +132,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   let syncSession: SyncSession | null = null;
 
   if (options.syncDocPath && options.syncServerUrl) {
-    syncSession = createSyncSession(options.syncDocPath, options.syncServerUrl, options.apiKey, options.initialDoc);
+    syncSession = createSyncSession(options.syncDocPath, options.syncServerUrl, options.initialDoc);
     extensions.push(syncSession.extension);
     const um = syncSession.undoManager;
     extensions.push(undoRedoFacet.of({

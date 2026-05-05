@@ -19,10 +19,12 @@ COPY requirements.txt .
 RUN uv pip install --system -r requirements.txt
 
 # Copy server code
-COPY server/ server/
+COPY server/src/server/ server/
 
 # Copy built frontend
 COPY --from=frontend-build /build/frontend/dist frontend/dist
+
+ENV MDNOTES_FRONTEND_DIST=/app/frontend/dist
 
 EXPOSE 8080
 

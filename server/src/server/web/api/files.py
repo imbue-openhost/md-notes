@@ -8,7 +8,7 @@ from litestar import patch
 from litestar import post
 from litestar.status_codes import HTTP_201_CREATED
 
-from server.core.config import VAULT_PATH
+from server.core.config import Config
 from server.core.files import create_directory
 from server.core.files import delete_file
 from server.core.files import list_files
@@ -26,16 +26,16 @@ class FilesController(Controller):
     path = "/api/vaults/{vault_name:str}/files"
 
     @get("/")
-    async def list_all(self, vault_name: str) -> list[FileEntry]:
-        return list_files(vault_root(VAULT_PATH, vault_name))
+    async def list_all(self, vault_name: str, config: Config) -> list[FileEntry]:
+        return list_files(vault_root(config.vault_path, vault_name))
 
     @get("/{filepath:path}", media_type=MediaType.TEXT)
-    async def get_file(self, vault_name: str, filepath: str) -> str:
-        return read_file(vault_root(VAULT_PATH, vault_name), filepath.lstrip("/"))
+    async def get_file(self, vault_name: str, filepath: str, config: Config) -> str:
+        return read_file(vault_root(config.vault_path, vault_name), filepath.lstrip("/"))
 
     @post("/{filepath:path}", status_code=HTTP_201_CREATED)
-    async def create_file(self, vault_name: str, filepath: str, data: CreateFileBody) -> OkResponse:
-        root = vault_root(VAULT_PATH, vault_name)
+    async def create_file(self, vault_name: str, filepath: str, data: CreateFileBody, config: Config) -> OkResponse:
+        root = vault_root(config.vault_path, vault_name)
         rel = filepath.lstrip("/")
         if data.type == "dir":
             create_directory(root, rel)
@@ -44,11 +44,11 @@ class FilesController(Controller):
         return OkResponse()
 
     @patch("/{filepath:path}")
-    async def move_file(self, vault_name: str, filepath: str, data: RenameBody) -> OkResponse:
-        rename_file(vault_root(VAULT_PATH, vault_name), filepath.lstrip("/"), data.newPath)
+    async def move_file(self, vault_name: str, filepath: str, data: RenameBody, config: Config) -> OkResponse:
+        rename_file(vault_root(config.vault_path, vault_name), filepath.lstrip("/"), data.newPath)
         return OkResponse()
 
     @delete("/{filepath:path}", status_code=200)
-    async def remove_file(self, vault_name: str, filepath: str) -> OkResponse:
-        delete_file(vault_root(VAULT_PATH, vault_name), filepath.lstrip("/"))
+    async def remove_file(self, vault_name: str, filepath: str, config: Config) -> OkResponse:
+        delete_file(vault_root(config.vault_path, vault_name), filepath.lstrip("/"))
         return OkResponse()

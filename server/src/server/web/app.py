@@ -8,11 +8,10 @@ from litestar import Litestar
 from litestar import Request
 from litestar import Response
 from litestar.config.cors import CORSConfig
+from litestar.di import Provide
 from litestar.static_files import create_static_files_router
 
-from server.core.config import DB_PATH
-from server.core.config import FRONTEND_DIST
-from server.core.config import VAULT_PATH
+from server.core.config import Config
 from server.core.db import close_db
 from server.core.db import init_db
 from server.core.files import PathTraversalError
@@ -28,7 +27,6 @@ from server.web.api.share import share_sync
 from server.web.api.sync import sync_doc
 from server.web.api.vaults import VaultsController
 from server.web.auth import AuthMiddleware
-from server.web.pages.index import get_api_key
 from server.web.pages.index import health
 from server.web.pages.index import serve_index
 from server.web.pages.share import share_page
@@ -56,25 +54,24 @@ def _vault_already_exists_handler(
     return Response({"error": "vault already exists"}, status_code=409)
 
 
-@asynccontextmanager
-async def _lifespan(app: Litestar) -> AsyncIterator[None]:
-    init_db(DB_PATH)
-    sync_manager = SyncManager(VAULT_PATH)
-    app.state.sync_manager = sync_manager
-    await sync_manager.start()
-    try:
-        yield
-    finally:
-        await sync_manager.stop()
-        close_db()
+def create_app(config: Config) -> Litestar:
+    config.vault_path.mkdir(parents=True, exist_ok=True)
 
+    assets_router = create_static_files_router(path="/assets", directories=[config.frontend_dist / "assets"])
 
-def create_app() -> Litestar:
-    VAULT_PATH.mkdir(parents=True, exist_ok=True)
+    @asynccontextmanager
+    async def lifespan(app: Litestar) -> AsyncIterator[None]:
+        init_db(config.db_path)
+        sync_manager = SyncManager(config.vault_path)
+        app.state.sync_manager = sync_manager
+        await sync_manager.start()
+        try:
+            yield
+        finally:
+            await sync_manager.stop()
+            close_db()
 
-    assets_router = create_static_files_router(path="/assets", directories=[FRONTEND_DIST / "assets"])
-
-    return Litestar(
+    app = Litestar(
         route_handlers=[
             FilesController,
             VaultsController,
@@ -84,13 +81,13 @@ def create_app() -> Litestar:
             share_sync,
             share_page,
             share_info,
-            get_api_key,
             health,
             serve_index,
             assets_router,
         ],
+        dependencies={"config": Provide(lambda: config, sync_to_thread=False)},
         middleware=[AuthMiddleware],
-        lifespan=[_lifespan],
+        lifespan=[lifespan],
         cors_config=CORSConfig(allow_origins=["*"]),
         exception_handlers={
             PathTraversalError: _path_traversal_handler,
@@ -100,3 +97,5 @@ def create_app() -> Litestar:
             VaultAlreadyExists: _vault_already_exists_handler,
         },
     )
+    app.state.config = config
+    return app

@@ -5,16 +5,10 @@
 import type { FileEntry } from './types';
 
 let baseUrl = '';
-let apiKey = '';
 
 /** Set the API base URL (e.g., "http://localhost:8080"). */
 export function setApiBaseUrl(url: string): void {
   baseUrl = url.replace(/\/$/, '');
-}
-
-/** Set the API key for authenticated requests. */
-export function setApiKey(key: string): void {
-  apiKey = key;
 }
 
 /** Auto-detect: if served by the Quart server, baseUrl is empty (same-origin). */
@@ -23,11 +17,7 @@ export function getApiBaseUrl(): string {
 }
 
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  const headers = new Headers(init?.headers);
-  if (apiKey) {
-    headers.set('Authorization', `Bearer ${apiKey}`);
-  }
-  const res = await fetch(`${baseUrl}${path}`, { ...init, headers });
+  const res = await fetch(`${baseUrl}${path}`, init);
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`API ${res.status}: ${body}`);
@@ -143,11 +133,7 @@ export async function listShareLinks(docPath?: string): Promise<ShareLink[]> {
   return res.json();
 }
 
-export async function getServerApiKey(): Promise<string> {
-  const res = await apiFetch('/api/key');
-  const data = await res.json();
-  return data.api_key;
-}
+// ── Settings ──────────────────────────────────────────────────────────────
 
 export async function getServerVimrc(): Promise<string | null> {
   const res = await apiFetch('/api/settings/vimrc');

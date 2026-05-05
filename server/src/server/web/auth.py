@@ -1,8 +1,10 @@
-"""API-key auth middleware for both HTTP and WebSocket scopes."""
+"""Auth middleware: enforces OpenHost owner authentication.
+
+All non-public routes require the ``x-openhost-is-owner: true`` header, set by the OpenHost edge proxy.
+"""
 
 from typing import Any
 from typing import cast
-from urllib.parse import parse_qs
 
 from litestar.enums import ScopeType
 from litestar.middleware import AbstractMiddleware
@@ -11,25 +13,13 @@ from litestar.types import Receive
 from litestar.types import Scope
 from litestar.types import Send
 
-from server.core.config import API_KEY
-
 _PUBLIC_PREFIXES = ("/share/", "/assets/", "/ws/share/")
 _PUBLIC_PATHS = ("/health",)
 
 
-def _has_valid_token(scope: Scope) -> bool:
+def _is_owner(scope: Scope) -> bool:
     headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
-
-    if headers.get("x-openhost-is-owner") == "true":
-        return True
-
-    auth = headers.get("authorization", "")
-    if auth == f"Bearer {API_KEY}":
-        return True
-
-    qs = parse_qs(scope.get("query_string", b"").decode())
-    token_values = qs.get("token", [])
-    return bool(token_values) and token_values[0] == API_KEY
+    return headers.get("x-openhost-is-owner") == "true"
 
 
 def _is_public(path: str) -> bool:
@@ -42,11 +32,11 @@ class AuthMiddleware(AbstractMiddleware):
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         scope_type = scope["type"]
-        if not API_KEY or scope_type not in (ScopeType.HTTP, ScopeType.WEBSOCKET):
+        if scope_type not in (ScopeType.HTTP, ScopeType.WEBSOCKET):
             await self.app(scope, receive, send)
             return
 
-        if _is_public(scope["path"]) or _has_valid_token(scope):
+        if _is_public(scope["path"]) or _is_owner(scope):
             await self.app(scope, receive, send)
             return
 
@@ -63,6 +53,5 @@ class AuthMiddleware(AbstractMiddleware):
             )
             await send(cast(Any, {"type": "http.response.body", "body": b'{"error":"Unauthorized"}'}))
         else:
-            # Drain the websocket.connect frame, then refuse the handshake.
             await receive()
             await send(cast(Any, {"type": "websocket.close", "code": 4403}))
