@@ -24,8 +24,7 @@ from server.routes.settings import SettingsController
 from server.routes.share import ShareController
 from server.routes.share import share_page
 from server.routes.share import share_sync
-from server.routes.sync import start_ws_server
-from server.routes.sync import stop_ws_server
+from server.routes.sync import SyncManager
 from server.routes.sync import sync_doc
 from server.routes.vaults import VaultsController
 from server.vault import PathTraversalError
@@ -62,11 +61,13 @@ def _file_not_found_handler(request: Request[Any, Any, Any], exc: FileNotFoundEr
 @asynccontextmanager
 async def _lifespan(app: Litestar) -> AsyncIterator[None]:
     init_db(DB_PATH)
-    await start_ws_server()
+    sync_manager = SyncManager(VAULT_PATH)
+    app.state.sync_manager = sync_manager
+    await sync_manager.start()
     try:
         yield
     finally:
-        await stop_ws_server()
+        await sync_manager.stop()
         close_db()
 
 

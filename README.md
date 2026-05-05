@@ -38,3 +38,13 @@ This is a document/notes editor, most similar to Obsidian. Some important core d
 - unfinished and on hold for now, to focus on the web editor.
 - supporting a nice offline mode adds complexity vs web.
 
+
+## TODO
+
+### server
+
+- make openapi doc for api contract
+- organize files better
+- split core vs route code better
+- cleanup config.py into a typed config object
+- do something with the db

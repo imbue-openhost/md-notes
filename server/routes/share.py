@@ -27,11 +27,7 @@ from server.models.share import CreateShareBody
 from server.models.share import CreateShareResponse
 from server.models.share import ShareLink
 from server.routes.sync import LitestarWebsocketChannel
-from server.routes.sync import _init_room_doc
-from server.routes.sync import _initialised_rooms
-from server.routes.sync import _save_room
-from server.routes.sync import get_ws_server
-from server.routes.sync import serve_document
+from server.routes.sync import SyncManager
 
 log = logging.getLogger(__name__)
 
@@ -135,25 +131,9 @@ async def share_sync(socket: WebSocket[Any, Any, Any], link_uuid: str) -> None:
         await socket.close(code=4004, reason="Share link not found")
         return
 
-    ws_server = get_ws_server()
-    if ws_server is None:
-        await socket.close(code=1011, reason="Sync server not running")
-        return
-
-    doc_path = link.doc_path
+    manager: SyncManager = socket.app.state.sync_manager
 
     if link.permission == "read":
-        room = await ws_server.get_room(doc_path)
-        _init_room_doc(room, doc_path)
-        room.ready = True
-        raw_channel = LitestarWebsocketChannel(socket, doc_path)
-        channel = ReadOnlyChannel(raw_channel)
-        try:
-            await ws_server.serve(channel)
-        finally:
-            if not room.clients:
-                await _save_room(doc_path, room)
-                await ws_server.delete_room(room=room)
-                _initialised_rooms.discard(doc_path)
+        await manager.serve(socket, link.doc_path, wrap_channel=ReadOnlyChannel)
     else:
-        await serve_document(ws_server, socket, doc_path)
+        await manager.serve(socket, link.doc_path)
