@@ -11,7 +11,7 @@ RUN npm run build
 FROM ubuntu:26.04
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-RUN apt-get update && apt-get install -y --no-install-recommends caddy python3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends caddy && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
