@@ -104,11 +104,14 @@ function buildSession(wsUrl: string, roomName: string): SyncSession {
   const undoManager = new Y.UndoManager(ytext);
   const extension = yCollab(ytext, provider.awareness, { undoManager });
 
+  let destroyed = false;
   return {
     extension,
     undoManager,
     getText: () => ytext.toString(),
     destroy: () => {
+      if (destroyed) return;
+      destroyed = true;
       provider.disconnect();
       provider.destroy();
       ydoc.destroy();

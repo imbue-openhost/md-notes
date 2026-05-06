@@ -178,11 +178,15 @@ export const EditorLayout: Component<Props> = (props) => {
   }
 
   onCleanup(() => {
-    for (const instance of editorInstances.values()) {
-      instance.destroy();
+    // api.dispose() cascades through onDidRemovePanel -> destroy each editor instance.
+    // Dockview's own teardown can throw "resource already disposed" from internal
+    // double-dispose paths; swallow so the unmount completes and the picker can render.
+    try {
+      api?.dispose();
+    } catch (e) {
+      console.warn('dockview dispose threw:', e);
     }
     editorInstances.clear();
-    api?.dispose();
   });
 
   return (

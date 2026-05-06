@@ -171,9 +171,12 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     parent: container,
   });
 
+  let destroyed = false;
   return {
     view,
     destroy: () => {
+      if (destroyed) return;
+      destroyed = true;
       syncSession?.destroy();
       view.destroy();
     },

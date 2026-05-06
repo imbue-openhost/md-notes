@@ -70,12 +70,18 @@ export const App: Component = () => {
     }
   }
 
-  async function loadWebVaults() {
-    let vaults: VaultConfig[] = [];
+  async function fetchVaultList(): Promise<VaultConfig[]> {
     try {
       const remote = await listVaults();
-      vaults = remote.map((v) => ({ name: v.name, path: '', sync: true }));
-    } catch (e) { console.error('Failed to load vaults:', e); }
+      return remote.map((v) => ({ name: v.name, path: '', sync: true }));
+    } catch (e) {
+      console.error('Failed to load vaults:', e);
+      return [];
+    }
+  }
+
+  async function loadWebVaults() {
+    const vaults = await fetchVaultList();
 
     try {
       const lastName = localStorage.getItem('mdnotes-last-vault');
@@ -103,7 +109,10 @@ export const App: Component = () => {
 
   function switchVault() {
     setVault(null);
-    loadWebVaults().catch(console.error);
+    fetchVaultList().then((vaults) => {
+      setVaultList(vaults);
+      setShowVaultPicker(true);
+    }).catch(console.error);
   }
 
   function handleFileSelect(path: string) {
