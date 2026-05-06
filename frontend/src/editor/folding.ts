@@ -11,7 +11,7 @@
 import { syntaxTree } from '@codemirror/language';
 import { foldService } from '@codemirror/language';
 import { foldGutter } from '@codemirror/language';
-import type { Extension } from '@codemirror/state';
+import { Prec, type Extension } from '@codemirror/state';
 
 /**
  * Fold service that defines ranges based on ATXHeading nodes.
@@ -75,7 +75,12 @@ const markdownFoldService = foldService.of((state, lineStart, lineEnd) => {
 
 /**
  * Returns the extensions needed for header-based markdown folding.
+ *
+ * Our fold service is registered with `Prec.high` so it runs before the
+ * `headerIndent` fold service that `@codemirror/lang-markdown` installs by
+ * default — that built-in service ends folds at the last non-blank line, which
+ * leaves the inter-section whitespace visible and conflicts with our range.
  */
 export function markdownFolding(): Extension {
-  return [markdownFoldService, foldGutter()];
+  return [Prec.high(markdownFoldService), foldGutter()];
 }
