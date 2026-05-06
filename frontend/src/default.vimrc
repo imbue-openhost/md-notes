@@ -36,3 +36,7 @@ nmap zc :foldcursor<CR>
 nmap za :togglefold<CR>
 nmap zM :foldall<CR>
 nmap zR :unfoldall<CR>
+
+" Toggle GFM task checkbox on the current line
+exmap toggletask toggle-task
+nmap <leader>x :toggletask<CR>

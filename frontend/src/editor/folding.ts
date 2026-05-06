@@ -11,7 +11,10 @@
 import { syntaxTree } from '@codemirror/language';
 import { foldService } from '@codemirror/language';
 import { foldGutter } from '@codemirror/language';
+import { foldable } from '@codemirror/language';
+import { foldEffect } from '@codemirror/language';
 import { Prec, type Extension } from '@codemirror/state';
+import type { EditorView } from '@codemirror/view';
 
 /**
  * Fold service that defines ranges based on ATXHeading nodes. Exported so unit
@@ -84,4 +87,23 @@ export const markdownFoldService = foldService.of((state, lineStart, lineEnd) =>
  */
 export function markdownFolding(): Extension {
   return [Prec.high(markdownFoldService), foldGutter()];
+}
+
+/**
+ * Fold every foldable line, including nested ones. The built-in `foldAll`
+ * skips past each discovered range, so subheadings inside an outer section
+ * never get folded — toggling the outer section open then reveals expanded
+ * subsections. We iterate every line so nested folds are registered too.
+ */
+export function foldAllRecursive(view: EditorView): boolean {
+  const { state } = view;
+  const effects = [];
+  for (let i = 1; i <= state.doc.lines; i++) {
+    const line = state.doc.line(i);
+    const range = foldable(state, line.from, line.to);
+    if (range) effects.push(foldEffect.of(range));
+  }
+  if (!effects.length) return false;
+  view.dispatch({ effects });
+  return true;
 }

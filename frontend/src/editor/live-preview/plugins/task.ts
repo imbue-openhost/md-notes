@@ -84,9 +84,11 @@ export const taskListPlugin = ViewPlugin.fromClass(
 
           if (checked) {
             const line = state.doc.lineAt(node.from);
-            decorations.push(
-              Decoration.line({ class: 'cm-task-checked' }).range(line.from)
-            );
+            if (node.to < line.to) {
+              decorations.push(
+                Decoration.mark({ class: 'cm-task-checked' }).range(node.to, line.to)
+              );
+            }
           }
         },
       });

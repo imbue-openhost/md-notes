@@ -12,7 +12,37 @@
 import { vim, Vim } from '@replit/codemirror-vim';
 import { EditorView } from '@codemirror/view';
 import { EditorState, type Extension } from '@codemirror/state';
-import { foldAll, unfoldAll, toggleFold, foldCode, unfoldCode } from '@codemirror/language';
+import { unfoldAll, toggleFold, foldCode, unfoldCode, syntaxTree } from '@codemirror/language';
+import { foldAllRecursive } from './folding';
+
+function toggleTaskAtCursor(view: EditorView): boolean {
+  const { state } = view;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const tree = syntaxTree(state);
+
+  let from = -1;
+  let to = -1;
+  tree.iterate({
+    from: line.from,
+    to: line.to,
+    enter: (node) => {
+      if (from !== -1) return false;
+      if (node.name === 'TaskMarker') {
+        from = node.from;
+        to = node.to;
+        return false;
+      }
+    },
+  });
+
+  if (from === -1) return false;
+  const checked = /^\[[xX]\]$/.test(state.doc.sliceString(from, to));
+  view.dispatch({
+    changes: { from, to, insert: checked ? '[ ]' : '[x]' },
+  });
+  return true;
+}
 
 // ── Vimrc parser ──────────────────────────────────────────────────────────
 
@@ -88,10 +118,11 @@ const NUMERIC_OPTIONS = new Set([
  */
 const BUILTIN_ACTIONS: Record<string, (view: EditorView) => boolean> = {
   'toggle-fold': (view) => toggleFold(view),
-  'fold-all': (view) => foldAll(view),
+  'fold-all': (view) => foldAllRecursive(view),
   'unfold-all': (view) => unfoldAll(view),
   'fold-at-cursor': (view) => foldCode(view),
   'unfold-at-cursor': (view) => unfoldCode(view),
+  'toggle-task': (view) => toggleTaskAtCursor(view),
 };
 
 /**
