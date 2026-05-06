@@ -3,7 +3,9 @@
  *
  * Clicking the fold gutter on a heading collapses everything from the end of
  * the heading line up to (but not including) the next heading of equal or
- * higher level. Nested headings fold independently.
+ * higher level. Any blank lines preceding that next heading are absorbed into
+ * the fold so collapsed sections stack with consistent spacing regardless of
+ * how the source document is whitespaced. Nested headings fold independently.
  */
 
 import { syntaxTree } from '@codemirror/language';
@@ -65,13 +67,6 @@ const markdownFoldService = foldService.of((state, lineStart, lineEnd) => {
       }
     }
   } while (cursor.next());
-
-  // Trim trailing blank lines from the fold range
-  while (foldTo > foldFrom) {
-    const line = state.doc.lineAt(foldTo);
-    if (line.text.trim().length > 0) break;
-    foldTo = line.from > foldFrom ? line.from - 1 : foldFrom;
-  }
 
   if (foldTo <= foldFrom) return null;
 
