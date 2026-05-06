@@ -12,4 +12,12 @@ from server.web.app import create_app
 logging.getLogger("websockets.server").setLevel(logging.WARNING)
 
 config = load_config()
-uvicorn.run(create_app(config), host=config.host, port=config.port, access_log=False)
+# CRDT initial-state messages can exceed uvicorn's default 1 MiB websocket
+# frame limit for large docs. Bump to 64 MiB so big notes sync.
+uvicorn.run(
+    create_app(config),
+    host=config.host,
+    port=config.port,
+    access_log=False,
+    ws_max_size=64 * 1024 * 1024,
+)
