@@ -2,7 +2,7 @@ import { createSignal, createResource, onMount, onCleanup, Show, type Component 
 import { createEditor, type EditorInstance } from './editor/editor';
 import {
   createShareLink, listShareLinks, deleteShareLink,
-  listVaults, createVault, deleteVault, getServerVimrc, saveServerVimrc,
+  listVaults, createVault, deleteVault, getServerVimrc,
 } from './api/client';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
 import { serverUrl, getShareUuid, fetchShareInfo, type ShareInfo } from './config';
@@ -215,7 +215,11 @@ export const App: Component = () => {
       </Show>
 
       <Show when={showWebSettings()}>
-        <WebSettingsModal onClose={() => setShowWebSettings(false)} />
+        <WebSettingsModal
+          initialVimrc={activeVimrc()}
+          onSaved={(v) => { setActiveVimrc(v); setShowWebSettings(false); }}
+          onClose={() => setShowWebSettings(false)}
+        />
       </Show>
     </>
   );
