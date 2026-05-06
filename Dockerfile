@@ -8,7 +8,7 @@ RUN npm run build
 
 # ─────────────────────────────────────────────────────────────
 
-FROM python:3.13-alpine
+FROM python:3.12-alpine
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 RUN apk add --no-cache caddy
@@ -16,8 +16,8 @@ RUN apk add --no-cache caddy
 WORKDIR /app
 
 # Install Python dependencies
-COPY requirements.txt .
-RUN uv pip install --system -r requirements.txt
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
 # Copy server code
 COPY server/src/server/ server/
@@ -30,4 +30,4 @@ COPY Caddyfile /etc/caddy/Caddyfile
 
 EXPOSE 8080
 
-CMD sh -c "caddy run --config /etc/caddy/Caddyfile & python -u -m server"
+CMD sh -c "caddy run --config /etc/caddy/Caddyfile & uv run python -u -m server"
