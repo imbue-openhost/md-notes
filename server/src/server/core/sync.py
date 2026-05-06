@@ -174,7 +174,7 @@ class SyncManager:
         doc.observe(on_change)
 
         self._initialised_rooms.add(room_name)
-        log.info("Initialised room %s from disk (%d chars)", room_name, len(content))
+        log.debug("Initialised room %s from disk (%d chars)", room_name, len(content))
 
     async def _save_room(self, room_name: str, room: YRoom) -> None:
         """Write Y.Doc text content back to the .md file."""
@@ -186,7 +186,7 @@ class SyncManager:
             content = str(text)
             write_file(self._vault_path, room_name, content)
             self._first_dirty_at.pop(room_name, None)
-            log.info("Saved room %s to disk (%d chars)", room_name, len(content))
+            log.debug("Saved room %s to disk (%d chars)", room_name, len(content))
         except Exception:
             log.exception("Failed to save room %s", room_name)
 
