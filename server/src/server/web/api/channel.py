@@ -1,14 +1,12 @@
 """Litestar WebSocket → pycrdt Channel adapter."""
 
 import asyncio
-import logging
 from typing import Any
 from typing import Self
 
 from litestar import WebSocket
 from litestar.exceptions import WebSocketDisconnect
-
-log = logging.getLogger(__name__)
+from loguru import logger
 
 
 class LitestarWebsocketChannel:
@@ -33,14 +31,14 @@ class LitestarWebsocketChannel:
         except (asyncio.CancelledError, GeneratorExit):
             raise StopAsyncIteration from None
         except Exception:
-            log.debug("WebSocket receive error on %s", self._path, exc_info=True)
+            logger.opt(exception=True).debug("WebSocket receive error on {}", self._path)
             raise StopAsyncIteration from None
 
     async def send(self, message: bytes) -> None:
         try:
             await self._ws.send_bytes(message)
         except Exception as e:
-            log.debug("WebSocket send error on %s: %s", self._path, e)
+            logger.debug("WebSocket send error on {}: {}", self._path, e)
             raise ConnectionError(f"WebSocket closed: {e}") from e
 
     async def recv(self) -> bytes:

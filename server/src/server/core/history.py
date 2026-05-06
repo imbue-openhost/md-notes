@@ -8,7 +8,6 @@ Nothing here is exposed on the API; ``HistoryManager`` is started/stopped from t
 """
 
 import asyncio
-import logging
 import shutil
 import subprocess
 from datetime import UTC
@@ -16,8 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 
-log = logging.getLogger(__name__)
-
+from loguru import logger
 
 _GIT_USER_NAME = "md-notes"
 _GIT_USER_EMAIL = "md-notes@localhost"
@@ -42,9 +40,9 @@ class HistoryManager:
         self._vault_path.mkdir(parents=True, exist_ok=True)
         if not (self._vault_path / ".git").exists():
             await self._run_git("init", "-q")
-            log.info("Initialised git repo at %s", self._vault_path)
+            logger.info("Initialised git repo at {}", self._vault_path)
         self._task = asyncio.create_task(self._loop())
-        log.info("History autosave started (interval=%ss)", int(self.AUTOSAVE_INTERVAL_SECS))
+        logger.info("History autosave started (interval={}s)", int(self.AUTOSAVE_INTERVAL_SECS))
 
     async def stop(self) -> None:
         if self._task is None:
@@ -55,7 +53,7 @@ class HistoryManager:
         except asyncio.CancelledError:
             pass
         self._task = None
-        log.info("History autosave stopped")
+        logger.info("History autosave stopped")
 
     async def _loop(self) -> None:
         while True:
@@ -65,7 +63,7 @@ class HistoryManager:
             except asyncio.CancelledError:
                 raise
             except Exception:
-                log.exception("Autosave failed")
+                logger.exception("Autosave failed")
 
     async def _autosave(self) -> None:
         await self._run_git("add", "-u")
@@ -76,7 +74,7 @@ class HistoryManager:
             if Path(path).suffix.lower() in ALLOWED_EXTENSIONS:
                 to_add.append(path)
             else:
-                log.warning("Skipping non-whitelisted file from autosave: %s", path)
+                logger.warning("Skipping non-whitelisted file from autosave: {}", path)
         if to_add:
             await self._run_git("add", "--", *to_add)
 
@@ -85,7 +83,7 @@ class HistoryManager:
 
         timestamp = datetime.now(UTC).isoformat(timespec="seconds")
         await self._run_git("commit", "-q", "-m", f"autosave on {timestamp}")
-        log.info("Autosaved at %s", timestamp)
+        logger.info("Autosaved at {}", timestamp)
 
     async def _list_untracked(self) -> list[str]:
         out = await self._run_git_capture("ls-files", "--others", "--exclude-standard", "-z")

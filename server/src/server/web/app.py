@@ -86,6 +86,8 @@ def create_app(config: Config) -> Litestar:
         guards=[requires_owner],
         lifespan=[lifespan],
         cors_config=CORSConfig(allow_origins=["*"]),
+        # Loguru owns logging — see __main__.py for the InterceptHandler bridge.
+        logging_config=None,
         exception_handlers={
             PathTraversalError: _path_traversal_handler,
             FileNotFoundError: _file_not_found_handler,

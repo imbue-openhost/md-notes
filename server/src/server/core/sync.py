@@ -18,12 +18,12 @@ active editing session (creation, rename, delete).
 """
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import Any
 from typing import ClassVar
 from typing import Self
 
+from loguru import logger
 from pycrdt import Text
 from pycrdt.websocket import WebsocketServer
 from pycrdt.websocket import YRoom
@@ -31,8 +31,6 @@ from pycrdt.websocket import YRoom
 from server.core.files import PathTraversalError
 from server.core.files import read_file
 from server.core.files import write_file
-
-log = logging.getLogger(__name__)
 
 
 class SyncNotRunning(Exception):
@@ -69,7 +67,7 @@ class ReadOnlyChannel:
             if len(data) < 2:
                 return data  # type: ignore[no-any-return]
             if data[0] == _MSG_SYNC and data[1] == _SYNC_UPDATE:
-                log.debug("Dropped update from read-only client")
+                logger.debug("Dropped update from read-only client")
                 continue
             return data  # type: ignore[no-any-return]
 
@@ -103,7 +101,7 @@ class SyncManager:
         self._ws_server = WebsocketServer(rooms_ready=False, auto_clean_rooms=False)
         self._ws_server_task = asyncio.ensure_future(self._ws_server.start())
         await asyncio.sleep(0.1)
-        log.info("Yjs WebSocket server started")
+        logger.info("Yjs WebSocket server started")
 
     async def stop(self) -> None:
         if self._ws_server is None:
@@ -113,7 +111,7 @@ class SyncManager:
                 room = await self._ws_server.get_room(room_name)
                 await self._save_room(room_name, room)
             except Exception:
-                log.exception("Failed to save room %s during shutdown", room_name)
+                logger.exception("Failed to save room {} during shutdown", room_name)
         await self._ws_server.stop()
         if self._ws_server_task:
             self._ws_server_task.cancel()
@@ -121,7 +119,7 @@ class SyncManager:
         self._ws_server = None
         self._initialised_rooms.clear()
         self._first_dirty_at.clear()
-        log.info("Yjs WebSocket server stopped")
+        logger.info("Yjs WebSocket server stopped")
 
     # ── public serve ────────────────────────────────────────────────────
 
@@ -174,7 +172,7 @@ class SyncManager:
         doc.observe(on_change)
 
         self._initialised_rooms.add(room_name)
-        log.debug("Initialised room %s from disk (%d chars)", room_name, len(content))
+        logger.debug("Initialised room {} from disk ({} chars)", room_name, len(content))
 
     async def _save_room(self, room_name: str, room: YRoom) -> None:
         """Write Y.Doc text content back to the .md file."""
@@ -186,9 +184,9 @@ class SyncManager:
             content = str(text)
             write_file(self._vault_path, room_name, content)
             self._first_dirty_at.pop(room_name, None)
-            log.debug("Saved room %s to disk (%d chars)", room_name, len(content))
+            logger.debug("Saved room {} to disk ({} chars)", room_name, len(content))
         except Exception:
-            log.exception("Failed to save room %s", room_name)
+            logger.exception("Failed to save room {}", room_name)
 
     def _schedule_save(self, room_name: str, room: YRoom) -> None:
         # Debounce by SAVE_DEBOUNCE_SECS of quiet, but cap at SAVE_MAX_INTERVAL_SECS since the room first went
