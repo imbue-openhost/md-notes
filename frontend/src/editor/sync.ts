@@ -131,6 +131,9 @@ function buildSession(
   };
 }
 
+// Bump to invalidate client IndexedDB caches (v2: clear state corrupted by CRDT merge duplication bug).
+const IDB_VERSION = 2;
+
 /** Authenticated doc sync: WS /api/docs/{vault}/crdt_websocket/{filepath} */
 export function createSyncSession(
   vaultName: string,
@@ -139,7 +142,7 @@ export function createSyncSession(
   initialContent?: string,
 ): SyncSession {
   const wsUrl = getWsUrl(serverUrl) + `/api/docs/${encodeURIComponent(vaultName)}/crdt_websocket`;
-  return buildSession(wsUrl, filePath, `mdnotes-${vaultName}/${filePath}`, initialContent);
+  return buildSession(wsUrl, filePath, `mdnotes-v${IDB_VERSION}-${vaultName}/${filePath}`, initialContent);
 }
 
 /** Public share sync: WS /api/share/{uuid}/crdt_websocket/{docPath} */
@@ -149,5 +152,5 @@ export function createShareSyncSession(
   serverUrl: string,
 ): SyncSession {
   const wsUrl = getWsUrl(serverUrl) + `/api/share/${encodeURIComponent(uuid)}/crdt_websocket`;
-  return buildSession(wsUrl, docPath, `mdnotes-share-${uuid}`);
+  return buildSession(wsUrl, docPath, `mdnotes-v${IDB_VERSION}-share-${uuid}`);
 }
