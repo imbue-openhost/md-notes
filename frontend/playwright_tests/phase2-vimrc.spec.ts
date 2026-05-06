@@ -1,9 +1,20 @@
 import { test, expect } from '@playwright/test';
+import { createVault, deleteVault, createFile, openVault } from './test-helpers';
+
+const VAULT = 'VimrcTest';
+
+test.beforeAll(async () => {
+  await createVault(VAULT);
+  await createFile(VAULT, 'test.md', '');
+});
+
+test.afterAll(async () => {
+  await deleteVault(VAULT);
+});
 
 test.describe('Phase 2: Vimrc Parser', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('.cm-editor', { timeout: 5000 });
+    await openVault(page, VAULT);
   });
 
   test('vim normal mode works — Escape returns to normal mode', async ({ page }) => {
@@ -11,13 +22,11 @@ test.describe('Phase 2: Vimrc Parser', () => {
     await content.click();
     await page.keyboard.press('Escape');
 
-    // Type some content in insert mode first
     await page.keyboard.type('i');
     await page.keyboard.type('NORMALTEST');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(100);
 
-    // In normal mode, 'j' should not insert text
     const before = await content.textContent();
     await page.keyboard.press('j');
     await page.waitForTimeout(100);
@@ -32,9 +41,8 @@ test.describe('Phase 2: Vimrc Parser', () => {
     await content.click();
     await page.keyboard.press('Escape');
 
-    // Go to top and enter insert mode
     await page.keyboard.type('gg');
-    await page.keyboard.type('O'); // Open line above in insert mode
+    await page.keyboard.type('O');
     await page.keyboard.type('VIMRC_TEST');
     await page.keyboard.press('Escape');
 
@@ -42,7 +50,6 @@ test.describe('Phase 2: Vimrc Parser', () => {
   });
 
   test('vim command mode — :set shows no errors', async ({ page }) => {
-    // Register error listener before any actions
     const errors: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'error') errors.push(msg.text());
@@ -52,7 +59,6 @@ test.describe('Phase 2: Vimrc Parser', () => {
     await content.click();
     await page.keyboard.press('Escape');
 
-    // Type a command — this tests that vim command line works
     await page.keyboard.type(':');
     await page.waitForTimeout(200);
 

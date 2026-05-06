@@ -1,9 +1,20 @@
 import { test, expect } from '@playwright/test';
+import { createVault, deleteVault, createFile, openVault } from './test-helpers';
+
+const VAULT = 'EditorTest';
+
+test.beforeAll(async () => {
+  await createVault(VAULT);
+  await createFile(VAULT, 'test.md', '');
+});
+
+test.afterAll(async () => {
+  await deleteVault(VAULT);
+});
 
 test.describe('Phase 1: Editor Core', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('.cm-editor', { timeout: 5000 });
+    await openVault(page, VAULT);
   });
 
   test('editor mounts', async ({ page }) => {
@@ -84,6 +95,7 @@ test.describe('Phase 1: Editor Core', () => {
       }
     });
 
+    // beforeEach already opened the vault; reload to capture errors on a fresh load
     await page.reload();
     await page.waitForSelector('.cm-editor', { timeout: 5000 });
     await page.waitForTimeout(500);
