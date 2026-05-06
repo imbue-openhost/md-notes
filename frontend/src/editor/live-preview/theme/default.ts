@@ -81,22 +81,26 @@ export const editorTheme = EditorView.theme({
     fontWeight: '700',
     lineHeight: '1.3',
     color: 'hsl(var(--md-heading, var(--foreground, 220 9% 9%)))',
+    textDecoration: 'none',
   },
   '.cm-header-2': {
     fontSize: '1.5em',
     fontWeight: '600',
     lineHeight: '1.4',
     color: 'hsl(var(--md-heading, var(--foreground, 220 9% 9%)))',
+    textDecoration: 'none',
   },
   '.cm-header-3': {
     fontSize: '1.25em',
     fontWeight: '600',
     lineHeight: '1.5',
     color: 'hsl(var(--md-heading, var(--foreground, 220 9% 9%)))',
+    textDecoration: 'none',
   },
   '.cm-header-4, .cm-header-5, .cm-header-6': {
     fontWeight: '600',
     color: 'hsl(var(--md-heading, var(--foreground, 220 9% 9%)))',
+    textDecoration: 'none',
   },
 
   // ========== Inline Styles ==========

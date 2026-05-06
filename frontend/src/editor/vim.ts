@@ -12,47 +12,86 @@
 import { vim, Vim } from '@replit/codemirror-vim';
 import { EditorView } from '@codemirror/view';
 import { EditorState, type Extension } from '@codemirror/state';
-import { unfoldAll, toggleFold, foldCode, unfoldCode, syntaxTree } from '@codemirror/language';
+import { unfoldAll, toggleFold, foldCode, unfoldCode } from '@codemirror/language';
 import { foldAllRecursive } from './folding';
 
-function toggleTaskAtCursor(view: EditorView): boolean {
+/**
+ * Toggle bullet/task state across the current selection.
+ *
+ * Scans every line in the selection that starts with a bullet (`-`, `*`, `+`,
+ * or numbered like `1.` / `1)`). Each matched line has one of three statuses,
+ * ordered lowest → highest:
+ *
+ *   bullet (`- foo`)  <  unchecked (`- [ ] foo`)  <  checked (`- [x] foo`)
+ *
+ * If every matched line shares a status, each advances:
+ *   bullet → unchecked, unchecked → checked, checked → unchecked.
+ * If the selection mixes statuses, only the lines at the lowest present
+ * status advance one step; the rest are left untouched.
+ *
+ * With no selection (cursor on a single line) this reduces to the
+ * single-line toggle behaviour.
+ */
+function toggleTaskAtSelection(view: EditorView): boolean {
   const { state } = view;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-  const tree = syntaxTree(state);
+  const sel = state.selection.main;
+  const startLine = state.doc.lineAt(sel.from);
+  const endLine = state.doc.lineAt(sel.to);
+  // Visual-line selections often end at the start of the line *after* the
+  // last visually-selected line. Don't treat that trailing line as selected.
+  const endLineNum =
+    sel.to > sel.from && sel.to === endLine.from && endLine.number > startLine.number
+      ? endLine.number - 1
+      : endLine.number;
 
-  let from = -1;
-  let to = -1;
-  tree.iterate({
-    from: line.from,
-    to: line.to,
-    enter: (node) => {
-      if (from !== -1) return false;
-      if (node.name === 'TaskMarker') {
-        from = node.from;
-        to = node.to;
-        return false;
-      }
-    },
-  });
-
-  if (from !== -1) {
-    const checked = /^\[[xX]\]$/.test(state.doc.sliceString(from, to));
-    view.dispatch({
-      changes: { from, to, insert: checked ? '[ ]' : '[x]' },
-    });
-    return true;
+  type Item = {
+    prefixEnd: number;
+    marker?: { from: number; to: number; checked: boolean };
+  };
+  const items: Item[] = [];
+  for (let n = startLine.number; n <= endLineNum; n++) {
+    const line = state.doc.line(n);
+    const text = state.doc.sliceString(line.from, line.to);
+    const m = text.match(/^(\s*(?:[-*+]|\d+[.)])\s+)(\[([ xX])\]\s+)?/);
+    if (!m) continue;
+    const prefixEnd = line.from + m[1].length;
+    if (!m[2]) {
+      items.push({ prefixEnd });
+    } else {
+      items.push({
+        prefixEnd,
+        marker: {
+          from: prefixEnd,
+          to: prefixEnd + 3,
+          checked: m[3] !== ' ',
+        },
+      });
+    }
   }
 
-  // No TaskMarker: if this is a bullet/numbered list item, insert `[ ] `
-  // right after the bullet.
-  const lineText = state.doc.sliceString(line.from, line.to);
-  const bulletMatch = lineText.match(/^\s*(?:[-*+]|\d+[.)])\s+/);
-  if (!bulletMatch) return false;
-  const insertAt = line.from + bulletMatch[0].length;
-  view.dispatch({
-    changes: { from: insertAt, to: insertAt, insert: '[ ] ' },
-  });
+  if (items.length === 0) return false;
+
+  // 0 = bullet, 1 = unchecked, 2 = checked
+  const statusOf = (it: Item) => (!it.marker ? 0 : it.marker.checked ? 2 : 1);
+  const statuses = items.map(statusOf);
+  const minStatus = Math.min(...statuses);
+  const allSame = statuses.every((s) => s === minStatus);
+
+  const changes: { from: number; to: number; insert: string }[] = [];
+  for (const it of items) {
+    if (!allSame && statusOf(it) !== minStatus) continue;
+    if (!it.marker) {
+      changes.push({ from: it.prefixEnd, to: it.prefixEnd, insert: '[ ] ' });
+    } else if (!it.marker.checked) {
+      changes.push({ from: it.marker.from, to: it.marker.to, insert: '[x]' });
+    } else {
+      // Only reached when every selected item is checked.
+      changes.push({ from: it.marker.from, to: it.marker.to, insert: '[ ]' });
+    }
+  }
+
+  if (changes.length === 0) return false;
+  view.dispatch({ changes });
   return true;
 }
 
@@ -135,7 +174,7 @@ const BUILTIN_ACTIONS: Record<string, (view: EditorView) => boolean> = {
   'unfold-all': (view) => unfoldAll(view),
   'fold-at-cursor': (view) => foldCode(view),
   'unfold-at-cursor': (view) => unfoldCode(view),
-  'toggle-task': (view) => toggleTaskAtCursor(view),
+  'toggle-task': (view) => toggleTaskAtSelection(view),
 };
 
 /**
