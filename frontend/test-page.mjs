@@ -1,0 +1,24 @@
+import { chromium } from 'playwright';
+const token = process.env.TOKEN;
+const browser = await chromium.launch();
+const ctx = await browser.newContext({extraHTTPHeaders: {Authorization: `Bearer ${token}`}});
+const page = await ctx.newPage();
+const errors = [];
+const wsMsgs = [];
+page.on('console', m => console.log('CONSOLE', m.type(), m.text().substring(0,200)));
+page.on('pageerror', e => errors.push(e.message));
+page.on('websocket', ws => {
+  console.log('WS:', ws.url());
+  ws.on('framesent', f => wsMsgs.push({dir:'->',url:ws.url(),size:f.payload.length}));
+  ws.on('framereceived', f => wsMsgs.push({dir:'<-',url:ws.url(),size:f.payload.length}));
+  ws.on('close', () => console.log('WS CLOSED:', ws.url()));
+});
+await page.goto('https://md-notes.host.zackpolizzi.com/journal/daily_journal', {waitUntil: 'networkidle', timeout: 20000}).catch(e => console.log('NAV ERR:', e.message));
+await page.waitForTimeout(5000);
+console.log('Page errors:', errors);
+console.log('WS frames:', wsMsgs.length);
+const editor = await page.locator('.cm-editor').count();
+console.log('Editor count:', editor);
+const text = await page.locator('.cm-content').first().textContent().catch(() => 'NO CONTENT');
+console.log('Editor content (first 200):', (text || '').substring(0, 200));
+await browser.close();
