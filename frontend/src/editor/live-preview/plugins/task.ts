@@ -98,10 +98,13 @@ export const taskListPlugin = ViewPlugin.fromClass(
           }
 
           if (checked) {
-            const line = state.doc.lineAt(node.from);
-            if (node.to < line.to) {
+            const lineForMark = state.doc.lineAt(node.from);
+            const after = state.doc.sliceString(node.to, lineForMark.to);
+            const leadingWs = after.match(/^\s*/)?.[0].length ?? 0;
+            const markFrom = node.to + leadingWs;
+            if (markFrom < lineForMark.to) {
               decorations.push(
-                Decoration.mark({ class: 'cm-task-checked' }).range(node.to, line.to)
+                Decoration.mark({ class: 'cm-task-checked' }).range(markFrom, lineForMark.to)
               );
             }
           }
