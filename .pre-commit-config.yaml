@@ -22,6 +22,12 @@ repos:
         language: system
         pass_filenames: false
         types: [python]
+      - id: openapi
+        name: "openapi spec"
+        entry: uv run python server/openapi/generate.py
+        language: system
+        pass_filenames: false
+        types: [python]
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.24.2
     hooks:
