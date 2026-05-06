@@ -16,6 +16,7 @@ from server.core.config import Config
 from server.core.db import close_db
 from server.core.db import init_db
 from server.core.files import PathTraversalError
+from server.core.history import HistoryManager
 from server.core.sync import SyncManager
 from server.core.vaults import InvalidVaultName
 from server.core.vaults import VaultAlreadyExists
@@ -63,9 +64,13 @@ def create_app(config: Config) -> Litestar:
         sync_manager = SyncManager(config.vault_path)
         app.state.sync_manager = sync_manager
         await sync_manager.start()
+        history_manager = HistoryManager(config.vault_path)
+        app.state.history_manager = history_manager
+        await history_manager.start()
         try:
             yield
         finally:
+            await history_manager.stop()
             await sync_manager.stop()
             close_db()
 
