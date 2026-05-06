@@ -1,1 +1,0 @@
-{"default":{"identifier":"default","description":"Default capabilities for md-notes","local":true,"windows":["main"],"permissions":["core:default","dialog:default","dialog:allow-open","fs:default","http:default"]}}
