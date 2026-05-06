@@ -15,13 +15,9 @@ This is a document/notes editor, most similar to Obsidian. Some important core d
 
 ### backend
 
-- **Quart/Hypercorn server** with REST API for file CRUD and static frontend serving
-- **Yjs real-time sync** — edits sync between browser tabs/devices via WebSocket
-- **Share links** — generate read-only or read-write links, stored in SQLite
-- **API key auth** — all routes except `/share/` require authentication
-- **OpenHost deployment** at `md-notes.host.zackpolizzi.com`
-- **Tauri scaffolding** — Rust project compiles, ready to build native Mac app
-- **y-indexeddb** — offline persistence for Yjs document state
+- litestar API
+- CRDT implemented with y.js and served over a websocket
+- API is documented in server/openapi/openapi.json. this is generated via a git hook; **clients should build against this spec**
 
 ### default web editor (built for zack specifically :) )
 
