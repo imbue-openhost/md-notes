@@ -14,7 +14,7 @@ health_check = "/health"
 public_paths = ["/"]
 
 [resources]
-memory_mb = 256
+memory_mb = 512
 cpu_millicores = 200
 
 [data]
