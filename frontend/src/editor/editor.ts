@@ -17,16 +17,13 @@ import {
   collapseOnSelectionFacet,
   mouseSelectingField,
   setMouseSelecting,
-  livePreviewPlugin,
   markdownStylePlugin,
   taskListPlugin,
-  codeBlockField,
-  imageField,
-  linkPlugin,
   editorTheme,
 } from './live-preview/index';
 
 import { markdownFolding } from './folding';
+import { foldPersistence } from './fold-persistence';
 import { Vim } from '@replit/codemirror-vim';
 
 import { vimMode } from './vim';
@@ -173,6 +170,10 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
   if (options.readOnly) {
     extensions.push(EditorState.readOnly.of(true));
+  }
+
+  if (options.syncVault && options.syncFilePath) {
+    extensions.push(foldPersistence({ vault: options.syncVault, filePath: options.syncFilePath }));
   }
 
   const state = EditorState.create({

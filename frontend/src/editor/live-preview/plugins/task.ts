@@ -70,46 +70,53 @@ export const taskListPlugin = ViewPlugin.fromClass(
       const decorations: Range<Decoration>[] = [];
       const { state } = view;
       const ranges = state.selection.ranges;
+      const tree = syntaxTree(state);
 
-      syntaxTree(state).iterate({
-        enter: (node) => {
-          if (node.name !== 'TaskMarker') return;
+      // Iterate only the visible viewport ranges. On a 1.5MB file, walking the
+      // full tree on every selection/viewport change costs hundreds of ms and
+      // throttles cursor movement to a few updates per second.
+      for (const { from, to } of view.visibleRanges) {
+        tree.iterate({
+          from,
+          to,
+          enter: (node) => {
+            if (node.name !== 'TaskMarker') return;
 
-          const text = state.doc.sliceString(node.from, node.to);
-          const checked = /^\[[xX]\]$/.test(text);
+            const text = state.doc.sliceString(node.from, node.to);
+            const checked = /^\[[xX]\]$/.test(text);
 
-          const line = state.doc.lineAt(node.from);
-          const prefix = state.doc.sliceString(line.from, node.from);
-          const bulletMatch = prefix.match(/^(\s*)(?:[-*+]|\d+[.)])\s+$/);
-          const replaceFrom = bulletMatch
-            ? line.from + bulletMatch[1].length
-            : node.from;
+            const line = state.doc.lineAt(node.from);
+            const prefix = state.doc.sliceString(line.from, node.from);
+            const bulletMatch = prefix.match(/^(\s*)(?:[-*+]|\d+[.)])\s+$/);
+            const replaceFrom = bulletMatch
+              ? line.from + bulletMatch[1].length
+              : node.from;
 
-          const cursorOnMarker = ranges.some(
-            (r) => r.from <= node.to && r.to >= replaceFrom
-          );
-
-          if (!cursorOnMarker) {
-            decorations.push(
-              Decoration.replace({
-                widget: new CheckboxWidget(checked, node.from),
-              }).range(replaceFrom, node.to)
+            const cursorOnMarker = ranges.some(
+              (r) => r.from <= node.to && r.to >= replaceFrom
             );
-          }
 
-          if (checked) {
-            const lineForMark = state.doc.lineAt(node.from);
-            const after = state.doc.sliceString(node.to, lineForMark.to);
-            const leadingWs = after.match(/^\s*/)?.[0].length ?? 0;
-            const markFrom = node.to + leadingWs;
-            if (markFrom < lineForMark.to) {
+            if (!cursorOnMarker) {
               decorations.push(
-                Decoration.mark({ class: 'cm-task-checked' }).range(markFrom, lineForMark.to)
+                Decoration.replace({
+                  widget: new CheckboxWidget(checked, node.from),
+                }).range(replaceFrom, node.to)
               );
             }
-          }
-        },
-      });
+
+            if (checked) {
+              const after = state.doc.sliceString(node.to, line.to);
+              const leadingWs = after.match(/^\s*/)?.[0].length ?? 0;
+              const markFrom = node.to + leadingWs;
+              if (markFrom < line.to) {
+                decorations.push(
+                  Decoration.mark({ class: 'cm-task-checked' }).range(markFrom, line.to)
+                );
+              }
+            }
+          },
+        });
+      }
 
       return Decoration.set(
         decorations.sort((a, b) => a.from - b.from),

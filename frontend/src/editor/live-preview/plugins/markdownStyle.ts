@@ -76,28 +76,36 @@ export const markdownStylePlugin = ViewPlugin.fromClass(
         Link: 'cm-link',
       };
 
-      syntaxTree(view.state).iterate({
-        enter: (node) => {
-          const cls = styleMap[node.name];
-          if (!cls) return;
+      const tree = syntaxTree(view.state);
 
-          // Skip nodes inside code blocks
-          if (isInsideSkippedParent(node)) {
-            return;
-          }
+      // Walk only the visible viewport. Iterating the entire tree on every
+      // viewport change makes scrolling/cursor movement chug on large docs.
+      for (const { from, to } of view.visibleRanges) {
+        tree.iterate({
+          from,
+          to,
+          enter: (node) => {
+            const cls = styleMap[node.name];
+            if (!cls) return;
 
-          decorations.push(
-            Decoration.mark({ class: cls }).range(node.from, node.to)
-          );
+            // Skip nodes inside code blocks
+            if (isInsideSkippedParent(node)) {
+              return;
+            }
 
-          // Headings also need line-level decoration
-          if (node.name.startsWith('ATXHeading')) {
             decorations.push(
-              Decoration.line({ class: 'cm-heading-line' }).range(node.from)
+              Decoration.mark({ class: cls }).range(node.from, node.to)
             );
-          }
-        },
-      });
+
+            // Headings also need line-level decoration
+            if (node.name.startsWith('ATXHeading')) {
+              decorations.push(
+                Decoration.line({ class: 'cm-heading-line' }).range(node.from)
+              );
+            }
+          },
+        });
+      }
 
       return Decoration.set(decorations, true);
     }
