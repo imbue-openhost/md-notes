@@ -52,7 +52,8 @@ export const App: Component = () => {
   const [activeVimrc, setActiveVimrc] = createSignal(DEFAULT_VIMRC);
   const [vault, setVault] = createSignal<VaultConfig | null>(null);
   const [vaultList, setVaultList] = createSignal<VaultConfig[]>([]);
-  const [showVaultPicker, setShowVaultPicker] = createSignal(true);
+  const [showVaultPicker, setShowVaultPicker] = createSignal(false);
+  const [booting, setBooting] = createSignal(true);
   const [currentDocPath, setCurrentDocPath] = createSignal<string | null>(null);
   const [shareModalPath, setShareModalPath] = createSignal<string | null>(null);
   const [showWebSettings, setShowWebSettings] = createSignal(false);
@@ -64,24 +65,30 @@ export const App: Component = () => {
       const saved = await getServerVimrc();
       if (saved) setActiveVimrc(saved);
     } catch {}
-    try { await loadWebVaults(); } catch (e) {
-      console.warn('Backend unreachable:', e);
-      openVault({ name: '', path: '', sync: true });
-    }
+    await loadWebVaults();
+    setBooting(false);
   }
 
   async function fetchVaultList(): Promise<VaultConfig[]> {
-    try {
-      const remote = await listVaults();
-      return remote.map((v) => ({ name: v.name, path: '', sync: true }));
-    } catch (e) {
-      console.error('Failed to load vaults:', e);
-      return [];
+    const remote = await listVaults();
+    return remote.map((v) => ({ name: v.name, path: '', sync: true }));
+  }
+
+  async function fetchVaultListWithRetry(): Promise<VaultConfig[]> {
+    let delay = 500;
+    while (true) {
+      try {
+        return await fetchVaultList();
+      } catch (e) {
+        console.warn('Backend not ready, retrying:', e);
+        await new Promise((r) => setTimeout(r, delay));
+        delay = Math.min(delay * 2, 5000);
+      }
     }
   }
 
   async function loadWebVaults() {
-    const vaults = await fetchVaultList();
+    const vaults = await fetchVaultListWithRetry();
 
     try {
       const lastName = localStorage.getItem('mdnotes-last-vault');
@@ -112,7 +119,11 @@ export const App: Component = () => {
     fetchVaultList().then((vaults) => {
       setVaultList(vaults);
       setShowVaultPicker(true);
-    }).catch(console.error);
+    }).catch((e) => {
+      console.error('Failed to load vaults:', e);
+      setVaultList([]);
+      setShowVaultPicker(true);
+    });
   }
 
   function handleFileSelect(path: string) {
@@ -179,7 +190,11 @@ export const App: Component = () => {
 
   return (
     <>
-      <Show when={showVaultPicker() && !vault()}>
+      <Show when={booting()}>
+        <div style={{ padding: '2rem', color: '#888' }}>Connecting to server…</div>
+      </Show>
+
+      <Show when={!booting() && showVaultPicker() && !vault()}>
         <VaultPicker
           vaults={vaultList()}
           onSelect={handleVaultSelect}
