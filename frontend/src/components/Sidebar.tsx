@@ -151,18 +151,57 @@ export const Sidebar: Component<Props> = (props) => {
     <>
       <div id="sidebar">
         <div class="sidebar-header">
-          <span>{props.vaultName ?? 'Files'}</span>
+          <DropdownMenu.Root
+            onOpenChange={(open) => { if (open) props.onRefreshVaults?.(); }}
+          >
+            <DropdownMenu.Trigger class="sidebar-vault-trigger" title="Switch vault">
+              <span class="sidebar-vault-name">{props.vaultName || 'No vault'}</span>
+              <span class="sidebar-vault-chevron" aria-hidden>{'⌄'}</span>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content class="sidebar-vault-menu">
+                <For each={props.vaults ?? []}>
+                  {(v) => (
+                    <DropdownMenu.Item
+                      class="sidebar-vault-item"
+                      onSelect={() => {
+                        if (v.name !== props.vaultName) props.onSwitchToVault?.(v);
+                      }}
+                    >
+                      <span class="sidebar-vault-check">
+                        {v.name === props.vaultName ? '✓' : ''}
+                      </span>
+                      <span>{v.name}</span>
+                    </DropdownMenu.Item>
+                  )}
+                </For>
+                <Show when={(props.vaults?.length ?? 0) > 0}>
+                  <DropdownMenu.Separator class="sidebar-vault-sep" />
+                </Show>
+                <DropdownMenu.Item
+                  class="sidebar-vault-item sidebar-vault-manage"
+                  onSelect={() => props.onManageVaults?.()}
+                >
+                  <span class="sidebar-vault-check" />
+                  <span>Manage vaults...</span>
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
           <div class="sidebar-header-buttons">
             <button class="sidebar-btn" title="New file" onClick={handleNewFile}>+</button>
+            <Show when={props.onSettings}>
+              <button class="sidebar-btn" title="Settings" onClick={props.onSettings}>{'⚙️'}</button>
+            </Show>
             <Show when={props.onShare}>
               <button
-                class="sidebar-btn"
+                class="sidebar-btn sidebar-btn-text"
                 title="Share current file"
                 onClick={() => {
                   if (props.currentPath) props.onShare!(props.currentPath);
                   else alert('Open a file first.');
                 }}
-              >{'\u{1F517}'}</button>
+              >Share</button>
             </Show>
           </div>
         </div>
@@ -187,48 +226,6 @@ export const Sidebar: Component<Props> = (props) => {
           </div>
         </Show>
 
-        <div class="sidebar-footer">
-          <DropdownMenu.Root
-            placement="top-start"
-            onOpenChange={(open) => { if (open) props.onRefreshVaults?.(); }}
-          >
-            <DropdownMenu.Trigger class="sidebar-vault-trigger" title="Switch vault">
-              <span class="sidebar-vault-chevron" aria-hidden>{'↕'}</span>
-              <span class="sidebar-vault-name">{props.vaultName || 'No vault'}</span>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content class="sidebar-vault-menu">
-                <For each={props.vaults ?? []}>
-                  {(v) => (
-                    <DropdownMenu.Item
-                      class="sidebar-vault-item"
-                      onSelect={() => {
-                        if (v.name !== props.vaultName) props.onSwitchToVault?.(v);
-                      }}
-                    >
-                      <span class="sidebar-vault-check">
-                        {v.name === props.vaultName ? '✓' : ''}
-                      </span>
-                      <span>{v.name}</span>
-                    </DropdownMenu.Item>
-                  )}
-                </For>
-                <Show when={(props.vaults?.length ?? 0) > 0}>
-                  <DropdownMenu.Separator class="sidebar-vault-sep" />
-                </Show>
-                <DropdownMenu.Item
-                  class="sidebar-vault-manage"
-                  onSelect={() => props.onManageVaults?.()}
-                >
-                  Manage vaults...
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-          <Show when={props.onSettings}>
-            <button class="sidebar-footer-btn" title="Settings" onClick={props.onSettings}>{'⚙️'}</button>
-          </Show>
-        </div>
       </div>
 
       <Show when={dialog()}>

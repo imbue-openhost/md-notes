@@ -226,23 +226,15 @@ li.open > .sidebar-children {
   background: hsl(var(--muted));
 }
 
-/* ── Sidebar footer (vault switcher) ──────────────────────── */
-.sidebar-footer {
+/* ── Sidebar vault switcher ───────────────────────────────── */
+.sidebar-vault-trigger {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 8px;
-  border-top: 1px solid hsl(var(--border));
-}
-
-.sidebar-vault-trigger {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
   background: none;
   border: none;
-  padding: 4px 6px;
+  padding: 2px 6px;
+  margin: -2px -6px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
@@ -259,7 +251,8 @@ li.open > .sidebar-children {
 }
 
 .sidebar-vault-chevron {
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1;
   color: hsl(var(--muted-foreground));
   flex-shrink: 0;
 }
@@ -271,19 +264,9 @@ li.open > .sidebar-children {
   min-width: 0;
 }
 
-.sidebar-footer-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  color: hsl(var(--muted-foreground));
-}
-
-.sidebar-footer-btn:hover {
-  background: hsl(var(--border));
-  color: hsl(var(--foreground));
+.sidebar-btn-text {
+  font-size: 12px;
+  padding: 2px 10px;
 }
 
 .sidebar-vault-menu {
@@ -328,20 +311,7 @@ li.open > .sidebar-children {
 }
 
 .sidebar-vault-manage {
-  padding: 6px 8px;
-  font-size: 13px;
-  cursor: pointer;
-  border-radius: 4px;
-  outline: none;
-  text-align: center;
-  font-weight: 500;
-  color: hsl(var(--primary-foreground));
-  background: hsl(var(--primary));
-}
-
-.sidebar-vault-manage:hover,
-.sidebar-vault-manage[data-highlighted] {
-  background: hsl(var(--primary) / 0.85);
+  color: hsl(var(--muted-foreground));
 }
 
 /* ── Share modal ──────────────────────────────────────────── */
