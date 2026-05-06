@@ -14,9 +14,10 @@ import { foldGutter } from '@codemirror/language';
 import { Prec, type Extension } from '@codemirror/state';
 
 /**
- * Fold service that defines ranges based on ATXHeading nodes.
+ * Fold service that defines ranges based on ATXHeading nodes. Exported so unit
+ * tests can install just the service (without the DOM-dependent fold gutter).
  */
-const markdownFoldService = foldService.of((state, lineStart, lineEnd) => {
+export const markdownFoldService = foldService.of((state, lineStart, lineEnd) => {
   const tree = syntaxTree(state);
   let headingName = '';
   let headingFrom = 0;
