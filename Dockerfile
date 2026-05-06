@@ -30,4 +30,4 @@ COPY Caddyfile /etc/caddy/Caddyfile
 
 EXPOSE 8080
 
-CMD sh -c "caddy run --config /etc/caddy/Caddyfile & uv run python -u -m server"
+CMD sh -c "caddy run --config /etc/caddy/Caddyfile & uv run --no-dev python -u -m server"
