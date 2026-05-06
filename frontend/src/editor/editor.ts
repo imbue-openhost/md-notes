@@ -19,6 +19,7 @@ import {
   setMouseSelecting,
   livePreviewPlugin,
   markdownStylePlugin,
+  taskListPlugin,
   codeBlockField,
   imageField,
   linkPlugin,
@@ -88,6 +89,7 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     mouseSelectingField,
     editorTheme,
     markdownStylePlugin,
+    taskListPlugin,
 
     EditorView.domEventHandlers({
       keydown: (event) => {

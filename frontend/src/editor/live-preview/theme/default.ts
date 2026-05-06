@@ -112,6 +112,17 @@ export const editorTheme = EditorView.theme({
     textDecoration: 'line-through',
     color: 'hsl(var(--muted-foreground, 220 9% 46%))',
   },
+
+  // ========== Task List Checkboxes ==========
+  '.cm-task-checkbox': {
+    margin: '0 0.4em 0 0',
+    cursor: 'pointer',
+    verticalAlign: 'middle',
+  },
+  '.cm-task-checked': {
+    textDecoration: 'line-through',
+    color: 'hsl(var(--muted-foreground, 220 9% 46%))',
+  },
   '.cm-code': {
     backgroundColor: 'hsl(var(--muted, 220 14% 96%))',
     padding: '2px 4px',

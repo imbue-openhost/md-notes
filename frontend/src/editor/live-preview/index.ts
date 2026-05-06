@@ -14,6 +14,7 @@ export type { UpdateAction } from './core/pluginUpdateHelper';
 // Plugins
 export { livePreviewPlugin } from './plugins/livePreview';
 export { markdownStylePlugin } from './plugins/markdownStyle';
+export { taskListPlugin } from './plugins/task';
 export { codeBlockField } from './plugins/codeBlock';
 export type { CodeBlockOptions } from './plugins/codeBlock';
 export { imageField } from './plugins/image';
