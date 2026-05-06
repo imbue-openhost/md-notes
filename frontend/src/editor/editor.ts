@@ -112,7 +112,6 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
 }
 
 export interface EditorOptions {
-  initialDoc?: string;
   vimrcContent?: string;
   syncVault?: string;
   syncFilePath?: string;
@@ -135,7 +134,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   let syncSession: SyncSession | null = null;
 
   if (options.syncServerUrl && options.syncVault && options.syncFilePath) {
-    syncSession = createSyncSession(options.syncVault, options.syncFilePath, options.syncServerUrl, options.initialDoc);
+    syncSession = createSyncSession(options.syncVault, options.syncFilePath, options.syncServerUrl);
   } else if (options.syncServerUrl && options.shareUuid && options.shareDocPath) {
     syncSession = createShareSyncSession(options.shareUuid, options.shareDocPath, options.syncServerUrl);
   }
@@ -163,7 +162,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   }
 
   const state = EditorState.create({
-    doc: options.initialDoc ?? '',
+    doc: '',
     extensions,
   });
 

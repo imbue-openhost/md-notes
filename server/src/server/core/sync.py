@@ -7,10 +7,6 @@ an ephemeral coordination layer that exists only while clients are connected.
 A room's ``Y.Doc`` holds a single ``Y.Text`` named ``content``. Round-tripping is a pure string identity:
 ``read_file(...)`` seeds the text on first connect, ``str(text)`` writes it back on save.
 
-The CRDT binary state is also persisted alongside the ``.md`` file (in a ``.crdt_state/`` directory). On server
-restart, rooms restore from binary state rather than re-inserting text into a fresh Y.Doc. This preserves CRDT
-operation identities and prevents content duplication when clients reconnect with cached state.
-
 The full lifecycle for each room — disk read on first connect, debounced saves while editing, save-and-drop on
 last disconnect, save-all on shutdown — is owned by ``SyncManager``. One instance per app, constructed in
 ``create_app`` and stored on ``app.state.sync_manager``; route handlers look it up off the connection and call
@@ -28,7 +24,6 @@ from typing import Any
 from typing import ClassVar
 from typing import Self
 
-from pycrdt import Doc
 from pycrdt import Text
 from pycrdt.websocket import WebsocketServer
 from pycrdt.websocket import YRoom
@@ -105,7 +100,6 @@ class SyncManager:
     # ── lifecycle ───────────────────────────────────────────────────────
 
     async def start(self) -> None:
-        self._recover_duplicated_files()
         self._ws_server = WebsocketServer(rooms_ready=False, auto_clean_rooms=False)
         self._ws_server_task = asyncio.ensure_future(self._ws_server.start())
         await asyncio.sleep(0.1)
@@ -128,43 +122,6 @@ class SyncManager:
         self._initialised_rooms.clear()
         self._first_dirty_at.clear()
         log.info("Yjs WebSocket server stopped")
-
-    # ── recovery ────────────────────────────────────────────────────────
-
-    def _recover_duplicated_files(self) -> None:
-        """One-time recovery: undo power-of-2 content duplication from the CRDT merge bug.
-
-        Only runs when no ``.crdt_state/`` directory exists yet (i.e. first deploy of the fix).
-        """
-        crdt_state_dir = self._vault_path / ".crdt_state"
-        if crdt_state_dir.exists():
-            return
-
-        md_files = sorted(self._vault_path.rglob("*.md"), key=lambda p: p.stat().st_size)
-        for md_file in md_files:
-            size = md_file.stat().st_size
-            if size < 1_000_000:
-                continue
-            content = md_file.read_text(encoding="utf-8")
-            original = self._unduplicate(content)
-            if len(original) < len(content):
-                md_file.write_text(original, encoding="utf-8")
-                log.warning(
-                    "Recovered duplicated file %s: %d → %d chars",
-                    md_file.relative_to(self._vault_path),
-                    len(content),
-                    len(original),
-                )
-
-    @staticmethod
-    def _unduplicate(content: str) -> str:
-        while len(content) > 1 and len(content) % 2 == 0:
-            half = len(content) // 2
-            if content[:half] == content[half:]:
-                content = content[:half]
-            else:
-                break
-        return content
 
     # ── public serve ────────────────────────────────────────────────────
 
@@ -192,17 +149,8 @@ class SyncManager:
 
     # ── room init / save ────────────────────────────────────────────────
 
-    _EMPTY_STATE_VECTOR: ClassVar[bytes] = Doc().get_state()
-
-    def _crdt_state_path(self, room_name: str) -> Path:
-        return self._vault_path / ".crdt_state" / f"{room_name}.ydoc"
-
     def _init_room(self, room: YRoom, room_name: str) -> None:
-        """Load Y.Doc state for a room on first connect.
-
-        Prefers restoring from persisted CRDT binary state (preserves operation identities across restarts).
-        Falls back to seeding a fresh Y.Doc from the .md file when no binary state exists.
-        """
+        """Load .md content from disk into the Y.Doc's shared text on first connect."""
         if room_name in self._initialised_rooms:
             return
 
@@ -210,31 +158,26 @@ class SyncManager:
             vault_name = room_name.split("/", 1)[0]
             (self._vault_path / vault_name).mkdir(parents=True, exist_ok=True)
 
-        doc = room.ydoc
-        state_path = self._crdt_state_path(room_name)
+        try:
+            content = read_file(self._vault_path, room_name)
+        except (FileNotFoundError, PathTraversalError):
+            content = ""
 
-        if state_path.exists():
-            state = state_path.read_bytes()
-            doc.apply_update(state)
-            log.info("Initialised room %s from CRDT state (%d bytes)", room_name, len(state))
-        else:
-            try:
-                content = read_file(self._vault_path, room_name)
-            except (FileNotFoundError, PathTraversalError):
-                content = ""
-            doc["content"] = text = Text()
-            if content:
-                text += content
-            log.info("Initialised room %s from disk (%d chars)", room_name, len(content))
+        doc = room.ydoc
+        doc["content"] = text = Text()
+        if content:
+            text += content
 
         def on_change(event: Any) -> None:
             self._schedule_save(room_name, room)
 
         doc.observe(on_change)
+
         self._initialised_rooms.add(room_name)
+        log.info("Initialised room %s from disk (%d chars)", room_name, len(content))
 
     async def _save_room(self, room_name: str, room: YRoom) -> None:
-        """Write Y.Doc text back to .md and persist CRDT binary state."""
+        """Write Y.Doc text content back to the .md file."""
         try:
             doc = room.ydoc
             text = doc.get("content", type=Text)
@@ -242,11 +185,6 @@ class SyncManager:
                 return
             content = str(text)
             write_file(self._vault_path, room_name, content)
-
-            state_path = self._crdt_state_path(room_name)
-            state_path.parent.mkdir(parents=True, exist_ok=True)
-            state_path.write_bytes(doc.get_update(self._EMPTY_STATE_VECTOR))
-
             self._first_dirty_at.pop(room_name, None)
             log.info("Saved room %s to disk (%d chars)", room_name, len(content))
         except Exception:

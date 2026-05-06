@@ -2,12 +2,13 @@
  * Yjs sync — instance-based sync sessions for per-tab document sync.
  *
  * Each call to createSyncSession() / createShareSyncSession() returns an
- * independent session with its own Y.Doc, WebSocket provider, and IDB persistence.
+ * independent session with its own Y.Doc and WebSocket provider.
+ * The server is authoritative — clients always start with a fresh Y.Doc
+ * and receive state from the server on connect.
  */
 
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
-import { IndexeddbPersistence } from 'y-indexeddb';
 import { yCollab } from 'y-codemirror.next';
 import type { Extension } from '@codemirror/state';
 
@@ -66,24 +67,9 @@ export interface SyncSession {
   destroy: () => void;
 }
 
-function buildSession(
-  wsUrl: string,
-  roomName: string,
-  idbKey: string,
-  initialContent?: string,
-): SyncSession {
+function buildSession(wsUrl: string, roomName: string): SyncSession {
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText('content');
-
-  const idbPersistence = new IndexeddbPersistence(idbKey, ydoc);
-
-  if (initialContent) {
-    idbPersistence.once('synced', () => {
-      if (ytext.length === 0) {
-        ytext.insert(0, initialContent);
-      }
-    });
-  }
 
   // y-websocket builds URL as `${wsUrl}/${roomName}`
   const provider = new WebsocketProvider(wsUrl, roomName, ydoc);
@@ -125,24 +111,19 @@ function buildSession(
     destroy: () => {
       provider.disconnect();
       provider.destroy();
-      idbPersistence.destroy();
       ydoc.destroy();
     },
   };
 }
-
-// Bump to invalidate client IndexedDB caches (v2: clear state corrupted by CRDT merge duplication bug).
-const IDB_VERSION = 2;
 
 /** Authenticated doc sync: WS /api/docs/{vault}/crdt_websocket/{filepath} */
 export function createSyncSession(
   vaultName: string,
   filePath: string,
   serverUrl: string,
-  initialContent?: string,
 ): SyncSession {
   const wsUrl = getWsUrl(serverUrl) + `/api/docs/${encodeURIComponent(vaultName)}/crdt_websocket`;
-  return buildSession(wsUrl, filePath, `mdnotes-v${IDB_VERSION}-${vaultName}/${filePath}`, initialContent);
+  return buildSession(wsUrl, filePath);
 }
 
 /** Public share sync: WS /api/share/{uuid}/crdt_websocket/{docPath} */
@@ -152,5 +133,5 @@ export function createShareSyncSession(
   serverUrl: string,
 ): SyncSession {
   const wsUrl = getWsUrl(serverUrl) + `/api/share/${encodeURIComponent(uuid)}/crdt_websocket`;
-  return buildSession(wsUrl, docPath, `mdnotes-v${IDB_VERSION}-share-${uuid}`);
+  return buildSession(wsUrl, docPath);
 }
