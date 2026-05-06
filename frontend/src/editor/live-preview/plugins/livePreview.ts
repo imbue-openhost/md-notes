@@ -60,10 +60,16 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      // Only rebuild on document changes. Selection-based rebuilds
-      // (showing/hiding marks near cursor) cause InlineCoordsScan
-      // stack overflow with vim navigation.
-      if (update.docChanged) {
+      // Rebuild on doc edits, viewport scrolls, and syntax-tree updates from
+      // the incremental parser (so marks on regions parsed after initial load
+      // still get styled). Deliberately NOT triggered by selection changes —
+      // selection-based rebuilds cause InlineCoordsScan stack overflow with
+      // vim navigation.
+      if (
+        update.docChanged ||
+        update.viewportChanged ||
+        syntaxTree(update.startState) !== syntaxTree(update.state)
+      ) {
         this.decorations = this.build(update.view);
       }
     }

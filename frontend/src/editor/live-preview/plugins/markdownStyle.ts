@@ -45,7 +45,15 @@ export const markdownStylePlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged) {
+      // The markdown parser is incremental — on initial load it may not have
+      // parsed the whole document yet. Rebuild whenever the syntax tree
+      // changes (not just on doc edits) so headings parsed later still get
+      // styled. Viewport changes also trigger a rebuild for the same reason.
+      if (
+        update.docChanged ||
+        update.viewportChanged ||
+        syntaxTree(update.startState) !== syntaxTree(update.state)
+      ) {
         this.decorations = this.build(update.view);
       }
     }
