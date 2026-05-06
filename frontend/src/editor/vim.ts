@@ -36,10 +36,22 @@ function toggleTaskAtCursor(view: EditorView): boolean {
     },
   });
 
-  if (from === -1) return false;
-  const checked = /^\[[xX]\]$/.test(state.doc.sliceString(from, to));
+  if (from !== -1) {
+    const checked = /^\[[xX]\]$/.test(state.doc.sliceString(from, to));
+    view.dispatch({
+      changes: { from, to, insert: checked ? '[ ]' : '[x]' },
+    });
+    return true;
+  }
+
+  // No TaskMarker: if this is a bullet/numbered list item, insert `[ ] `
+  // right after the bullet.
+  const lineText = state.doc.sliceString(line.from, line.to);
+  const bulletMatch = lineText.match(/^\s*(?:[-*+]|\d+[.)])\s+/);
+  if (!bulletMatch) return false;
+  const insertAt = line.from + bulletMatch[0].length;
   view.dispatch({
-    changes: { from, to, insert: checked ? '[ ]' : '[x]' },
+    changes: { from: insertAt, to: insertAt, insert: '[ ] ' },
   });
   return true;
 }
@@ -71,6 +83,7 @@ export interface VimrcResult {
   settings: VimSetting[];
   exmaps: VimExmap[];
   errors: string[];
+  mapleader: string;
 }
 
 /**
@@ -241,7 +254,7 @@ export function parseVimrc(content: string): VimrcResult {
     errors.push(`vimrc:${lineNum + 1}: unsupported command: ${line}`);
   }
 
-  return { mappings, settings, exmaps, errors };
+  return { mappings, settings, exmaps, errors, mapleader };
 }
 
 // ── Apply to editor ───────────────────────────────────────────────────────
@@ -261,8 +274,24 @@ export function applyExmaps(exmaps: VimExmap[]): void {
 
 /**
  * Apply parsed mappings via Vim.map / Vim.noremap.
+ *
+ * If any mapping uses `mapleader` as a prefix, also unmap the leader's
+ * default action so it doesn't shadow the leader-prefixed sequence.
+ * codemirror-vim's matcher returns the first *full* match before
+ * checking partial matches, so e.g. typing `,` triggers the default
+ * `,` (repeat-char-search-reverse) before the buffered `,x` mapping
+ * has a chance to match.
  */
-export function applyMappings(mappings: VimMapping[]): void {
+export function applyMappings(mappings: VimMapping[], mapleader?: string): void {
+  if (mapleader && mapleader.length === 1) {
+    const usedAsPrefix = mappings.some(
+      (m) => m.lhs.length > 1 && m.lhs.startsWith(mapleader),
+    );
+    // Pass undefined ctx (despite the .d.ts requiring string): default
+    // mappings have no context field, and unmap uses strict equality, so
+    // ctx must be undefined to match them.
+    if (usedAsPrefix) (Vim.unmap as (lhs: string, ctx?: string) => unknown)(mapleader);
+  }
   for (const m of mappings) {
     if (m.noremap) {
       Vim.noremap(m.lhs, m.rhs, m.context);
@@ -333,7 +362,7 @@ export function vimMode(vimrcContent?: string): Extension[] {
       console.error(err);
     }
     applyExmaps(result.exmaps);
-    applyMappings(result.mappings);
+    applyMappings(result.mappings, result.mapleader);
     extensions.push(...settingsToExtensions(result.settings));
   }
 

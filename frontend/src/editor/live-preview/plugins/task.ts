@@ -59,6 +59,7 @@ export const taskListPlugin = ViewPlugin.fromClass(
       if (
         update.docChanged ||
         update.viewportChanged ||
+        update.selectionSet ||
         syntaxTree(update.startState) !== syntaxTree(update.state)
       ) {
         this.decorations = this.build(update.view);
@@ -68,6 +69,7 @@ export const taskListPlugin = ViewPlugin.fromClass(
     build(view: EditorView) {
       const decorations: Range<Decoration>[] = [];
       const { state } = view;
+      const ranges = state.selection.ranges;
 
       syntaxTree(state).iterate({
         enter: (node) => {
@@ -76,11 +78,24 @@ export const taskListPlugin = ViewPlugin.fromClass(
           const text = state.doc.sliceString(node.from, node.to);
           const checked = /^\[[xX]\]$/.test(text);
 
-          decorations.push(
-            Decoration.replace({
-              widget: new CheckboxWidget(checked, node.from),
-            }).range(node.from, node.to)
+          const line = state.doc.lineAt(node.from);
+          const prefix = state.doc.sliceString(line.from, node.from);
+          const bulletMatch = prefix.match(/^(\s*)(?:[-*+]|\d+[.)])\s+$/);
+          const replaceFrom = bulletMatch
+            ? line.from + bulletMatch[1].length
+            : node.from;
+
+          const cursorOnMarker = ranges.some(
+            (r) => r.from <= node.to && r.to >= replaceFrom
           );
+
+          if (!cursorOnMarker) {
+            decorations.push(
+              Decoration.replace({
+                widget: new CheckboxWidget(checked, node.from),
+              }).range(replaceFrom, node.to)
+            );
+          }
 
           if (checked) {
             const line = state.doc.lineAt(node.from);

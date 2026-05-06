@@ -10,7 +10,7 @@ import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } f
 import { defaultKeymap, history, historyKeymap, undo as cmUndo, redo as cmRedo } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
-import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language';
+import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldNodeProp } from '@codemirror/language';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 
 import {
@@ -82,7 +82,19 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
       ...searchKeymap,
     ]),
 
-    markdown({ base: markdownLanguage, codeLanguages: languages }),
+    markdown({
+      base: markdownLanguage,
+      codeLanguages: languages,
+      // Suppress lang-markdown's default folds for non-heading blocks
+      // (ListItem, Blockquote, FencedCode, Table, …) so only headings fold.
+      extensions: {
+        props: [
+          foldNodeProp.add({
+            'CodeBlock FencedCode Blockquote HorizontalRule ListItem HTMLBlock LinkReference Paragraph CommentBlock ProcessingInstructionBlock Table': () => null,
+          }),
+        ],
+      },
+    }),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
 
     collapseOnSelectionFacet.of(true),
