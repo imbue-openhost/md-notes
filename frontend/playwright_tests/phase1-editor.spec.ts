@@ -3,34 +3,60 @@ import { test, expect } from '@playwright/test';
 test.describe('Phase 1: Editor Core', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    // Wait for CM6 editor to mount
     await page.waitForSelector('.cm-editor', { timeout: 5000 });
   });
 
-  test('editor mounts and shows content', async ({ page }) => {
+  test('editor mounts', async ({ page }) => {
     const editor = page.locator('.cm-editor');
     await expect(editor).toBeVisible();
     const content = page.locator('.cm-content');
-    await expect(content).toContainText('Welcome to md-notes');
+    await expect(content).toBeVisible();
   });
 
   test('markdown styling: headings are styled', async ({ page }) => {
+    const content = page.locator('.cm-content');
+    await content.click();
+    await page.keyboard.press('Escape');
+    await page.keyboard.type('i');
+    await page.keyboard.type('# Test Heading');
+    await page.keyboard.press('Escape');
+
     const h1 = page.locator('.cm-header-1');
     await expect(h1).toBeVisible();
-    await expect(h1).toContainText('Welcome to md-notes');
   });
 
   test('markdown styling: bold text is styled', async ({ page }) => {
+    const content = page.locator('.cm-content');
+    await content.click();
+    await page.keyboard.press('Escape');
+    await page.keyboard.type('i');
+    await page.keyboard.type('**bold text**');
+    await page.keyboard.press('Escape');
+
     const bold = page.locator('.cm-strong').first();
     await expect(bold).toBeVisible();
   });
 
   test('markdown styling: italic text is styled', async ({ page }) => {
+    const content = page.locator('.cm-content');
+    await content.click();
+    await page.keyboard.press('Escape');
+    await page.keyboard.type('i');
+    await page.keyboard.type('*italic text*');
+    await page.keyboard.press('Escape');
+
     const italic = page.locator('.cm-emphasis').first();
     await expect(italic).toBeVisible();
   });
 
   test('markdown styling: inline code is styled', async ({ page }) => {
+    const content = page.locator('.cm-content');
+    await content.click();
+    await page.keyboard.press('Escape');
+    await page.keyboard.type('i');
+    await page.keyboard.type('`inline code`');
+    await page.keyboard.press('Escape');
+
     const code = page.locator('.cm-code').first();
     await expect(code).toBeVisible();
   });
@@ -40,7 +66,6 @@ test.describe('Phase 1: Editor Core', () => {
     await content.click();
     await page.keyboard.press('Escape');
 
-    // Type 'i' to enter insert mode, then type text
     await page.keyboard.type('i');
     await page.keyboard.type('TESTINPUT');
     await expect(content).toContainText('TESTINPUT');

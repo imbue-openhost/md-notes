@@ -23,9 +23,12 @@ function api(path: string): string {
   return `http://localhost:${SERVER_PORT}${path}`;
 }
 
-function filesApi(path: string = ''): string {
-  const suffix = path ? `/${path}` : '';
-  return api(`/api/vaults/${vaultName}/files${suffix}`);
+function listApi(): string {
+  return api(`/api/docs/${vaultName}`);
+}
+
+function fileApi(path: string): string {
+  return api(`/api/docs/${vaultName}/file?path=${encodeURIComponent(path)}`);
 }
 
 test.beforeAll(async () => {
@@ -79,7 +82,7 @@ test.afterAll(async () => {
 
 test.describe('Phase 3: Server + File Management', () => {
   test('API: list files returns vault contents', async () => {
-    const res = await fetch(filesApi());
+    const res = await fetch(listApi());
     expect(res.ok).toBe(true);
     const files = await res.json();
     expect(files).toBeInstanceOf(Array);
@@ -89,55 +92,51 @@ test.describe('Phase 3: Server + File Management', () => {
   });
 
   test('API: read file returns content', async () => {
-    const res = await fetch(filesApi('hello.md'));
+    const res = await fetch(fileApi('hello.md'));
     expect(res.ok).toBe(true);
     const text = await res.text();
     expect(text).toContain('# Hello World');
   });
 
   test('API: create and delete file', async () => {
-    const createRes = await fetch(filesApi('new-note.md'), {
+    const createRes = await fetch(fileApi('new-note.md'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: '# New Note' }),
     });
     expect(createRes.status).toBe(201);
 
-    const readRes = await fetch(filesApi('new-note.md'));
+    const readRes = await fetch(fileApi('new-note.md'));
     expect(readRes.ok).toBe(true);
     expect(await readRes.text()).toBe('# New Note');
 
-    const deleteRes = await fetch(filesApi('new-note.md'), { method: 'DELETE' });
+    const deleteRes = await fetch(fileApi('new-note.md'), { method: 'DELETE' });
     expect(deleteRes.ok).toBe(true);
   });
 
   test('API: rename file', async () => {
-    await fetch(filesApi('rename-me.md'), {
+    await fetch(fileApi('rename-me.md'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: '# Rename Test' }),
     });
 
-    const renameRes = await fetch(filesApi('rename-me.md'), {
+    const renameRes = await fetch(fileApi('rename-me.md'), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newPath: 'renamed.md' }),
     });
     expect(renameRes.ok).toBe(true);
 
-    const readRes = await fetch(filesApi('renamed.md'));
+    const readRes = await fetch(fileApi('renamed.md'));
     expect(readRes.ok).toBe(true);
 
-    await fetch(filesApi('renamed.md'), { method: 'DELETE' });
+    await fetch(fileApi('renamed.md'), { method: 'DELETE' });
   });
 
   test('API: path traversal is blocked', async () => {
-    const res = await fetch(filesApi('..%2F..%2Fetc%2Fpasswd'));
-    expect([403, 404]).toContain(res.status);
-    if (res.status === 200) {
-      const text = await res.text();
-      expect(text).not.toContain('root:');
-    }
+    const res = await fetch(fileApi('../../etc/passwd'));
+    expect([400, 403, 404]).toContain(res.status);
   });
 
   test('API: frontend is served', async () => {

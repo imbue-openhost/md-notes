@@ -9,23 +9,22 @@ test.describe('Phase 2: Vimrc Parser', () => {
   test('vim normal mode works — Escape returns to normal mode', async ({ page }) => {
     const content = page.locator('.cm-content');
     await content.click();
-
-    // Go to normal mode
     await page.keyboard.press('Escape');
 
-    // In normal mode, 'j' moves cursor down (doesn't insert text)
-    // First, go to the top with gg
-    await page.keyboard.type('gg');
+    // Type some content in insert mode first
+    await page.keyboard.type('i');
+    await page.keyboard.type('NORMALTEST');
+    await page.keyboard.press('Escape');
     await page.waitForTimeout(100);
 
-    // Remember the cursor line, move down with j
+    // In normal mode, 'j' should not insert text
+    const before = await content.textContent();
     await page.keyboard.press('j');
     await page.waitForTimeout(100);
+    const after = await content.textContent();
 
-    // If vim is working, 'j' should not have inserted 'j' into the document
-    const text = await content.textContent();
-    // The sample doc starts with "Welcome to md-notes" — no stray 'j' should appear there
-    expect(text).toContain('Welcome to md-notes');
+    expect(before).toContain('NORMALTEST');
+    expect(after).toBe(before);
   });
 
   test('vim insert mode allows typing', async ({ page }) => {

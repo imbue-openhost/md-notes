@@ -52,12 +52,11 @@ test.describe('Vim + Live Preview interaction', () => {
       await page.keyboard.press('j');
       await page.waitForTimeout(100);
 
-      // Check if the vim status panel shows insert mode
-      const panels = page.locator('.cm-panels-bottom');
-      const panelText = await panels.textContent().catch(() => '');
-      if (panelText && panelText.toLowerCase().includes('insert')) {
+      // Check if vim dropped into insert mode by looking for the vim status
+      const vimStatus = page.locator('.cm-vim-panel');
+      const statusText = await vimStatus.textContent().catch(() => '');
+      if (statusText && statusText.toLowerCase().includes('insert')) {
         insertModeDrops.push(i + 1);
-        // Press Escape to recover and continue
         await page.keyboard.press('Escape');
         await page.waitForTimeout(100);
       }

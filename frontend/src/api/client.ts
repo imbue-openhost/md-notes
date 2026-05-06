@@ -25,17 +25,21 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
-function filesBase(vaultName: string): string {
-  return `/api/vaults/${encodeURIComponent(vaultName)}/files`;
+function docsBase(vaultName: string): string {
+  return `/api/docs/${encodeURIComponent(vaultName)}`;
+}
+
+function fileUrl(vaultName: string, path: string): string {
+  return `${docsBase(vaultName)}/file?path=${encodeURIComponent(path)}`;
 }
 
 export async function listFiles(vaultName: string): Promise<FileEntry[]> {
-  const res = await apiFetch(filesBase(vaultName));
+  const res = await apiFetch(docsBase(vaultName));
   return res.json();
 }
 
 export async function readFile(vaultName: string, path: string): Promise<string> {
-  const res = await apiFetch(`${filesBase(vaultName)}/${encodeURIComponent(path)}`);
+  const res = await apiFetch(fileUrl(vaultName, path));
   return res.text();
 }
 
@@ -45,7 +49,7 @@ export async function createFile(
   content = '',
   type: 'file' | 'dir' = 'file',
 ): Promise<void> {
-  await apiFetch(`${filesBase(vaultName)}/${encodeURIComponent(path)}`, {
+  await apiFetch(fileUrl(vaultName, path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content, type }),
@@ -53,7 +57,7 @@ export async function createFile(
 }
 
 export async function renameFile(vaultName: string, oldPath: string, newPath: string): Promise<void> {
-  await apiFetch(`${filesBase(vaultName)}/${encodeURIComponent(oldPath)}`, {
+  await apiFetch(fileUrl(vaultName, oldPath), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ newPath }),
@@ -61,7 +65,7 @@ export async function renameFile(vaultName: string, oldPath: string, newPath: st
 }
 
 export async function deleteFile(vaultName: string, path: string): Promise<void> {
-  await apiFetch(`${filesBase(vaultName)}/${encodeURIComponent(path)}`, {
+  await apiFetch(fileUrl(vaultName, path), {
     method: 'DELETE',
   });
 }
