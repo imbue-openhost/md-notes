@@ -5,7 +5,7 @@ import { dirname } from 'path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './playwright_tests',
   timeout: 30000,
   use: {
     baseURL: 'http://localhost:5174',
