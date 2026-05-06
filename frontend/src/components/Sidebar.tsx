@@ -1,6 +1,6 @@
 import { createSignal, createResource, For, Show, onMount, onCleanup, type Component } from 'solid-js';
-import { ContextMenu } from '@kobalte/core';
-import type { FileEntry } from '../api/types';
+import { ContextMenu, DropdownMenu } from '@kobalte/core';
+import type { FileEntry, VaultConfig } from '../api/types';
 import { listFiles, createFile, deleteFile, renameFile } from '../api/vault-ops';
 import { InputDialog } from './InputDialog';
 
@@ -8,9 +8,12 @@ export type SyncStatus = 'connected' | 'disconnected' | 'connecting' | 'no-remot
 
 interface Props {
   vaultName?: string;
+  vaults?: VaultConfig[];
   onSelect: (path: string) => void;
   onShare?: (path: string) => void;
-  onSwitchVault?: () => void;
+  onSwitchToVault?: (v: VaultConfig) => void;
+  onManageVaults?: () => void;
+  onRefreshVaults?: () => void;
   onSettings?: () => void;
   showSyncStatus?: boolean;
   syncStatus?: SyncStatus;
@@ -161,12 +164,6 @@ export const Sidebar: Component<Props> = (props) => {
                 }}
               >{'\u{1F517}'}</button>
             </Show>
-            <Show when={props.onSwitchVault}>
-              <button class="sidebar-btn" title="Switch vault" onClick={props.onSwitchVault}>{'\u{1F4C1}'}</button>
-            </Show>
-            <Show when={props.onSettings}>
-              <button class="sidebar-btn" title="Settings" onClick={props.onSettings}>{'\u2699\uFE0F'}</button>
-            </Show>
           </div>
         </div>
 
@@ -189,6 +186,49 @@ export const Sidebar: Component<Props> = (props) => {
             <span>{SYNC_LABELS[props.syncStatus ?? 'disconnected'] ?? props.syncStatus}</span>
           </div>
         </Show>
+
+        <div class="sidebar-footer">
+          <DropdownMenu.Root
+            placement="top-start"
+            onOpenChange={(open) => { if (open) props.onRefreshVaults?.(); }}
+          >
+            <DropdownMenu.Trigger class="sidebar-vault-trigger" title="Switch vault">
+              <span class="sidebar-vault-chevron" aria-hidden>{'↕'}</span>
+              <span class="sidebar-vault-name">{props.vaultName || 'No vault'}</span>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content class="sidebar-vault-menu">
+                <For each={props.vaults ?? []}>
+                  {(v) => (
+                    <DropdownMenu.Item
+                      class="sidebar-vault-item"
+                      onSelect={() => {
+                        if (v.name !== props.vaultName) props.onSwitchToVault?.(v);
+                      }}
+                    >
+                      <span class="sidebar-vault-check">
+                        {v.name === props.vaultName ? '✓' : ''}
+                      </span>
+                      <span>{v.name}</span>
+                    </DropdownMenu.Item>
+                  )}
+                </For>
+                <Show when={(props.vaults?.length ?? 0) > 0}>
+                  <DropdownMenu.Separator class="sidebar-vault-sep" />
+                </Show>
+                <DropdownMenu.Item
+                  class="sidebar-vault-manage"
+                  onSelect={() => props.onManageVaults?.()}
+                >
+                  Manage vaults...
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+          <Show when={props.onSettings}>
+            <button class="sidebar-footer-btn" title="Settings" onClick={props.onSettings}>{'⚙️'}</button>
+          </Show>
+        </div>
       </div>
 
       <Show when={dialog()}>

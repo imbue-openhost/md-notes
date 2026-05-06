@@ -89,6 +89,7 @@ export const App: Component = () => {
 
   async function loadWebVaults() {
     const vaults = await fetchVaultListWithRetry();
+    setVaultList(vaults);
 
     try {
       const lastName = localStorage.getItem('mdnotes-last-vault');
@@ -98,8 +99,21 @@ export const App: Component = () => {
       }
     } catch {}
 
-    setVaultList(vaults);
     setShowVaultPicker(true);
+  }
+
+  async function refreshVaultList() {
+    try {
+      setVaultList(await fetchVaultList());
+    } catch (e) {
+      console.warn('Failed to refresh vault list:', e);
+    }
+  }
+
+  function switchToVault(v: VaultConfig) {
+    if (v.name === vault()?.name) return;
+    setVault(null);
+    queueMicrotask(() => openVault(v));
   }
 
   function openVault(v: VaultConfig) {
@@ -206,9 +220,12 @@ export const App: Component = () => {
       <Show when={vault()}>
         <Sidebar
           vaultName={vault()!.name}
+          vaults={vaultList()}
           onSelect={handleFileSelect}
           onShare={setShareModalPath}
-          onSwitchVault={switchVault}
+          onSwitchToVault={switchToVault}
+          onManageVaults={switchVault}
+          onRefreshVaults={refreshVaultList}
           onSettings={() => setShowWebSettings(true)}
           currentPath={currentDocPath()}
         />

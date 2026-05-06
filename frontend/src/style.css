@@ -226,6 +226,124 @@ li.open > .sidebar-children {
   background: hsl(var(--muted));
 }
 
+/* ── Sidebar footer (vault switcher) ──────────────────────── */
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.sidebar-vault-trigger {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  text-align: left;
+  min-width: 0;
+  outline: none;
+}
+
+.sidebar-vault-trigger:hover,
+.sidebar-vault-trigger[data-expanded] {
+  background: hsl(var(--border));
+}
+
+.sidebar-vault-chevron {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  flex-shrink: 0;
+}
+
+.sidebar-vault-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.sidebar-footer-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: hsl(var(--muted-foreground));
+}
+
+.sidebar-footer-btn:hover {
+  background: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+.sidebar-vault-menu {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  padding: 4px;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  outline: none;
+}
+
+.sidebar-vault-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  outline: none;
+}
+
+.sidebar-vault-item:hover,
+.sidebar-vault-item[data-highlighted] {
+  background: hsl(var(--muted));
+}
+
+.sidebar-vault-check {
+  width: 14px;
+  flex-shrink: 0;
+  color: hsl(var(--foreground));
+  font-size: 12px;
+}
+
+.sidebar-vault-sep {
+  height: 1px;
+  background: hsl(var(--border));
+  margin: 4px 0;
+  border: none;
+}
+
+.sidebar-vault-manage {
+  padding: 6px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  outline: none;
+  text-align: center;
+  font-weight: 500;
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+}
+
+.sidebar-vault-manage:hover,
+.sidebar-vault-manage[data-highlighted] {
+  background: hsl(var(--primary) / 0.85);
+}
+
 /* ── Share modal ──────────────────────────────────────────── */
 .share-modal-overlay {
   position: fixed;
