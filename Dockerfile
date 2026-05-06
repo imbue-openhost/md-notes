@@ -8,10 +8,10 @@ RUN npm run build
 
 # ─────────────────────────────────────────────────────────────
 
-FROM python:3.12-alpine
+FROM ubuntu:26.04
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-RUN apk add --no-cache caddy
+RUN apt-get update && apt-get install -y --no-install-recommends caddy python3 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
