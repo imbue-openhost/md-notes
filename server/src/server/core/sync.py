@@ -18,12 +18,14 @@ active editing session (creation, rename, delete).
 """
 
 import asyncio
+import uuid
 from pathlib import Path
 from typing import Any
 from typing import ClassVar
 from typing import Self
 
 from loguru import logger
+from pycrdt import Map
 from pycrdt import Text
 from pycrdt.websocket import WebsocketServer
 from pycrdt.websocket import YRoom
@@ -86,6 +88,7 @@ class SyncManager:
 
     SAVE_DEBOUNCE_SECS: ClassVar[float] = 5.0
     SAVE_MAX_INTERVAL_SECS: ClassVar[float] = 30.0
+    ROOM_CLEANUP_DELAY_SECS: ClassVar[float] = 300.0
 
     def __init__(self, vault_path: Path) -> None:
         self._vault_path = vault_path
@@ -94,6 +97,7 @@ class SyncManager:
         self._initialised_rooms: set[str] = set()
         self._save_tasks: dict[str, asyncio.Task[None]] = {}
         self._first_dirty_at: dict[str, float] = {}
+        self._cleanup_tasks: dict[str, asyncio.Task[None]] = {}
 
     # ── lifecycle ───────────────────────────────────────────────────────
 
@@ -106,6 +110,9 @@ class SyncManager:
     async def stop(self) -> None:
         if self._ws_server is None:
             return
+        for task in self._cleanup_tasks.values():
+            task.cancel()
+        self._cleanup_tasks.clear()
         for room_name in list(self._initialised_rooms):
             try:
                 room = await self._ws_server.get_room(room_name)
@@ -133,6 +140,11 @@ class SyncManager:
             raise SyncNotRunning()
 
         doc_path = channel.path
+
+        pending = self._cleanup_tasks.pop(doc_path, None)
+        if pending and not pending.done():
+            pending.cancel()
+
         room = await self._ws_server.get_room(doc_path)
         self._init_room(room, doc_path)
         room.ready = True
@@ -141,9 +153,37 @@ class SyncManager:
             await self._ws_server.serve(channel)
         finally:
             if not room.clients:
+                self._schedule_room_cleanup(doc_path, room)
+
+    # ── room cleanup ─────────────────────────────────────────────────────
+
+    def _schedule_room_cleanup(self, doc_path: str, room: YRoom) -> None:
+        """Schedule room deletion after a grace period instead of deleting immediately.
+
+        Without this delay, a brief WebSocket disconnect (common on mobile, tab-switch, or network blip) causes
+        the server to destroy the room and discard the Y.Doc. When the client reconnects, the server creates a
+        fresh Y.Doc from disk with new internal client IDs. The reconnecting client's still-alive Y.Doc then
+        syncs with this fresh doc — Yjs treats the two sets of operations as independent insertions at the same
+        position, doubling every piece of content.
+
+        The grace period keeps the room (and its Y.Doc) alive long enough for the client to reconnect to the
+        *same* Y.Doc, avoiding the duplication entirely. ``serve()`` cancels a pending cleanup if a new client
+        joins during the window.
+        """
+        existing = self._cleanup_tasks.get(doc_path)
+        if existing and not existing.done():
+            existing.cancel()
+
+        async def _delayed_cleanup() -> None:
+            await asyncio.sleep(self.ROOM_CLEANUP_DELAY_SECS)
+            if self._ws_server and not room.clients:
                 await self._save_room(doc_path, room)
                 await self._ws_server.delete_room(room=room)
                 self._initialised_rooms.discard(doc_path)
+                logger.debug("Cleaned up room {} after grace period", doc_path)
+            self._cleanup_tasks.pop(doc_path, None)
+
+        self._cleanup_tasks[doc_path] = asyncio.ensure_future(_delayed_cleanup())
 
     # ── room init / save ────────────────────────────────────────────────
 
@@ -165,6 +205,11 @@ class SyncManager:
         doc["content"] = text = Text()
         if content:
             text += content
+
+        # Random ID so clients can detect when the server recreated the room (see sync.ts).
+        meta: Map[str] = Map()
+        doc["meta"] = meta
+        meta["room_epoch"] = uuid.uuid4().hex
 
         def on_change(event: Any) -> None:
             self._schedule_save(room_name, room)

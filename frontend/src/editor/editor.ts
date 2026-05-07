@@ -5,7 +5,7 @@
  * with its own view and cleanup. No global state.
  */
 
-import { EditorState, Facet, Prec, type Extension } from '@codemirror/state';
+import { EditorState, Prec, type Extension } from '@codemirror/state';
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, undo as cmUndo, redo as cmRedo } from './commands/commands';
 import { markdown, markdownLanguage } from './lang-markdown/index';
@@ -95,16 +95,7 @@ import { foldPersistence } from './fold-persistence';
 import { Vim } from '@replit/codemirror-vim';
 
 import { vimMode } from './vim';
-import { createSyncSession, createShareSyncSession, type SyncSession } from './sync';
-
-interface UndoRedoProvider {
-  undo(): boolean;
-  redo(): boolean;
-}
-
-const undoRedoFacet = Facet.define<UndoRedoProvider, UndoRedoProvider | null>({
-  combine: (inputs) => inputs[0] ?? null,
-});
+import { createSyncSession, createShareSyncSession, undoRedoFacet, type SyncSession } from './sync';
 
 Vim.defineAction('undo', (cm: any, actionArgs: any) => {
   const view = cm.cm6;
@@ -232,11 +223,6 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
   if (syncSession) {
     extensions.push(syncSession.extension);
-    const um = syncSession.undoManager;
-    extensions.push(undoRedoFacet.of({
-      undo: () => um.undo() != null,
-      redo: () => um.redo() != null,
-    }));
   }
 
   if (options.onDocChange) {
@@ -265,6 +251,8 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     state,
     parent: container,
   });
+
+  syncSession?.setView(view);
 
   let destroyed = false;
   return {
