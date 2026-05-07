@@ -37,15 +37,15 @@ def _setup_logging() -> logging.Logger:
         sys.stderr,
         format="<green>{time:HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | "
         "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-        level="DEBUG",
+        level="INFO",
     )
-    logging.basicConfig(handlers=[_InterceptHandler()], level=logging.DEBUG, force=True)
+    logging.basicConfig(handlers=[_InterceptHandler()], level=logging.INFO, force=True)
     # Pre-build hypercorn.error so its _create_logger returns it as-is instead of
     # replacing our handlers with its own StreamHandler.
     hc_error = logging.getLogger("hypercorn.error")
     hc_error.handlers = [_InterceptHandler()]
     hc_error.propagate = False
-    hc_error.setLevel(logging.DEBUG)
+    hc_error.setLevel(logging.INFO)
     return hc_error
 
 
