@@ -64,7 +64,7 @@ class DocsController(Controller):
         """Yjs CRDT sync for a single document."""
         await socket.accept()
         manager: SyncManager = socket.app.state.sync_manager
-        doc_path = f"{vault_name}/{filepath}"
+        doc_path = f"{vault_name}/{filepath.lstrip('/')}"
         channel = LitestarWebsocketChannel(socket, doc_path)
         try:
             await manager.serve(channel)
