@@ -7,7 +7,7 @@
 
 import { EditorState, Facet, Prec, type Extension } from '@codemirror/state';
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, undo as cmUndo, redo as cmRedo } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, undo as cmUndo, redo as cmRedo } from './commands/commands';
 import { markdown, markdownLanguage } from './lang-markdown/index';
 import { languages } from '@codemirror/language-data';
 import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle, bracketMatching, foldNodeProp } from '@codemirror/language';
@@ -147,9 +147,11 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     highlightSelectionMatches(),
     bracketMatching(),
 
+    // defaultKeymap provides insert-mode basics (Backspace, Enter, arrow keys, etc.)
+    // that vim's insert mode falls through to. historyKeymap adds Cmd-z/Shift-Cmd-z
+    // on top of vim's u/Ctrl-r.
     keymap.of([
-      // Filter out emacsStyleKeymap entries (mac: "Ctrl-d", etc.) that shadow vim bindings.
-      ...defaultKeymap.filter(b => !(b.mac && /^Ctrl-[a-z]$/i.test(b.mac))),
+      ...defaultKeymap,
       ...(useSync ? [] : historyKeymap),
       ...searchKeymap,
     ]),
