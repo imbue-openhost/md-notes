@@ -7,7 +7,8 @@ import {syntaxTree, IndentContext, getIndentUnit, indentUnit, indentString,
 import {SyntaxNode, NodeProp} from "@lezer/common"
 import {toggleComment, toggleBlockComment} from "./comment"
 
-export {CommentTokens, toggleComment, toggleLineComment, lineComment, lineUncomment,
+export type {CommentTokens} from "./comment"
+export {toggleComment, toggleLineComment, lineComment, lineUncomment,
         toggleBlockComment, blockComment, blockUncomment, toggleBlockCommentByLine} from "./comment"
 export {history, historyKeymap, historyField, undo, redo, undoSelection, redoSelection,
         undoDepth, redoDepth, isolateHistory, invertedEffects} from "./history"
