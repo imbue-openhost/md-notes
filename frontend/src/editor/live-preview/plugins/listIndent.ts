@@ -46,16 +46,11 @@ export const listVisualIndentPlugin = ViewPlugin.fromClass(
       const tree = syntaxTree(state);
 
       for (const { from, to } of view.visibleRanges) {
-        // Establish the list-nesting depth at the start of the visible range
-        // (we may begin iteration partway inside a deeply-nested list).
+        // tree.iterate fires `enter` for every overlapping ancestor, so we
+        // can start at 0 and let the enter/leave callbacks track depth —
+        // any list containing the visible range will itself overlap and
+        // be entered.
         let listDepth = 0;
-        for (
-          let n = tree.resolveInner(from, 1).parent;
-          n;
-          n = n.parent
-        ) {
-          if (n.name === 'BulletList' || n.name === 'OrderedList') listDepth++;
-        }
 
         tree.iterate({
           from,
