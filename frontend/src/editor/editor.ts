@@ -92,7 +92,7 @@ import {
 
 import { markdownFolding } from './folding';
 import { foldPersistence } from './fold-persistence';
-import { Vim } from '@replit/codemirror-vim';
+import { Vim, getCM } from '@replit/codemirror-vim';
 
 import { vimMode } from './vim';
 import { createSyncSession, createShareSyncSession, type SyncSession } from './sync';
@@ -286,6 +286,22 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     state,
     parent: container,
   });
+
+  const cmForLogging = getCM(view) as any;
+  if (cmForLogging) {
+    cmForLogging.on('vim-keypress', (key: string) => {
+      if (key === '<C-d>' || key === '<C-u>') {
+        // eslint-disable-next-line no-console
+        console.log('[vim-keypress]', key);
+      }
+    });
+    cmForLogging.on('inputEvent', (info: any) => {
+      if (info && info.key && (info.key === '<C-d>' || info.key === '<C-u>')) {
+        // eslint-disable-next-line no-console
+        console.log('[vim inputEvent]', info);
+      }
+    });
+  }
 
   let destroyed = false;
   return {
