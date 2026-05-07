@@ -92,7 +92,7 @@ import {
 
 import { markdownFolding } from './folding';
 import { foldPersistence } from './fold-persistence';
-import { Vim, getCM } from '@replit/codemirror-vim';
+import { Vim } from '@replit/codemirror-vim';
 
 import { vimMode } from './vim';
 import { createSyncSession, createShareSyncSession, type SyncSession } from './sync';
@@ -148,7 +148,8 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     bracketMatching(),
 
     keymap.of([
-      ...defaultKeymap,
+      // Filter out emacsStyleKeymap entries (mac: "Ctrl-d", etc.) that shadow vim bindings.
+      ...defaultKeymap.filter(b => !(b.mac && /^Ctrl-[a-z]$/i.test(b.mac))),
       ...(useSync ? [] : historyKeymap),
       ...searchKeymap,
     ]),
@@ -179,32 +180,8 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
 
     EditorView.domEventHandlers({
       keydown: (event) => {
-        if (event.ctrlKey && (event.key === 'd' || event.key === 'u') && !event.metaKey && !event.altKey) {
-          // eslint-disable-next-line no-console
-          console.log('[ctrl-d/u keydown@cm]', {
-            key: event.key,
-            code: event.code,
-            ctrl: event.ctrlKey,
-            shift: event.shiftKey,
-            defaultPrevented: event.defaultPrevented,
-          });
-          queueMicrotask(() => {
-            // eslint-disable-next-line no-console
-            console.log('[ctrl-d/u keydown@microtask]', {
-              key: event.key,
-              defaultPrevented: event.defaultPrevented,
-            });
-          });
-        }
         if (event.key === 'Escape') {
           event.preventDefault();
-        }
-        return false;
-      },
-      beforeinput: (event: InputEvent) => {
-        if (event.inputType === 'deleteContentForward' || event.inputType === 'deleteContentBackward') {
-          // eslint-disable-next-line no-console
-          console.log('[beforeinput]', { inputType: event.inputType, data: event.data });
         }
         return false;
       },
@@ -286,22 +263,6 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     state,
     parent: container,
   });
-
-  const cmForLogging = getCM(view) as any;
-  if (cmForLogging) {
-    cmForLogging.on('vim-keypress', (key: string) => {
-      if (key === '<C-d>' || key === '<C-u>') {
-        // eslint-disable-next-line no-console
-        console.log('[vim-keypress]', key);
-      }
-    });
-    cmForLogging.on('inputEvent', (info: any) => {
-      if (info && info.key && (info.key === '<C-d>' || info.key === '<C-u>')) {
-        // eslint-disable-next-line no-console
-        console.log('[vim inputEvent]', info);
-      }
-    });
-  }
 
   let destroyed = false;
   return {
