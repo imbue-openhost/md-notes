@@ -77,3 +77,5 @@ class ShareController(Controller):
             await manager.serve(channel)
         except SyncNotRunning:
             await socket.close(code=1011, reason="Sync server not running")
+        except FileNotFoundError:
+            await socket.close(code=1008, reason="Document does not exist")

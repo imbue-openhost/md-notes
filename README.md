@@ -15,13 +15,20 @@ This is a document/notes editor, most similar to Obsidian. Some important core d
 
 ### sync protocol
 
-- the CRDT libraries expect that the server persists CRDT state even if the room is shutdown. this is important because if a client goes away (closes laptop, say) and then comes back, and reconnects to the room, but the server has lost history, the libraries don't handle this elegantly. potentially the protocol could be tweaked to handle this better, but it's fighting the library.
-- the intended pattern is to persist room state to disk, ideally doing so in a careful way so that even if the server shuts down uncleanly, it'll still come back in a consistent state.
-- i don't love this though because it weakens the .md files being the single source of truth - if the CRDT is persistent, it's really the source of truth, and i guess we just write out the body to the .md files periodically, but the .md files never actually get read back. does this matter? idk
+- i first tried to build this where markdown is really the source of truth, and the CRDT is ephemeral - created when the first client connects, and deleted shortly after the last client disconnects
+    - and the client is supposed to pull fresh state any time it reconnects
+    - but "disconnects" can mean "closed laptop and will reopen in a week", and their client will still have the old state
+    - and when the client reconnects, part of the handshake is that the client and server sync state. if the server is a fresh room, with the doc freshly loaded, and the client already has the doc with separate history, they'll merge and you'll end up with duplication.
+    - seems like this could be addressed with a change to the handshake logic, but the CRDT libraries expect that the server persists CRDT state even if the room is shutdown, so hooks into this handshake aren't really exposed. and i don't really wanna get to rewriting the core libraries.
+    - with a native app that has persistent local state, this gets even harder, and a persistent remote CRDT state probably makes even more sense?
 
-- with a native app that has persistent local state, this gets even harder, and a persistent remote CRDT state probably makes even more sense?
+- the intended pattern is to persist room state to disk also, so that there's only one CRDT history, and resyncs of different devices will always be consistent.
+    - i don't love this though because it weakens the .md files being the single source of truth - if the CRDT is persistent, it's really the source of truth, and i guess we just write out the body to the .md files periodically, but the .md files never actually get read back. does this matter? idk
+    - this also helps avoid a full document copy on page load (if client state was stored in indexdb or similar)
+    - what if the .md files get edited while the CRDT is active? that makes a mess of things.
+    - this will also let me store comments etc in the CRDT state and not need to persist to an external DB.
 
-- what if the .md files get edited while the CRDT is active? that makes a mess of things.
+i ended up switching to the second pattern; just seemed like that's closer to standard practice.
 
 ### backend
 

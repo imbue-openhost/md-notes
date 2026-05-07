@@ -7,6 +7,7 @@ to prevent directory traversal.
 from pathlib import Path
 from pathlib import PurePosixPath
 
+from server.core import crdt_store
 from server.models.files import FileEntry
 
 
@@ -67,17 +68,24 @@ def create_directory(root: Path, rel_path: str) -> None:
 
 
 def delete_file(root: Path, rel_path: str) -> None:
-    """Delete a file or empty directory."""
+    """Delete a file or empty directory; propagate to CRDT sidecar tree."""
     target = _resolve_and_validate(root, rel_path)
     if target.is_dir():
         target.rmdir()
+        crdt_store.delete_dir(root, rel_path)
     else:
         target.unlink()
+        crdt_store.delete_state(root, rel_path)
 
 
 def rename_file(root: Path, old_path: str, new_path: str) -> None:
-    """Rename / move a file within the vault."""
+    """Rename / move a file within the vault; propagate to CRDT sidecar tree."""
     src = _resolve_and_validate(root, old_path)
     dst = _resolve_and_validate(root, new_path)
     dst.parent.mkdir(parents=True, exist_ok=True)
+    is_dir = src.is_dir()
     src.rename(dst)
+    if is_dir:
+        crdt_store.rename_dir(root, old_path, new_path)
+    else:
+        crdt_store.rename_state(root, old_path, new_path)

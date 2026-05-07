@@ -252,8 +252,6 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     parent: container,
   });
 
-  syncSession?.setView(view);
-
   let destroyed = false;
   return {
     view,

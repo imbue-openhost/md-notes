@@ -13,7 +13,7 @@ test.afterAll(async () => {
 });
 
 test.describe('Phase 5: Vault switching', () => {
-  test('switch-vault button returns to picker without console errors', async ({ page }) => {
+  test('manage-vaults item returns to picker without console errors', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
     page.on('console', (msg) => {
@@ -23,7 +23,8 @@ test.describe('Phase 5: Vault switching', () => {
     await openVault(page, VAULT);
     await expect(page.locator('.cm-editor')).toBeVisible();
 
-    await page.locator('.sidebar-btn[title="Switch vault"]').click();
+    await page.locator('.sidebar-vault-trigger').click();
+    await page.locator('.sidebar-vault-manage').click();
 
     await expect(page.locator('.vault-picker')).toBeVisible();
     await expect(page.locator('.vault-picker-item-name', { hasText: VAULT })).toBeVisible();
@@ -40,7 +41,8 @@ test.describe('Phase 5: Vault switching', () => {
 
   test('can re-open the same vault after switching', async ({ page }) => {
     await openVault(page, VAULT);
-    await page.locator('.sidebar-btn[title="Switch vault"]').click();
+    await page.locator('.sidebar-vault-trigger').click();
+    await page.locator('.sidebar-vault-manage').click();
     await expect(page.locator('.vault-picker')).toBeVisible();
     await page.locator('.vault-picker-item-name', { hasText: VAULT }).click();
     await page.locator('.sidebar-item[data-type="file"][data-path="test.md"]').click();

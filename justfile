@@ -9,4 +9,4 @@ test-frontend:
 
 # Full e2e: builds container, runs server + mock router, runs playwright.
 test-e2e:
-    python tests/run_e2e.py
+    uv run python tests/run_e2e.py

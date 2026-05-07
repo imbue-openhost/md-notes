@@ -25,11 +25,11 @@ from typing import ClassVar
 from typing import Self
 
 from loguru import logger
-from pycrdt import Map
 from pycrdt import Text
 from pycrdt.websocket import WebsocketServer
 from pycrdt.websocket import YRoom
 
+from server.core import crdt_store
 from server.core.files import PathTraversalError
 from server.core.files import read_file
 from server.core.files import write_file
@@ -124,7 +124,7 @@ class SyncManager:
     """Owns the pycrdt WebSocket server and the lifecycle of every active room."""
 
     SAVE_DEBOUNCE_SECS: ClassVar[float] = 5.0
-    SAVE_MAX_INTERVAL_SECS: ClassVar[float] = 30.0
+    SAVE_MAX_INTERVAL_SECS: ClassVar[float] = 10.0
     ROOM_CLEANUP_DELAY_SECS: ClassVar[float] = 300.0
 
     def __init__(self, vault_path: Path) -> None:
@@ -186,7 +186,12 @@ class SyncManager:
             logger.info("Cancelled pending cleanup for {} — new client joining", doc_path)
 
         room = await self._ws_server.get_room(doc_path)
-        self._init_room(room, doc_path)
+        try:
+            self._init_room(room, doc_path)
+        except FileNotFoundError:
+            await self._ws_server.delete_room(room=room)
+            logger.info("Refusing room {}: .md not found", doc_path)
+            raise
         room.ready = True
 
         # Wrap original channel (which may already be ReadOnlyChannel) so we get visibility into
@@ -254,28 +259,35 @@ class SyncManager:
     # ── room init / save ────────────────────────────────────────────────
 
     def _init_room(self, room: YRoom, room_name: str) -> None:
-        """Load .md content from disk into the Y.Doc's shared text on first connect."""
+        """Load CRDT sidecar (or seed from .md) into the Y.Doc on first connect.
+
+        Raises FileNotFoundError if the .md does not exist — .md is the source of truth, no file means no
+        room. The sidecar at ``vault_crdt/<room_name>.bin`` (when present) preserves Y.Doc clientIDs/clocks
+        across restarts so reconnecting clients sync incrementally instead of merging full state and doubling
+        content.
+        """
         if room_name in self._initialised_rooms:
             return
 
-        if "/" in room_name:
-            vault_name = room_name.split("/", 1)[0]
-            (self._vault_path / vault_name).mkdir(parents=True, exist_ok=True)
-
+        # .md must exist. We don't auto-create — REST handles file creation.
         try:
             content = read_file(self._vault_path, room_name)
-        except (FileNotFoundError, PathTraversalError):
-            content = ""
+        except PathTraversalError:
+            raise FileNotFoundError(room_name) from None
 
         doc = room.ydoc
-        doc["content"] = text = Text()
-        if content:
-            text += content
-
-        # Random ID so clients can detect when the server recreated the room (see sync.ts).
-        meta: Map[str] = Map()
-        doc["meta"] = meta
-        meta["room_epoch"] = uuid.uuid4().hex
+        sidecar = crdt_store.read_state(self._vault_path, room_name)
+        if sidecar is not None:
+            doc.apply_update(sidecar)
+            text = doc.get("content", type=Text)
+            initial_chars = len(str(text)) if text is not None else 0
+            source = "sidecar"
+        else:
+            doc["content"] = text = Text()
+            if content:
+                text += content
+            initial_chars = len(content)
+            source = ".md"
 
         def on_change(event: Any) -> None:
             self._schedule_save(room_name, room)
@@ -283,11 +295,11 @@ class SyncManager:
         doc.observe(on_change)
 
         self._initialised_rooms.add(room_name)
-        self._last_saved_size[room_name] = len(content)
-        logger.info("Opened room {} from disk ({} chars)", room_name, len(content))
+        self._last_saved_size[room_name] = initial_chars
+        logger.info("Opened room {} from {} ({} chars)", room_name, source, initial_chars)
 
     async def _save_room(self, room_name: str, room: YRoom) -> None:
-        """Write Y.Doc text content back to the .md file."""
+        """Write Y.Doc text content back to .md, then snapshot Y.Doc state to the CRDT sidecar."""
         try:
             doc = room.ydoc
             text = doc.get("content", type=Text)
@@ -297,9 +309,9 @@ class SyncManager:
             new_size = len(content)
             prev_size = self._last_saved_size.get(room_name)
             write_file(self._vault_path, room_name, content)
+            crdt_store.write_state(self._vault_path, room_name, doc.get_update())
             self._last_saved_size[room_name] = new_size
             self._first_dirty_at.pop(room_name, None)
-            # Flag suspicious size jumps (likely duplication). Threshold: grew by >25% AND >500 chars.
             if prev_size is not None and new_size > prev_size * 1.25 and new_size - prev_size > 500:
                 logger.info(
                     "Room {} grew from {} to {} chars (+{}, {:.0%}) — possible duplication",
