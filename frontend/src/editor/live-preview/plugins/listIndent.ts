@@ -69,9 +69,13 @@ export const listVisualIndentPlugin = ViewPlugin.fromClass(
               const target = (listDepth - 1) * VISUAL_INDENT;
               const padding = target - sourceIndent;
               if (padding > 0) {
+                // margin-left, not padding-left — the editor theme already
+                // sets `.cm-line { padding: 0 16px }` and an inline
+                // padding-left would replace that, neutralising small
+                // offsets (e.g. 2ch ≈ 16px ⇒ no visible change at level 2).
                 decorations.push(
                   Decoration.line({
-                    attributes: { style: `padding-left: ${padding}ch` },
+                    attributes: { style: `margin-left: ${padding}ch` },
                   }).range(line.from),
                 );
               }
