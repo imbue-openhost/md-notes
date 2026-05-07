@@ -16,6 +16,16 @@ import { unfoldAll, toggleFold, foldCode, unfoldCode } from '@codemirror/languag
 import { foldAllRecursive } from './folding';
 
 /**
+ * Line range from a parsed `:` ex command. `start` and `end` are 0-based
+ * CodeMirror line numbers (matching `params.selectionLine` /
+ * `selectionLineEnd` from @replit/codemirror-vim).
+ */
+export interface ActionLineRange {
+  start: number;
+  end?: number;
+}
+
+/**
  * Toggle bullet/task state across the current selection.
  *
  * Scans every line in the selection that starts with a bullet (`-`, `*`, `+`,
@@ -31,25 +41,39 @@ import { foldAllRecursive } from './folding';
  *
  * With no selection (cursor on a single line) this reduces to the
  * single-line toggle behaviour.
+ *
+ * When invoked from a vim visual-mode mapping, codemirror-vim exits visual
+ * mode (clearing the CM selection) before the ex handler runs, so the line
+ * range is passed in via `range` instead of read from `state.selection`.
  */
-function toggleTaskAtSelection(view: EditorView): boolean {
+function toggleTaskAtSelection(view: EditorView, range?: ActionLineRange): boolean {
   const { state } = view;
-  const sel = state.selection.main;
-  const startLine = state.doc.lineAt(sel.from);
-  const endLine = state.doc.lineAt(sel.to);
-  // Visual-line selections often end at the start of the line *after* the
-  // last visually-selected line. Don't treat that trailing line as selected.
-  const endLineNum =
-    sel.to > sel.from && sel.to === endLine.from && endLine.number > startLine.number
-      ? endLine.number - 1
-      : endLine.number;
+
+  let startLineNum: number;
+  let endLineNum: number;
+  if (range) {
+    // 0-based → 1-based for state.doc.line()
+    startLineNum = range.start + 1;
+    endLineNum = (range.end ?? range.start) + 1;
+  } else {
+    const sel = state.selection.main;
+    const startLine = state.doc.lineAt(sel.from);
+    const endLine = state.doc.lineAt(sel.to);
+    startLineNum = startLine.number;
+    // Visual-line selections often end at the start of the line *after* the
+    // last visually-selected line. Don't treat that trailing line as selected.
+    endLineNum =
+      sel.to > sel.from && sel.to === endLine.from && endLine.number > startLine.number
+        ? endLine.number - 1
+        : endLine.number;
+  }
 
   type Item = {
     prefixEnd: number;
     marker?: { from: number; to: number; checked: boolean };
   };
   const items: Item[] = [];
-  for (let n = startLine.number; n <= endLineNum; n++) {
+  for (let n = startLineNum; n <= endLineNum; n++) {
     const line = state.doc.line(n);
     const text = state.doc.sliceString(line.from, line.to);
     const m = text.match(/^(\s*(?:[-*+]|\d+[.)])\s+)(\[([ xX])\]\s+)?/);
@@ -168,13 +192,15 @@ const NUMERIC_OPTIONS = new Set([
  *   exmap togglefold toggle-fold
  *   nmap za :togglefold<CR>
  */
-const BUILTIN_ACTIONS: Record<string, (view: EditorView) => boolean> = {
+type BuiltinAction = (view: EditorView, range?: ActionLineRange) => boolean;
+
+const BUILTIN_ACTIONS: Record<string, BuiltinAction> = {
   'toggle-fold': (view) => toggleFold(view),
   'fold-all': (view) => foldAllRecursive(view),
   'unfold-all': (view) => unfoldAll(view),
   'fold-at-cursor': (view) => foldCode(view),
   'unfold-at-cursor': (view) => unfoldCode(view),
-  'toggle-task': (view) => toggleTaskAtSelection(view),
+  'toggle-task': (view, range) => toggleTaskAtSelection(view, range),
 };
 
 /**
@@ -305,8 +331,12 @@ export function applyExmaps(exmaps: VimExmap[]): void {
   for (const { name, action } of exmaps) {
     const fn = BUILTIN_ACTIONS[action];
     if (!fn) continue;
-    Vim.defineEx(name, name, (cm: any) => {
-      fn(cm.cm6);
+    Vim.defineEx(name, name, (cm: any, params: { selectionLine?: number; selectionLineEnd?: number }) => {
+      const range =
+        params && typeof params.selectionLine === 'number'
+          ? { start: params.selectionLine, end: params.selectionLineEnd }
+          : undefined;
+      fn(cm.cm6, range);
     });
   }
 }

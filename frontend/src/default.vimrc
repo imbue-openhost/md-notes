@@ -40,3 +40,4 @@ nmap zR :unfoldall<CR>
 " Toggle GFM task checkbox on the current line
 exmap toggletask toggle-task
 nmap <leader>x :toggletask<CR>
+xmap <leader>x :toggletask<CR>

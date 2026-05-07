@@ -103,6 +103,12 @@ export const editorTheme = EditorView.theme({
     textDecoration: 'none',
   },
 
+  // ========== Bullet (unordered list) ==========
+  '.cm-bullet': {
+    color: 'hsl(var(--muted-foreground, 220 9% 46%))',
+    fontWeight: '700',
+  },
+
   // ========== Inline Styles ==========
   '.cm-strong': {
     fontWeight: '700',

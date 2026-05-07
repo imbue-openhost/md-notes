@@ -19,6 +19,7 @@ import {
   setMouseSelecting,
   markdownStylePlugin,
   taskListPlugin,
+  bulletListPlugin,
   editorTheme,
 } from './live-preview/index';
 
@@ -99,6 +100,7 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     editorTheme,
     markdownStylePlugin,
     taskListPlugin,
+    bulletListPlugin,
 
     EditorView.domEventHandlers({
       keydown: (event) => {
