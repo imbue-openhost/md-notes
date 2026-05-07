@@ -177,22 +177,34 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     bulletListPlugin,
     listVisualIndentPlugin,
 
-    Prec.highest(EditorView.domEventHandlers({
+    EditorView.domEventHandlers({
       keydown: (event) => {
-        // macOS Cocoa binds Ctrl-D to deleteForward at the input layer; if we
-        // don't preventDefault on keydown, the OS fires a beforeinput delete
-        // even when vim handles <C-d>. Suppress here so only vim sees it.
-        if (event.ctrlKey && event.key === 'd' && !event.metaKey && !event.altKey && !event.shiftKey) {
+        if (event.ctrlKey && (event.key === 'd' || event.key === 'u') && !event.metaKey && !event.altKey) {
+          // eslint-disable-next-line no-console
+          console.log('[ctrl-d/u keydown@cm]', {
+            key: event.key,
+            code: event.code,
+            ctrl: event.ctrlKey,
+            shift: event.shiftKey,
+            defaultPrevented: event.defaultPrevented,
+          });
+          queueMicrotask(() => {
+            // eslint-disable-next-line no-console
+            console.log('[ctrl-d/u keydown@microtask]', {
+              key: event.key,
+              defaultPrevented: event.defaultPrevented,
+            });
+          });
+        }
+        if (event.key === 'Escape') {
           event.preventDefault();
         }
         return false;
       },
-    })),
-
-    EditorView.domEventHandlers({
-      keydown: (event) => {
-        if (event.key === 'Escape') {
-          event.preventDefault();
+      beforeinput: (event: InputEvent) => {
+        if (event.inputType === 'deleteContentForward' || event.inputType === 'deleteContentBackward') {
+          // eslint-disable-next-line no-console
+          console.log('[beforeinput]', { inputType: event.inputType, data: event.data });
         }
         return false;
       },
