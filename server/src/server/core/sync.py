@@ -39,11 +39,16 @@ class SyncNotRunning(Exception):
     """Raised by ``SyncManager.serve`` when the underlying WebSocket server is not started."""
 
 
-# ── Read-only channel filter ────────────────────────────────────────────
+# ── Channel wrappers ────────────────────────────────────────────────────
 
 
 _MSG_SYNC = 0
 _SYNC_UPDATE = 2
+
+# Yjs sync updates above this size are logged at INFO. Most edits are <100 bytes; an update in
+# the kilobytes is suspicious — typically a stale client reconciling its full local state with
+# the server's, which is the pattern that produces content duplication.
+_LARGE_UPDATE_BYTES = 2048
 
 
 class ReadOnlyChannel:
@@ -80,6 +85,38 @@ class ReadOnlyChannel:
         return await self._inner.recv()  # type: ignore[no-any-return]
 
 
+class LoggingChannel:
+    """Wraps a channel to log suspiciously-large incoming Yjs sync updates at INFO."""
+
+    def __init__(self, inner: Any, client_id: str):
+        self._inner = inner
+        self._client_id = client_id
+
+    @property
+    def path(self) -> str:
+        return self._inner.path  # type: ignore[no-any-return]
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> bytes:
+        data: bytes = await self._inner.__anext__()
+        if len(data) >= 2 and data[0] == _MSG_SYNC and data[1] == _SYNC_UPDATE and len(data) >= _LARGE_UPDATE_BYTES:
+            logger.info(
+                "Large sync update from client {} on {}: {} bytes (possible stale-state merge)",
+                self._client_id,
+                self._inner.path,
+                len(data),
+            )
+        return data
+
+    async def send(self, message: bytes) -> None:
+        await self._inner.send(message)
+
+    async def recv(self) -> bytes:
+        return await self._inner.recv()  # type: ignore[no-any-return]
+
+
 # ── Sync manager ────────────────────────────────────────────────────────
 
 
@@ -98,6 +135,7 @@ class SyncManager:
         self._save_tasks: dict[str, asyncio.Task[None]] = {}
         self._first_dirty_at: dict[str, float] = {}
         self._cleanup_tasks: dict[str, asyncio.Task[None]] = {}
+        self._last_saved_size: dict[str, int] = {}
 
     # ── lifecycle ───────────────────────────────────────────────────────
 
@@ -140,18 +178,39 @@ class SyncManager:
             raise SyncNotRunning()
 
         doc_path = channel.path
+        client_id = uuid.uuid4().hex[:8]
 
         pending = self._cleanup_tasks.pop(doc_path, None)
         if pending and not pending.done():
             pending.cancel()
+            logger.info("Cancelled pending cleanup for {} — new client joining", doc_path)
 
         room = await self._ws_server.get_room(doc_path)
         self._init_room(room, doc_path)
         room.ready = True
 
+        # Wrap original channel (which may already be ReadOnlyChannel) so we get visibility into
+        # large incoming updates. The wrapper preserves .path for downstream room routing.
+        if not isinstance(channel, LoggingChannel):
+            channel = LoggingChannel(channel, client_id)
+
+        logger.info(
+            "Client {} joined {} (now {} client(s))",
+            client_id,
+            doc_path,
+            len(room.clients) + 1,
+        )
+
         try:
             await self._ws_server.serve(channel)
         finally:
+            remaining = len(room.clients)
+            logger.info(
+                "Client {} left {} ({} client(s) remain)",
+                client_id,
+                doc_path,
+                remaining,
+            )
             if not room.clients:
                 self._schedule_room_cleanup(doc_path, room)
 
@@ -174,13 +233,20 @@ class SyncManager:
         if existing and not existing.done():
             existing.cancel()
 
+        logger.info(
+            "Room {} idle (0 clients); cleanup scheduled in {}s",
+            doc_path,
+            self.ROOM_CLEANUP_DELAY_SECS,
+        )
+
         async def _delayed_cleanup() -> None:
             await asyncio.sleep(self.ROOM_CLEANUP_DELAY_SECS)
             if self._ws_server and not room.clients:
                 await self._save_room(doc_path, room)
                 await self._ws_server.delete_room(room=room)
                 self._initialised_rooms.discard(doc_path)
-                logger.debug("Cleaned up room {} after grace period", doc_path)
+                self._last_saved_size.pop(doc_path, None)
+                logger.info("Closed room {} after grace period", doc_path)
             self._cleanup_tasks.pop(doc_path, None)
 
         self._cleanup_tasks[doc_path] = asyncio.ensure_future(_delayed_cleanup())
@@ -217,7 +283,8 @@ class SyncManager:
         doc.observe(on_change)
 
         self._initialised_rooms.add(room_name)
-        logger.debug("Initialised room {} from disk ({} chars)", room_name, len(content))
+        self._last_saved_size[room_name] = len(content)
+        logger.info("Opened room {} from disk ({} chars)", room_name, len(content))
 
     async def _save_room(self, room_name: str, room: YRoom) -> None:
         """Write Y.Doc text content back to the .md file."""
@@ -227,9 +294,23 @@ class SyncManager:
             if text is None:
                 return
             content = str(text)
+            new_size = len(content)
+            prev_size = self._last_saved_size.get(room_name)
             write_file(self._vault_path, room_name, content)
+            self._last_saved_size[room_name] = new_size
             self._first_dirty_at.pop(room_name, None)
-            logger.debug("Saved room {} to disk ({} chars)", room_name, len(content))
+            # Flag suspicious size jumps (likely duplication). Threshold: grew by >25% AND >500 chars.
+            if prev_size is not None and new_size > prev_size * 1.25 and new_size - prev_size > 500:
+                logger.info(
+                    "Room {} grew from {} to {} chars (+{}, {:.0%}) — possible duplication",
+                    room_name,
+                    prev_size,
+                    new_size,
+                    new_size - prev_size,
+                    (new_size - prev_size) / max(prev_size, 1),
+                )
+            else:
+                logger.debug("Saved room {} to disk ({} chars)", room_name, new_size)
         except Exception:
             logger.exception("Failed to save room {}", room_name)
 
