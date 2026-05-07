@@ -8,7 +8,7 @@
 import { EditorState, Facet, Prec, type Extension } from '@codemirror/state';
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, undo as cmUndo, redo as cmRedo } from '@codemirror/commands';
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { markdown, markdownLanguage } from './lang-markdown/index';
 import { languages } from '@codemirror/language-data';
 import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle, bracketMatching, foldNodeProp } from '@codemirror/language';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
@@ -132,7 +132,7 @@ Vim.defineAction('redo', (cm: any, actionArgs: any) => {
 
 function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
   return [
-    // Run before vim so Tab/Shift-Tab on list lines indent/dedent in any mode.
+    // Run before vim so Tab/Shift-Tab on list lines work in any mode.
     Prec.highest(keymap.of([
       { key: 'Tab', run: indentListLines },
       { key: 'Shift-Tab', run: dedentListLines },
@@ -176,6 +176,18 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     taskListPlugin,
     bulletListPlugin,
     listVisualIndentPlugin,
+
+    Prec.highest(EditorView.domEventHandlers({
+      keydown: (event) => {
+        // macOS Cocoa binds Ctrl-D to deleteForward at the input layer; if we
+        // don't preventDefault on keydown, the OS fires a beforeinput delete
+        // even when vim handles <C-d>. Suppress here so only vim sees it.
+        if (event.ctrlKey && event.key === 'd' && !event.metaKey && !event.altKey && !event.shiftKey) {
+          event.preventDefault();
+        }
+        return false;
+      },
+    })),
 
     EditorView.domEventHandlers({
       keydown: (event) => {

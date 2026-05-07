@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EditorState, Prec } from '@codemirror/state';
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { markdown, markdownLanguage } from './lang-markdown/index';
 import { codeFolding, foldEffect, foldable } from '@codemirror/language';
 import { markdownFoldService } from './folding';
 import { _internal } from './fold-persistence';

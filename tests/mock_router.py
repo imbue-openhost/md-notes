@@ -14,8 +14,9 @@ import os
 
 import attr
 import httpx
-import uvicorn
 import websockets
+from hypercorn.asyncio import serve
+from hypercorn.config import Config
 from litestar import Litestar
 from litestar.handlers import asgi
 from litestar.types import Receive
@@ -178,7 +179,10 @@ app = Litestar(route_handlers=[proxy])
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logger.info("Mock router :%d -> upstream %s:%d", CONFIG.router_port, CONFIG.upstream_host, CONFIG.upstream_port)
-    uvicorn.run(app, host="0.0.0.0", port=CONFIG.router_port, log_level="warning")
+    config = Config()
+    config.bind = [f"0.0.0.0:{CONFIG.router_port}"]
+    config.loglevel = "warning"
+    asyncio.run(serve(app, config))  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

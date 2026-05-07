@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EditorState, Prec } from '@codemirror/state';
 import { foldable } from '@codemirror/language';
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { markdown, markdownLanguage } from './lang-markdown/index';
 import { markdownFoldService } from './folding';
 
 function makeState(doc: string): EditorState {
