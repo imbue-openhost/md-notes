@@ -3,7 +3,6 @@ import { createEditor, type EditorInstance } from './editor/editor';
 import {
   createShareLink, listShareLinks, deleteShareLink,
   listVaults, createVault, deleteVault, getServerVimrc,
-  AuthRequiredError,
 } from './api/client';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
 import { serverUrl, getShareUuid, fetchShareInfo, type ShareInfo } from './config';
@@ -55,32 +54,18 @@ export const App: Component = () => {
   const [vaultList, setVaultList] = createSignal<VaultConfig[]>([]);
   const [showVaultPicker, setShowVaultPicker] = createSignal(false);
   const [booting, setBooting] = createSignal(true);
-  const [redirectingToLogin, setRedirectingToLogin] = createSignal(false);
   const [currentDocPath, setCurrentDocPath] = createSignal<string | null>(null);
   const [shareModalPath, setShareModalPath] = createSignal<string | null>(null);
   const [showWebSettings, setShowWebSettings] = createSignal(false);
 
   let layoutHandle: EditorLayoutHandle | undefined;
 
-  function redirectToLogin() {
-    setRedirectingToLogin(true);
-    const here = window.location.pathname + window.location.search;
-    window.location.href = '/login?redirect=' + encodeURIComponent(here);
-  }
-
   async function boot() {
     try {
       const saved = await getServerVimrc();
       if (saved) setActiveVimrc(saved);
-    } catch (e) {
-      if (e instanceof AuthRequiredError) { redirectToLogin(); return; }
-    }
-    try {
-      await loadWebVaults();
-    } catch (e) {
-      if (e instanceof AuthRequiredError) { redirectToLogin(); return; }
-      throw e;
-    }
+    } catch {}
+    await loadWebVaults();
     setBooting(false);
   }
 
@@ -95,7 +80,6 @@ export const App: Component = () => {
       try {
         return await fetchVaultList();
       } catch (e) {
-        if (e instanceof AuthRequiredError) throw e;
         console.warn('Backend not ready, retrying:', e);
         await new Promise((r) => setTimeout(r, delay));
         delay = Math.min(delay * 2, 5000);
@@ -221,9 +205,7 @@ export const App: Component = () => {
   return (
     <>
       <Show when={booting()}>
-        <div style={{ padding: '2rem', color: '#888' }}>
-          {redirectingToLogin() ? 'Redirecting to login…' : 'Connecting to server…'}
-        </div>
+        <div style={{ padding: '2rem', color: '#888' }}>Connecting to server…</div>
       </Show>
 
       <Show when={!booting() && showVaultPicker() && !vault()}>

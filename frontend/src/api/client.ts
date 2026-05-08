@@ -16,23 +16,10 @@ export function getApiBaseUrl(): string {
   return baseUrl;
 }
 
-/** Error thrown when the server returns 401/403 — the user needs to authenticate. */
-export class AuthRequiredError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = 'AuthRequiredError';
-    this.status = status;
-  }
-}
-
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(`${baseUrl}${path}`, init);
   if (!res.ok) {
     const body = await res.text();
-    if (res.status === 401 || res.status === 403) {
-      throw new AuthRequiredError(res.status, `API ${res.status}: ${body}`);
-    }
     throw new Error(`API ${res.status}: ${body}`);
   }
   return res;
