@@ -446,7 +446,50 @@ export const editorTheme = EditorView.theme({
   },
   '.cm-codeblock-source': {
     backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    // 字体继承自 .cm-content，确保一致性
+    fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+    fontSize: '0.9em',
+  },
+
+  // ========== Inline-mode code block (header / footer / content lines) =====
+  // The codeBlockField plugin running with interaction:'inline' replaces the
+  // opening fence line with a header widget, the closing fence line with a
+  // footer widget, and adds the .cm-codeblock-content class to each content
+  // line in between. The styling below gives the block a single visual unit:
+  // a tinted, rounded panel with monospace text.
+  '.cm-codeblock-header': {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '6px 12px',
+    backgroundColor: 'hsl(var(--muted, 220 14% 96%))',
+    borderTopLeftRadius: '6px',
+    borderTopRightRadius: '6px',
+    borderBottom: '1px solid hsl(var(--border, 220 13% 91%) / 0.6)',
+    fontSize: '12px',
+    color: 'hsl(var(--muted-foreground, 220 9% 46%))',
+    fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+    userSelect: 'none',
+  },
+  '.cm-codeblock-lang': {
+    fontWeight: '600',
+    textTransform: 'lowercase',
+    letterSpacing: '0.02em',
+  },
+  '.cm-codeblock-footer': {
+    height: '8px',
+    backgroundColor: 'hsl(var(--muted, 220 14% 96%))',
+    borderBottomLeftRadius: '6px',
+    borderBottomRightRadius: '6px',
+    borderTop: '1px solid hsl(var(--border, 220 13% 91%) / 0.6)',
+    userSelect: 'none',
+  },
+  '.cm-codeblock-content': {
+    backgroundColor: 'hsl(var(--muted, 220 14% 96%))',
+    fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+    fontSize: '0.9em',
+    lineHeight: '1.55',
+    // No left padding override — .cm-line already gives 16px.  Keep it so
+    // the syntax-highlight mark spans align with the editor gutter padding.
   },
   '.cm-codeblock-line-numbers': {
     counterReset: 'line',

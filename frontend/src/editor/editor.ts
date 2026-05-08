@@ -87,8 +87,16 @@ import {
   taskListPlugin,
   bulletListPlugin,
   listVisualIndentPlugin,
+  codeBlockField,
   editorTheme,
+  initHighlighter,
 } from './live-preview/index';
+
+// Kick off async highlighter init at module load. lowlight is an optional
+// dependency — this resolves to false if it's not installed, and code blocks
+// fall back to plain (escaped) text.  Either way, the live-preview code-block
+// plugin still applies monospace/background/fence-replacement decorations.
+void initHighlighter();
 
 import { markdownFolding } from './folding';
 import { foldPersistence } from './fold-persistence';
@@ -170,6 +178,7 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     taskListPlugin,
     bulletListPlugin,
     listVisualIndentPlugin,
+    codeBlockField({ interaction: 'inline' }),
 
     EditorView.domEventHandlers({
       keydown: (event) => {
