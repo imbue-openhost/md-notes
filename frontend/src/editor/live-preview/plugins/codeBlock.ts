@@ -23,6 +23,7 @@ import {
 } from '@codemirror/view';
 import { shouldShowSource } from '../core/shouldShowSource';
 import { mouseSelectingField } from '../core/mouseSelecting';
+import { getCodeBlockInListContext } from '../core/listContext';
 import {
   createCodeBlockSourceToggleWidget,
   createCodeBlockWidget,
@@ -130,7 +131,8 @@ class CodeBlockHeaderWidget extends WidgetType {
     readonly code: string,
     readonly from: number,
     readonly to: number,
-    readonly showCopyButton: boolean
+    readonly showCopyButton: boolean,
+    readonly indentCh: number = 0,
   ) {
     super();
   }
@@ -141,13 +143,15 @@ class CodeBlockHeaderWidget extends WidgetType {
       other.code === this.code &&
       other.from === this.from &&
       other.to === this.to &&
-      other.showCopyButton === this.showCopyButton
+      other.showCopyButton === this.showCopyButton &&
+      other.indentCh === this.indentCh
     );
   }
 
   toDOM(view?: EditorView): HTMLElement {
     const header = document.createElement('div');
     header.className = 'cm-codeblock-header';
+    if (this.indentCh > 0) header.style.marginLeft = `${this.indentCh}ch`;
 
     // Language badge
     if (this.language && this.language !== 'text') {
@@ -224,13 +228,18 @@ class CodeBlockHeaderWidget extends WidgetType {
  * Visual element: rounded bottom + background color
  */
 class CodeBlockFooterWidget extends WidgetType {
-  eq(): boolean {
-    return true;
+  constructor(readonly indentCh: number = 0) {
+    super();
+  }
+
+  eq(other: CodeBlockFooterWidget): boolean {
+    return other.indentCh === this.indentCh;
   }
 
   toDOM(): HTMLElement {
     const footer = document.createElement('div');
     footer.className = 'cm-codeblock-footer';
+    if (this.indentCh > 0) footer.style.marginLeft = `${this.indentCh}ch`;
     return footer;
   }
 
@@ -327,6 +336,16 @@ function buildCodeBlockInlineDecorations(
         node.to
       );
 
+      // If this code block is nested inside a list item, compute the
+      // visual indent so its widgets and lines align with the list's
+      // content column. Source-mode lines also get the same indent so
+      // toggling between modes doesn't shift the block sideways.
+      const inListCtx = getCodeBlockInListContext(state, node.from);
+      const indentCh = inListCtx ? inListCtx.list.contentColumn : 0;
+      const indentStyle = indentCh > 0
+        ? `--cb-indent: ${indentCh}ch;`
+        : '';
+
       if (showSource) {
         // Source mode: show toggle button + source line styling
         const sourceToggleWidget = createCodeBlockSourceToggleWidget(
@@ -342,7 +361,10 @@ function buildCodeBlockInlineDecorations(
         for (let pos = node.from; pos <= node.to; ) {
           const line = state.doc.lineAt(pos);
           decorations.push(
-            Decoration.line({ class: 'cm-codeblock-source' }).range(line.from)
+            Decoration.line({
+              class: 'cm-codeblock-source',
+              attributes: indentStyle ? { style: indentStyle } : undefined,
+            }).range(line.from)
           );
           pos = line.to + 1;
         }
@@ -360,7 +382,8 @@ function buildCodeBlockInlineDecorations(
           code,
           node.from,
           node.to,
-          options.copyButton
+          options.copyButton,
+          indentCh,
         );
         decorations.push(
           Decoration.replace({
@@ -378,7 +401,10 @@ function buildCodeBlockInlineDecorations(
         ) {
           const line = state.doc.line(lineNum);
           decorations.push(
-            Decoration.line({ class: 'cm-codeblock-content' }).range(line.from)
+            Decoration.line({
+              class: 'cm-codeblock-content',
+              attributes: indentStyle ? { style: indentStyle } : undefined,
+            }).range(line.from)
           );
         }
 
@@ -398,7 +424,7 @@ function buildCodeBlockInlineDecorations(
         // 4. Replace closing fence line with footer widget.
         //    Use inclusiveStart so the cursor cannot land between
         //    the last content line and the footer.
-        const footerWidget = new CodeBlockFooterWidget();
+        const footerWidget = new CodeBlockFooterWidget(indentCh);
         decorations.push(
           Decoration.replace({
             widget: footerWidget,

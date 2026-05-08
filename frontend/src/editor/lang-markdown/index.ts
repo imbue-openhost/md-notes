@@ -12,11 +12,13 @@ import { Language, LanguageSupport, LanguageDescription, syntaxTree } from '@cod
 import { MarkdownExtension, MarkdownParser, parseCode } from '@lezer/markdown';
 import { commonmarkLanguage, markdownLanguage, mkLang, getCodeParser, headerIndent } from './markdown';
 import { insertNewlineContinueMarkup, deleteMarkupBackward, toggleBold } from './commands';
+import { insertNewlineInListCodeBlock } from './codeBlockInList';
 
 export {
   commonmarkLanguage,
   markdownLanguage,
   insertNewlineContinueMarkup,
+  insertNewlineInListCodeBlock,
   deleteMarkupBackward,
   toggleBold,
 };
