@@ -8,7 +8,7 @@
 import { EditorState, Prec, type Extension } from '@codemirror/state';
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, undo as cmUndo, redo as cmRedo } from './commands/commands';
-import { markdown, markdownLanguage } from './lang-markdown/index';
+import { markdown, markdownLanguage, toggleBold } from './lang-markdown/index';
 import { languages } from '@codemirror/language-data';
 import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle, bracketMatching, foldNodeProp } from '@codemirror/language';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
@@ -29,6 +29,7 @@ import {
   taskListPlugin,
   bulletListPlugin,
   listVisualIndentPlugin,
+  codeBlockField,
   editorTheme,
 } from './live-preview/index';
 
@@ -66,10 +67,12 @@ Vim.defineAction('redo', (cm: any, actionArgs: any) => {
 function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
   return [
     // Run before vim so Tab/Shift-Tab are always consumed by the editor
-    // (regardless of vim mode), never bubbling to the browser.
+    // (regardless of vim mode), never bubbling to the browser. Mod-b also
+    // wins over the browser default here.
     Prec.highest(keymap.of([
       { key: 'Tab', run: handleTab, preventDefault: true },
       { key: 'Shift-Tab', run: handleShiftTab, preventDefault: true },
+      { key: 'Mod-b', run: toggleBold, preventDefault: true },
     ])),
 
     vimMode(vimrcContent),
@@ -113,6 +116,7 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     taskListPlugin,
     bulletListPlugin,
     listVisualIndentPlugin,
+    codeBlockField({ interaction: 'inline' }),
 
     EditorView.domEventHandlers({
       keydown: (event) => {

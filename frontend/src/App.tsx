@@ -1,4 +1,4 @@
-import { createSignal, createResource, onMount, onCleanup, Show, type Component } from 'solid-js';
+import { createSignal, createResource, createEffect, onMount, onCleanup, Show, type Component } from 'solid-js';
 import { createEditor, type EditorInstance } from './editor/editor';
 import {
   createShareLink, listShareLinks, deleteShareLink,
@@ -12,11 +12,24 @@ import { Sidebar } from './components/Sidebar';
 import { EditorLayout, type EditorLayoutHandle } from './components/EditorLayout';
 import { ShareModal } from './components/ShareModal';
 import { WebSettingsModal } from './components/SettingsModal';
+import { QuickOpen } from './components/QuickOpen';
 
 import DEFAULT_VIMRC from './default.vimrc?raw';
 
+const BASE_TITLE = 'md-notes';
+
+function fileLabel(path: string | null | undefined): string | null {
+  if (!path) return null;
+  const base = path.split('/').pop() || path;
+  return base.replace(/\.md$/i, '');
+}
+
 const ShareEditor: Component<{ uuid: string; info: ShareInfo }> = (props) => {
   let container!: HTMLDivElement;
+  createEffect(() => {
+    const name = fileLabel(props.info.doc_path);
+    document.title = name ? `${name} — Shared · ${BASE_TITLE}` : `Shared · ${BASE_TITLE}`;
+  });
   onMount(() => {
     createEditor(container, {
       vimrcContent: DEFAULT_VIMRC,
@@ -57,8 +70,21 @@ export const App: Component = () => {
   const [currentDocPath, setCurrentDocPath] = createSignal<string | null>(null);
   const [shareModalPath, setShareModalPath] = createSignal<string | null>(null);
   const [showWebSettings, setShowWebSettings] = createSignal(false);
+  const [showQuickOpen, setShowQuickOpen] = createSignal(false);
 
   let layoutHandle: EditorLayoutHandle | undefined;
+
+  createEffect(() => {
+    const v = vault();
+    const file = fileLabel(currentDocPath());
+    if (v && file) {
+      document.title = `${file} — ${v.name} · ${BASE_TITLE}`;
+    } else if (v) {
+      document.title = `${v.name} · ${BASE_TITLE}`;
+    } else {
+      document.title = BASE_TITLE;
+    }
+  });
 
   async function boot() {
     try {
@@ -91,8 +117,14 @@ export const App: Component = () => {
     const vaults = await fetchVaultListWithRetry();
     setVaultList(vaults);
 
+    // Per-tab last-vault: sessionStorage scopes to this tab, so a refresh keeps
+    // the same vault even if another tab has since selected a different one.
+    // Fall back to localStorage so a freshly opened tab/window still gets a
+    // reasonable default from the user's most recent choice.
     try {
-      const lastName = localStorage.getItem('mdnotes-last-vault');
+      const lastName =
+        sessionStorage.getItem('mdnotes-last-vault') ??
+        localStorage.getItem('mdnotes-last-vault');
       if (lastName) {
         const match = vaults.find((v) => v.name === lastName);
         if (match) { openVault(match); return; }
@@ -121,7 +153,12 @@ export const App: Component = () => {
     setVault(v);
     setShowVaultPicker(false);
     if (v.name) {
-      try { localStorage.setItem('mdnotes-last-vault', v.name); } catch {}
+      // Write to both: sessionStorage pins this tab's choice across refreshes,
+      // localStorage seeds future new tabs/windows with the most recent choice.
+      try {
+        sessionStorage.setItem('mdnotes-last-vault', v.name);
+        localStorage.setItem('mdnotes-last-vault', v.name);
+      } catch {}
     }
     if (v.sync && v.name) {
       createVault(v.name).catch(() => {});
@@ -176,6 +213,11 @@ export const App: Component = () => {
       if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
         e.preventDefault();
         layoutHandle?.splitPane();
+      }
+      if (e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && key === 'o') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (vault()) setShowQuickOpen(true);
       }
       if (e.ctrlKey && !e.metaKey && !e.shiftKey && key === 'h') {
         e.preventDefault();
@@ -243,6 +285,13 @@ export const App: Component = () => {
           path={shareModalPath()!}
           vaultName={vault()?.name}
           onClose={() => setShareModalPath(null)}
+        />
+      </Show>
+
+      <Show when={vault() && showQuickOpen()}>
+        <QuickOpen
+          onSelect={(path) => layoutHandle?.openFile(path)}
+          onClose={() => setShowQuickOpen(false)}
         />
       </Show>
 
