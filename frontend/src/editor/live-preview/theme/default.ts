@@ -113,8 +113,18 @@ export const editorTheme = EditorView.theme({
     color: 'hsl(var(--muted-foreground, 220 9% 46%))',
     fontWeight: '700',
     display: 'inline-block',
-    width: '2ch',
+    width: '1ch',
     textIndent: '0',
+  },
+
+  // List-indent spacer: a 1-char-wide invisible widget that the listIndent
+  // plugin uses to replace each leading-whitespace char in a list line.
+  // Fixed `width: 2ch` keeps the bullet column stable regardless of cursor
+  // position or proportional-font widths, while still leaving a real cursor
+  // landing position at every char boundary.
+  '.cm-list-indent-ws': {
+    display: 'inline-block',
+    width: '2ch',
   },
 
   // ========== Inline Styles ==========

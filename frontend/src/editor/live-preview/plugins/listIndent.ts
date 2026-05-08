@@ -6,15 +6,27 @@ import {
   EditorView,
   ViewPlugin,
   ViewUpdate,
+  WidgetType,
 } from '@codemirror/view';
 
-// Each level of list nesting renders this many character widths from the
-// previous level's bullet column.
-const VISUAL_INDENT = 4;
-// Reserved column width (in `ch`) for the bullet glyph + its trailing gap.
-// Must match `.cm-bullet { width }` in the theme — the value is what
-// text-indent compensates for to produce the hanging indent.
-const BULLET_COL = 2;
+// Visual width per source-indent character. Pairs with the project's
+// 2-space-per-level indent convention to put each level at 4ch from the
+// previous bullet column.
+const INDENT_CH = 2;
+// Width of the bullet column. Must match `.cm-bullet { width }` in the theme.
+const BULLET_COL = 1;
+
+class IndentSpacer extends WidgetType {
+  toDOM() {
+    const span = document.createElement('span');
+    span.className = 'cm-list-indent-ws';
+    return span;
+  }
+  eq() { return true; }
+  ignoreEvent() { return false; }
+}
+
+const indentSpacer = Decoration.replace({ widget: new IndentSpacer() });
 
 /**
  * Builds the list-indent decorations for a given state and visible ranges.
@@ -26,7 +38,6 @@ export function buildListIndentDecorations(
 ): DecorationSet {
   const decorations: Range<Decoration>[] = [];
   const tree = syntaxTree(state);
-  const ranges = state.selection.ranges;
 
   for (const { from, to } of visibleRanges) {
     // tree.iterate fires `enter` for every overlapping ancestor, so we can
@@ -45,41 +56,30 @@ export function buildListIndentDecorations(
           const sourceIndent = /^[ \t]*/.exec(line.text)![0].length;
           const afterMarker = line.text.slice(n.to - line.from);
           const wsAfterMarker = /^[ \t]*/.exec(afterMarker)![0].length;
-          const levelIndent = (listDepth - 1) * VISUAL_INDENT;
 
-          // Hide leading whitespace and the space after the marker so the
-          // bullet/checkbox widget is the only visible glyph in the prefix.
-          // Their widths in proportional fonts are not 1ch, so leaving them
-          // visible makes text-indent over- or under-compensate. Reveal the
-          // raw source whenever the cursor sits anywhere in the prefix
-          // region (line start through the post-marker space) so the user
-          // can put the cursor in the leading whitespace and edit it.
-          const prefixEnd = n.to + wsAfterMarker;
-          const cursorInPrefix = ranges.some(
-            (r) => r.from <= prefixEnd && r.to >= line.from,
-          );
-          if (!cursorInPrefix) {
-            if (sourceIndent > 0) {
-              decorations.push(
-                Decoration.replace({}).range(line.from, line.from + sourceIndent),
-              );
-            }
-            if (wsAfterMarker > 0) {
-              decorations.push(
-                Decoration.replace({}).range(n.to, n.to + wsAfterMarker),
-              );
-            }
+          // Replace each leading whitespace char with a fixed-width spacer
+          // widget. Per-char (rather than collapsing the whole prefix into a
+          // single replace) is what gives the cursor a landing position at
+          // every char boundary — and the explicit width keeps the bullet
+          // column stable across cursor moves and proportional-font sizing.
+          for (let i = 0; i < sourceIndent; i++) {
+            decorations.push(indentSpacer.range(line.from + i, line.from + i + 1));
+          }
+          // Post-marker space replaced empty so wrapped continuation lines
+          // line up with the first-line text and there's no extra gap.
+          if (wsAfterMarker > 0) {
+            decorations.push(
+              Decoration.replace({}).range(n.to, n.to + wsAfterMarker),
+            );
           }
 
-          // padding-left puts wrapped continuation lines at the bullet text
-          // column. text-indent pulls the first line back to the bullet
-          // column itself; since the leading source whitespace and the
-          // post-marker space are now zero-width replacements, the bullet
-          // widget is char[0] and -BULLET_COL ch lands it exactly at
-          // 16px + levelIndent.
+          // padding-left puts wrapped continuation at the bullet text
+          // column. text-indent pulls the first line back so the leading
+          // spacers (and then the bullet widget) start at the line edge.
+          const prefixCh = sourceIndent * INDENT_CH + BULLET_COL;
           const style =
-            `text-indent: -${BULLET_COL}ch;` +
-            `padding-left: calc(16px + ${levelIndent + BULLET_COL}ch);`;
+            `text-indent: -${prefixCh}ch;` +
+            `padding-left: calc(16px + ${prefixCh}ch);`;
 
           decorations.push(
             Decoration.line({
@@ -127,7 +127,6 @@ export const listVisualIndentPlugin = ViewPlugin.fromClass(
       if (
         update.docChanged ||
         update.viewportChanged ||
-        update.selectionSet ||
         syntaxTree(update.startState) !== syntaxTree(update.state)
       ) {
         this.decorations = buildListIndentDecorations(

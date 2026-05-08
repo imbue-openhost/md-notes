@@ -44,79 +44,69 @@ function lineStyleAt(decos: DecoSpec[], from: number): string | undefined {
 }
 
 describe('listVisualIndentPlugin', () => {
-  it('depth-1 bullet — pads bullet column to 2ch and reserves the gap', () => {
+  it('depth-1 bullet — reserves a 1ch bullet column at line start', () => {
     const state = buildState('- hello\n');
     const decos = collect(state);
     expect(lineStyleAt(decos, 0)).toBe(
-      'text-indent: -2ch;padding-left: calc(16px + 2ch);',
+      'text-indent: -1ch;padding-left: calc(16px + 1ch);',
     );
   });
 
-  it('depth-2 bullet — adds 4ch of level indent on top of the bullet column', () => {
+  it('depth-2 bullet — 2 leading whitespace chars × 2ch + 1ch bullet = 5ch prefix', () => {
     const state = buildState('- a\n  - b\n');
     const decos = collect(state);
     expect(lineStyleAt(decos, 4)).toBe(
-      'text-indent: -2ch;padding-left: calc(16px + 6ch);',
+      'text-indent: -5ch;padding-left: calc(16px + 5ch);',
     );
   });
 
-  it('depth-3 bullet — 8ch of level indent', () => {
+  it('depth-3 bullet — 4 leading whitespace chars × 2ch + 1ch = 9ch prefix', () => {
     const state = buildState('- a\n  - b\n    - c\n');
     const decos = collect(state);
     expect(lineStyleAt(decos, 10)).toBe(
-      'text-indent: -2ch;padding-left: calc(16px + 10ch);',
+      'text-indent: -9ch;padding-left: calc(16px + 9ch);',
     );
   });
 
-  it('hides leading whitespace and post-marker space when cursor is elsewhere', () => {
+  it('replaces each leading whitespace char with its own widget', () => {
+    // Per-char (rather than one big replace) is what gives the cursor a
+    // landing position at every char boundary in the prefix.
     const state = buildState('- a\n  - b\n');
     const decos = collect(state, 0);
-    // Depth-2 line is "  - b\n" starting at offset 4. Leading whitespace is
-    // [4,6); the post-marker space is [7,8).
-    expect(decos.find((d) => d.isReplace && d.from === 4 && d.to === 6)).toBeDefined();
+    expect(decos.find((d) => d.isReplace && d.from === 4 && d.to === 5)).toBeDefined();
+    expect(decos.find((d) => d.isReplace && d.from === 5 && d.to === 6)).toBeDefined();
+    // Post-marker space [7,8) collapses to a 0-width replace so wrapped
+    // continuation lines line up with the first-line text.
     expect(decos.find((d) => d.isReplace && d.from === 7 && d.to === 8)).toBeDefined();
   });
 
-  it('keeps source visible when the cursor is on the marker', () => {
-    // Cursor at 6 — on the depth-2 marker.
-    const state = buildState('- a\n  - b\n');
-    const decos = collect(state, 6);
-    const replaces = decos.filter(
-      (d) => d.isReplace && d.from >= 4 && d.to <= 8,
-    );
-    expect(replaces).toEqual([]);
-  });
-
-  it('keeps source visible when the cursor is in the leading whitespace', () => {
-    // Cursor at 5 — between the two leading spaces of the depth-2 line.
-    const state = buildState('- a\n  - b\n');
-    const decos = collect(state, 5);
-    const replaces = decos.filter(
-      (d) => d.isReplace && d.from >= 4 && d.to <= 8,
-    );
-    expect(replaces).toEqual([]);
+  it('renders the same widgets regardless of cursor position (no snap)', () => {
+    const doc = '- a\n  - b\n';
+    const offMarker = collect(buildState(doc), 0);
+    const onMarker = collect(buildState(doc), 6);
+    const inPrefix = collect(buildState(doc), 5);
+    const replaceShape = (d: DecoSpec) => `${d.from}-${d.to}-${d.isReplace}`;
+    const offShape = offMarker.filter((d) => d.isReplace).map(replaceShape).sort();
+    const onShape = onMarker.filter((d) => d.isReplace).map(replaceShape).sort();
+    const inShape = inPrefix.filter((d) => d.isReplace).map(replaceShape).sort();
+    expect(onShape).toEqual(offShape);
+    expect(inShape).toEqual(offShape);
   });
 
   it('reacts to indent changes — re-emits styling for the new doc', () => {
     const state = buildState('- hello\n');
-    // Cursor away from the prefix so the prefix-reveal doesn't suppress
-    // the leading-whitespace replacement we want to assert on.
-    const cursor = 7;
-    expect(lineStyleAt(collect(state, cursor), 0)).toBe(
-      'text-indent: -2ch;padding-left: calc(16px + 2ch);',
+    expect(lineStyleAt(collect(state), 0)).toBe(
+      'text-indent: -1ch;padding-left: calc(16px + 1ch);',
     );
 
     // Simulate `>>` adding 2 leading spaces.
     const next = state.update({ changes: { from: 0, insert: '  ' } }).state;
-    // Top-level lists stay at depth 1 even with leading whitespace, so the
-    // line styling stays the same — but the leading-whitespace replacement
-    // fires now and didn't before.
-    expect(lineStyleAt(collect(next, cursor + 2), 0)).toBe(
-      'text-indent: -2ch;padding-left: calc(16px + 2ch);',
+    // Top-level lists stay at depth 1 even with leading whitespace, but
+    // the prefix has grown — re-emit reflects the new sourceIndent.
+    expect(lineStyleAt(collect(next), 0)).toBe(
+      'text-indent: -5ch;padding-left: calc(16px + 5ch);',
     );
-    const wsReplace = collect(next, cursor + 2).find(
-      (d) => d.isReplace && d.from === 0 && d.to === 2,
-    );
-    expect(wsReplace).toBeDefined();
+    expect(collect(next).find((d) => d.isReplace && d.from === 0 && d.to === 1)).toBeDefined();
+    expect(collect(next).find((d) => d.isReplace && d.from === 1 && d.to === 2)).toBeDefined();
   });
 });
