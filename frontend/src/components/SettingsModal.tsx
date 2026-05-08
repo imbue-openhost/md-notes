@@ -1,6 +1,10 @@
 import { createSignal, type Component } from 'solid-js';
 import { Dialog } from '@kobalte/core';
 import { saveServerVimrc } from '../api/client';
+import {
+  getCollapseHeadersDefault,
+  setCollapseHeadersDefault,
+} from '../editor/editor-settings';
 
 interface WebSettingsProps {
   initialVimrc: string;
@@ -10,6 +14,7 @@ interface WebSettingsProps {
 
 export const WebSettingsModal: Component<WebSettingsProps> = (props) => {
   const [vimrc, setVimrc] = createSignal(props.initialVimrc);
+  const [collapseHeaders, setCollapseHeaders] = createSignal(getCollapseHeadersDefault());
   const [saving, setSaving] = createSignal(false);
 
   async function handleSave() {
@@ -17,6 +22,7 @@ export const WebSettingsModal: Component<WebSettingsProps> = (props) => {
     setSaving(true);
     try {
       await saveServerVimrc(value);
+      setCollapseHeadersDefault(collapseHeaders());
       props.onSaved(value);
     } catch (e) {
       alert(`Failed to save: ${e}`);
@@ -41,6 +47,19 @@ export const WebSettingsModal: Component<WebSettingsProps> = (props) => {
                   spellcheck={false}
                 />
                 <span class="settings-hint">Reload the editor for changes to take effect.</span>
+              </div>
+              <div class="settings-field">
+                <label class="settings-label">
+                  <input
+                    type="checkbox"
+                    checked={collapseHeaders()}
+                    onChange={(e) => setCollapseHeaders(e.currentTarget.checked)}
+                  />
+                  {' '}Open new docs with headers collapsed by default
+                </label>
+                <span class="settings-hint">
+                  Only applies to docs you haven't folded before; existing fold state takes precedence.
+                </span>
               </div>
             </div>
             <div class="settings-buttons">

@@ -1,11 +1,24 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { EditorState, Prec } from '@codemirror/state';
 import { markdown, markdownLanguage } from './lang-markdown/index';
 import { codeFolding, foldEffect, foldable } from '@codemirror/language';
 import { markdownFoldService } from './folding';
 import { _internal } from './fold-persistence';
 
-const { collectHeadings, currentFoldedPaths, applyPaths } = _internal;
+const { collectHeadings, currentFoldedPaths, applyPaths, hasStoredState, storageKey } = _internal;
+
+// Minimal in-memory localStorage shim — vitest runs under node without DOM.
+function installLocalStorageShim(): void {
+  const store = new Map<string, string>();
+  (globalThis as any).localStorage = {
+    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+    setItem: (k: string, v: string) => { store.set(k, String(v)); },
+    removeItem: (k: string) => { store.delete(k); },
+    clear: () => { store.clear(); },
+    key: (i: number) => Array.from(store.keys())[i] ?? null,
+    get length() { return store.size; },
+  };
+}
 
 function makeState(doc: string): EditorState {
   return EditorState.create({
@@ -81,6 +94,24 @@ describe('fold persistence path serialization', () => {
     const reopened = makeFakeView(makeState(edited));
     applyPaths(reopened, paths);
     expect(currentFoldedPaths(reopened.state)).toEqual([]);
+  });
+
+  it('hasStoredState distinguishes absent key from empty array', () => {
+    installLocalStorageShim();
+    const opts = { vault: 'v', filePath: 'a.md' };
+    expect(hasStoredState(opts)).toBe(false);
+
+    // Empty array stored — user folded then unfolded everything. This counts
+    // as "the user has a saved state for this doc" so the collapse-default
+    // preference should NOT override it.
+    localStorage.setItem(storageKey(opts), JSON.stringify([]));
+    expect(hasStoredState(opts)).toBe(true);
+
+    localStorage.setItem(storageKey(opts), JSON.stringify([['# A']]));
+    expect(hasStoredState(opts)).toBe(true);
+
+    localStorage.removeItem(storageKey(opts));
+    expect(hasStoredState(opts)).toBe(false);
   });
 
   it('disambiguates duplicate heading text by parent path', () => {
