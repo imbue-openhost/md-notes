@@ -117,8 +117,14 @@ export const App: Component = () => {
     const vaults = await fetchVaultListWithRetry();
     setVaultList(vaults);
 
+    // Per-tab last-vault: sessionStorage scopes to this tab, so a refresh keeps
+    // the same vault even if another tab has since selected a different one.
+    // Fall back to localStorage so a freshly opened tab/window still gets a
+    // reasonable default from the user's most recent choice.
     try {
-      const lastName = localStorage.getItem('mdnotes-last-vault');
+      const lastName =
+        sessionStorage.getItem('mdnotes-last-vault') ??
+        localStorage.getItem('mdnotes-last-vault');
       if (lastName) {
         const match = vaults.find((v) => v.name === lastName);
         if (match) { openVault(match); return; }
@@ -147,7 +153,12 @@ export const App: Component = () => {
     setVault(v);
     setShowVaultPicker(false);
     if (v.name) {
-      try { localStorage.setItem('mdnotes-last-vault', v.name); } catch {}
+      // Write to both: sessionStorage pins this tab's choice across refreshes,
+      // localStorage seeds future new tabs/windows with the most recent choice.
+      try {
+        sessionStorage.setItem('mdnotes-last-vault', v.name);
+        localStorage.setItem('mdnotes-last-vault', v.name);
+      } catch {}
     }
     if (v.sync && v.name) {
       createVault(v.name).catch(() => {});
