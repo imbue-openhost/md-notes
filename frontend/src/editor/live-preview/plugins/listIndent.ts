@@ -1,5 +1,5 @@
 import { syntaxTree } from '@codemirror/language';
-import { Range } from '@codemirror/state';
+import { EditorState, Range } from '@codemirror/state';
 import {
   Decoration,
   DecorationSet,
@@ -8,98 +8,133 @@ import {
   ViewUpdate,
 } from '@codemirror/view';
 
-// Each level of list nesting renders as this many character widths of indent,
-// regardless of the source's actual indent (2 spaces, 4 spaces, tabs, …).
+// Each level of list nesting renders this many character widths from the
+// previous level's bullet column.
 const VISUAL_INDENT = 4;
+// Reserved column width (in `ch`) for the bullet glyph + its trailing gap.
+// Must match `.cm-bullet { width }` in the theme — the value is what
+// text-indent compensates for to produce the hanging indent.
+const BULLET_COL = 2;
 
 /**
- * Visually scales list-item indentation by the nesting level reported by the
- * markdown parser, and gives each list line a hanging indent so wrapped
- * continuation lines align with the bullet's text rather than the left margin.
+ * Builds the list-indent decorations for a given state and visible ranges.
+ * Exported so unit tests can exercise it without a live EditorView.
+ */
+export function buildListIndentDecorations(
+  state: EditorState,
+  visibleRanges: readonly { from: number; to: number }[],
+): DecorationSet {
+  const decorations: Range<Decoration>[] = [];
+  const tree = syntaxTree(state);
+  const ranges = state.selection.ranges;
+
+  for (const { from, to } of visibleRanges) {
+    // tree.iterate fires `enter` for every overlapping ancestor, so we can
+    // start at 0 and let the enter/leave callbacks track depth — any list
+    // containing the visible range will itself overlap and be entered.
+    let listDepth = 0;
+
+    tree.iterate({
+      from,
+      to,
+      enter: (n) => {
+        if (n.name === 'BulletList' || n.name === 'OrderedList') {
+          listDepth++;
+        } else if (n.name === 'ListMark') {
+          const line = state.doc.lineAt(n.from);
+          const sourceIndent = /^[ \t]*/.exec(line.text)![0].length;
+          const afterMarker = line.text.slice(n.to - line.from);
+          const wsAfterMarker = /^[ \t]*/.exec(afterMarker)![0].length;
+          const levelIndent = (listDepth - 1) * VISUAL_INDENT;
+
+          // Hide leading whitespace and the space after the marker so the
+          // bullet/checkbox widget is the only visible glyph in the prefix.
+          // Their widths in proportional fonts are not 1ch, so leaving them
+          // visible makes text-indent over- or under-compensate. Reveal the
+          // raw source whenever the cursor sits anywhere in the prefix
+          // region (line start through the post-marker space) so the user
+          // can put the cursor in the leading whitespace and edit it.
+          const prefixEnd = n.to + wsAfterMarker;
+          const cursorInPrefix = ranges.some(
+            (r) => r.from <= prefixEnd && r.to >= line.from,
+          );
+          if (!cursorInPrefix) {
+            if (sourceIndent > 0) {
+              decorations.push(
+                Decoration.replace({}).range(line.from, line.from + sourceIndent),
+              );
+            }
+            if (wsAfterMarker > 0) {
+              decorations.push(
+                Decoration.replace({}).range(n.to, n.to + wsAfterMarker),
+              );
+            }
+          }
+
+          // padding-left puts wrapped continuation lines at the bullet text
+          // column. text-indent pulls the first line back to the bullet
+          // column itself; since the leading source whitespace and the
+          // post-marker space are now zero-width replacements, the bullet
+          // widget is char[0] and -BULLET_COL ch lands it exactly at
+          // 16px + levelIndent.
+          const style =
+            `text-indent: -${BULLET_COL}ch;` +
+            `padding-left: calc(16px + ${levelIndent + BULLET_COL}ch);`;
+
+          decorations.push(
+            Decoration.line({
+              attributes: { style },
+            }).range(line.from),
+          );
+        }
+      },
+      leave: (n) => {
+        if (n.name === 'BulletList' || n.name === 'OrderedList') {
+          listDepth--;
+        }
+      },
+    });
+  }
+
+  return Decoration.set(decorations, true);
+}
+
+/**
+ * Visually scales list-item indentation by the parser's nesting depth, and
+ * gives each list line a hanging indent so wrapped continuation lines align
+ * with the bullet's text rather than the line edge.
  *
- * Nesting: each list line gets enough extra `margin-left` so that nesting
- * depth N renders at `(N-1) * VISUAL_INDENT` character widths from the line
- * start. If the source already indents past the target, no margin is added.
+ * The plugin sets `padding-left` and `text-indent` on each list line so:
+ *   - the bullet sits at `(depth-1) * VISUAL_INDENT` ch from line start
+ *   - wrapped continuation lines start at the bullet text column
  *
- * Hanging indent: for every list line we set `text-indent: -<bulletWidth>ch`
- * combined with `padding-left: calc(16px + <bulletWidth>ch)` (16px matches
- * the theme's `.cm-line` left padding). The first rendered line is pulled
- * back to the normal start by the negative text-indent; wrapped lines aren't
- * affected by text-indent and so begin at the bullet-text column.
+ * To keep alignment deterministic in proportional fonts (where each source
+ * character's width != 1ch), the leading whitespace and the space following
+ * the marker are replaced by zero-width decorations, and the bullet widget
+ * itself has a fixed `BULLET_COL`-ch width (set in the theme). This way
+ * `text-indent: -BULLET_COL ch` compensates exactly for the bullet's box,
+ * regardless of which characters the source happens to contain.
  */
 export const listVisualIndentPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
 
     constructor(view: EditorView) {
-      this.decorations = this.build(view);
+      this.decorations = buildListIndentDecorations(view.state, view.visibleRanges);
     }
 
     update(update: ViewUpdate) {
       if (
         update.docChanged ||
         update.viewportChanged ||
+        update.selectionSet ||
         syntaxTree(update.startState) !== syntaxTree(update.state)
       ) {
-        this.decorations = this.build(update.view);
+        this.decorations = buildListIndentDecorations(
+          update.state,
+          update.view.visibleRanges,
+        );
       }
-    }
-
-    build(view: EditorView) {
-      const decorations: Range<Decoration>[] = [];
-      const { state } = view;
-      const tree = syntaxTree(state);
-
-      for (const { from, to } of view.visibleRanges) {
-        // tree.iterate fires `enter` for every overlapping ancestor, so we
-        // can start at 0 and let the enter/leave callbacks track depth —
-        // any list containing the visible range will itself overlap and
-        // be entered.
-        let listDepth = 0;
-
-        tree.iterate({
-          from,
-          to,
-          enter: (n) => {
-            if (n.name === 'BulletList' || n.name === 'OrderedList') {
-              listDepth++;
-            } else if (n.name === 'ListMark') {
-              const line = state.doc.lineAt(n.from);
-              const sourceIndent = /^[ \t]*/.exec(line.text)![0].length;
-              const markerLen = n.to - n.from;
-              // Whitespace immediately after the marker (typically one space).
-              const afterMarker = line.text.slice(n.to - line.from);
-              const wsAfterMarker = /^[ \t]*/.exec(afterMarker)![0].length;
-              const bulletWidth = sourceIndent + markerLen + wsAfterMarker;
-
-              const target = (listDepth - 1) * VISUAL_INDENT;
-              const nestPadding = Math.max(0, target - sourceIndent);
-
-              // margin-left — not padding-left — for nesting, so wrapped
-              // lines also shift right with the bullet. padding-left here
-              // drives the hanging indent; text-indent's negative value
-              // pulls the first line back to the normal start column.
-              const style =
-                `margin-left: ${nestPadding}ch;` +
-                `text-indent: -${bulletWidth}ch;` +
-                `padding-left: calc(16px + ${bulletWidth}ch);`;
-
-              decorations.push(
-                Decoration.line({
-                  attributes: { style },
-                }).range(line.from),
-              );
-            }
-          },
-          leave: (n) => {
-            if (n.name === 'BulletList' || n.name === 'OrderedList') {
-              listDepth--;
-            }
-          },
-        });
-      }
-
-      return Decoration.set(decorations, true);
     }
   },
   {

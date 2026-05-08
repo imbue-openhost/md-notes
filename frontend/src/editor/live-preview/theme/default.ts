@@ -104,9 +104,17 @@ export const editorTheme = EditorView.theme({
   },
 
   // ========== Bullet (unordered list) ==========
+  // Fixed inline-block width so listIndent's text-indent compensation is
+  // exact regardless of the editor font's bullet glyph metrics. Reset
+  // text-indent — the parent's negative value would otherwise inherit and
+  // pull the glyph out of its box (inline-block creates a new block
+  // formatting context and re-applies text-indent to its first line).
   '.cm-bullet': {
     color: 'hsl(var(--muted-foreground, 220 9% 46%))',
     fontWeight: '700',
+    display: 'inline-block',
+    width: '2ch',
+    textIndent: '0',
   },
 
   // ========== Inline Styles ==========
