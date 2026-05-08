@@ -1,4 +1,4 @@
-import { createSignal, createResource, onMount, onCleanup, Show, type Component } from 'solid-js';
+import { createSignal, createResource, createEffect, onMount, onCleanup, Show, type Component } from 'solid-js';
 import { createEditor, type EditorInstance } from './editor/editor';
 import {
   createShareLink, listShareLinks, deleteShareLink,
@@ -15,8 +15,20 @@ import { WebSettingsModal } from './components/SettingsModal';
 
 import DEFAULT_VIMRC from './default.vimrc?raw';
 
+const BASE_TITLE = 'md-notes';
+
+function fileLabel(path: string | null | undefined): string | null {
+  if (!path) return null;
+  const base = path.split('/').pop() || path;
+  return base.replace(/\.md$/i, '');
+}
+
 const ShareEditor: Component<{ uuid: string; info: ShareInfo }> = (props) => {
   let container!: HTMLDivElement;
+  createEffect(() => {
+    const name = fileLabel(props.info.doc_path);
+    document.title = name ? `${name} — Shared · ${BASE_TITLE}` : `Shared · ${BASE_TITLE}`;
+  });
   onMount(() => {
     createEditor(container, {
       vimrcContent: DEFAULT_VIMRC,
@@ -59,6 +71,18 @@ export const App: Component = () => {
   const [showWebSettings, setShowWebSettings] = createSignal(false);
 
   let layoutHandle: EditorLayoutHandle | undefined;
+
+  createEffect(() => {
+    const v = vault();
+    const file = fileLabel(currentDocPath());
+    if (v && file) {
+      document.title = `${file} — ${v.name} · ${BASE_TITLE}`;
+    } else if (v) {
+      document.title = `${v.name} · ${BASE_TITLE}`;
+    } else {
+      document.title = BASE_TITLE;
+    }
+  });
 
   async function boot() {
     try {
