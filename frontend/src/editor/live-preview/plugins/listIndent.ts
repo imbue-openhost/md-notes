@@ -14,13 +14,18 @@ const VISUAL_INDENT = 4;
 
 /**
  * Visually scales list-item indentation by the nesting level reported by the
- * markdown parser. Source content is unchanged; each list line gets enough
- * `padding-left` so that nesting depth N renders at `(N-1) * VISUAL_INDENT`
- * character widths from the line start.
+ * markdown parser, and gives each list line a hanging indent so wrapped
+ * continuation lines align with the bullet's text rather than the left margin.
  *
- * If the source already indents past the target (e.g. 4-space source for a
- * level-2 item where the target is also 4), no padding is added — we never
- * try to negatively offset.
+ * Nesting: each list line gets enough extra `margin-left` so that nesting
+ * depth N renders at `(N-1) * VISUAL_INDENT` character widths from the line
+ * start. If the source already indents past the target, no margin is added.
+ *
+ * Hanging indent: for every list line we set `text-indent: -<bulletWidth>ch`
+ * combined with `padding-left: calc(16px + <bulletWidth>ch)` (16px matches
+ * the theme's `.cm-line` left padding). The first rendered line is pulled
+ * back to the normal start by the negative text-indent; wrapped lines aren't
+ * affected by text-indent and so begin at the bullet-text column.
  */
 export const listVisualIndentPlugin = ViewPlugin.fromClass(
   class {
@@ -61,19 +66,29 @@ export const listVisualIndentPlugin = ViewPlugin.fromClass(
             } else if (n.name === 'ListMark') {
               const line = state.doc.lineAt(n.from);
               const sourceIndent = /^[ \t]*/.exec(line.text)![0].length;
+              const markerLen = n.to - n.from;
+              // Whitespace immediately after the marker (typically one space).
+              const afterMarker = line.text.slice(n.to - line.from);
+              const wsAfterMarker = /^[ \t]*/.exec(afterMarker)![0].length;
+              const bulletWidth = sourceIndent + markerLen + wsAfterMarker;
+
               const target = (listDepth - 1) * VISUAL_INDENT;
-              const padding = target - sourceIndent;
-              if (padding > 0) {
-                // margin-left, not padding-left — the editor theme already
-                // sets `.cm-line { padding: 0 16px }` and an inline
-                // padding-left would replace that, neutralising small
-                // offsets (e.g. 2ch ≈ 16px ⇒ no visible change at level 2).
-                decorations.push(
-                  Decoration.line({
-                    attributes: { style: `margin-left: ${padding}ch` },
-                  }).range(line.from),
-                );
-              }
+              const nestPadding = Math.max(0, target - sourceIndent);
+
+              // margin-left — not padding-left — for nesting, so wrapped
+              // lines also shift right with the bullet. padding-left here
+              // drives the hanging indent; text-indent's negative value
+              // pulls the first line back to the normal start column.
+              const style =
+                `margin-left: ${nestPadding}ch;` +
+                `text-indent: -${bulletWidth}ch;` +
+                `padding-left: calc(16px + ${bulletWidth}ch);`;
+
+              decorations.push(
+                Decoration.line({
+                  attributes: { style },
+                }).range(line.from),
+              );
             }
           },
           leave: (n) => {
