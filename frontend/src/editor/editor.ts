@@ -87,6 +87,7 @@ import {
   taskListPlugin,
   bulletListPlugin,
   listVisualIndentPlugin,
+  codeBlockField,
   editorTheme,
 } from './live-preview/index';
 
@@ -172,6 +173,7 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     taskListPlugin,
     bulletListPlugin,
     listVisualIndentPlugin,
+    codeBlockField({ interaction: 'inline' }),
 
     EditorView.domEventHandlers({
       keydown: (event) => {
