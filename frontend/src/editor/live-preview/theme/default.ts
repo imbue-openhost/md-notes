@@ -32,10 +32,10 @@ export const editorTheme = EditorView.theme({
 
   // ========== Selection Styles ==========
   '.cm-selectionBackground': {
-    backgroundColor: 'rgba(191, 219, 254, 0.25) !important',
+    backgroundColor: 'rgba(59, 130, 246, 0.25) !important',
   },
   '&.cm-focused .cm-selectionBackground': {
-    backgroundColor: 'rgba(191, 219, 254, 0.35) !important',
+    backgroundColor: 'rgba(59, 130, 246, 0.4) !important',
   },
 
   // ========== Inline Mark Animation ==========
