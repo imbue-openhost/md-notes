@@ -11,13 +11,14 @@ import { KeyBinding, keymap, EditorView } from '@codemirror/view';
 import { Language, LanguageSupport, LanguageDescription, syntaxTree } from '@codemirror/language';
 import { MarkdownExtension, MarkdownParser, parseCode } from '@lezer/markdown';
 import { commonmarkLanguage, markdownLanguage, mkLang, getCodeParser, headerIndent } from './markdown';
-import { insertNewlineContinueMarkup, deleteMarkupBackward } from './commands';
+import { insertNewlineContinueMarkup, deleteMarkupBackward, toggleBold } from './commands';
 
 export {
   commonmarkLanguage,
   markdownLanguage,
   insertNewlineContinueMarkup,
   deleteMarkupBackward,
+  toggleBold,
 };
 
 /// A small keymap with Markdown-specific bindings. Binds Enter to

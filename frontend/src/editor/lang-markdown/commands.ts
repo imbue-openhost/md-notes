@@ -7,6 +7,7 @@ import {
   countColumn,
   Line,
 } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 import { syntaxTree, indentUnit } from '@codemirror/language';
 import { SyntaxNode, Tree } from '@lezer/common';
 import { markdownLanguage } from './markdown';
@@ -312,3 +313,47 @@ export const deleteMarkupBackward: StateCommand = ({ state, dispatch }) => {
   dispatch(state.update(changes, { scrollIntoView: true, userEvent: 'delete' }));
   return true;
 };
+
+/// Toggle bold (`**...**`) on each selection range.
+///
+/// For non-empty ranges, if the range is already wrapped by `**` markers
+/// directly outside, those markers are removed; otherwise the range is
+/// wrapped with `**` on each side.
+///
+/// For empty ranges (cursors), inserts `****` and places the cursor between
+/// the markers so the user can type the bold text.
+export function toggleBold(view: EditorView): boolean {
+  const { state } = view;
+  const changes = state.changeByRange((range) => {
+    if (range.empty) {
+      const insert = '****';
+      return {
+        changes: { from: range.from, insert },
+        range: EditorSelection.cursor(range.from + 2),
+      };
+    }
+    const { from, to } = range;
+    const before = state.doc.sliceString(Math.max(0, from - 2), from);
+    const after = state.doc.sliceString(to, Math.min(state.doc.length, to + 2));
+    if (before === '**' && after === '**') {
+      // Already bolded — strip the surrounding `**` pair.
+      return {
+        changes: [
+          { from: from - 2, to: from, insert: '' },
+          { from: to, to: to + 2, insert: '' },
+        ],
+        range: EditorSelection.range(from - 2, to - 2),
+      };
+    }
+    // Wrap the selection.
+    return {
+      changes: [
+        { from, insert: '**' },
+        { from: to, insert: '**' },
+      ],
+      range: EditorSelection.range(from + 2, to + 2),
+    };
+  });
+  view.dispatch(state.update(changes, { scrollIntoView: true, userEvent: 'input' }));
+  return true;
+}

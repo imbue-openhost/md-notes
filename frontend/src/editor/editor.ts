@@ -8,7 +8,7 @@
 import { EditorState, Prec, type Extension } from '@codemirror/state';
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, undo as cmUndo, redo as cmRedo } from './commands/commands';
-import { markdown, markdownLanguage } from './lang-markdown/index';
+import { markdown, markdownLanguage, toggleBold } from './lang-markdown/index';
 import { languages } from '@codemirror/language-data';
 import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle, bracketMatching, foldNodeProp } from '@codemirror/language';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
@@ -124,9 +124,16 @@ Vim.defineAction('redo', (cm: any, actionArgs: any) => {
 function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
   return [
     // Run before vim so Tab/Shift-Tab on list lines work in any mode.
+    // Bold toggle (Mod-b) is also placed here so it wins over both vim's
+    // Ctrl-B page-up (in normal/visual mode) and the browser's default
+    // Ctrl-B (back/bookmarks). `Mod-b` maps to Cmd-b on mac and Ctrl-b
+    // elsewhere; we also bind `Ctrl-b` explicitly so mac users with an
+    // external keyboard get it on Ctrl-B too.
     Prec.highest(keymap.of([
       { key: 'Tab', run: indentListLines },
       { key: 'Shift-Tab', run: dedentListLines },
+      { key: 'Mod-b', run: toggleBold, preventDefault: true },
+      { key: 'Ctrl-b', run: toggleBold, preventDefault: true },
     ])),
 
     vimMode(vimrcContent),
