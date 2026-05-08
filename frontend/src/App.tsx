@@ -179,7 +179,7 @@ export const App: Component = () => {
         e.preventDefault();
         layoutHandle?.splitPane();
       }
-      if ((e.metaKey || e.ctrlKey) && key === 'o') {
+      if (e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && key === 'o') {
         e.preventDefault();
         e.stopPropagation();
         if (vault()) setShowQuickOpen(true);
