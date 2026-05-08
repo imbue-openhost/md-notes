@@ -444,8 +444,13 @@ export const editorTheme = EditorView.theme({
   '.cm-codeblock-copy-success': {
     color: 'hsl(142 76% 36%)',
   },
+  // --cb-indent (set by inline style on the line when nested in a list
+  // item) shifts both the text and the tint to start at the parent list's
+  // content column; default 0ch is a no-op for top-level code blocks.
   '.cm-codeblock-source': {
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    background:
+      'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0ch), rgba(139, 92, 246, 0.1) var(--cb-indent, 0ch))',
+    paddingLeft: 'calc(16px + var(--cb-indent, 0ch))',
     fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
     fontSize: '0.9em',
   },
@@ -484,12 +489,14 @@ export const editorTheme = EditorView.theme({
     userSelect: 'none',
   },
   '.cm-codeblock-content': {
-    backgroundColor: 'hsl(var(--muted, 220 14% 96%))',
+    // --cb-indent (inline-style on the line) shifts text and tint right
+    // when nested in a list item; defaults to 0 for top-level blocks.
+    background:
+      'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0ch), hsl(var(--muted, 220 14% 96%)) var(--cb-indent, 0ch))',
+    paddingLeft: 'calc(16px + var(--cb-indent, 0ch))',
     fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
     fontSize: '0.9em',
     lineHeight: '1.55',
-    // No left padding override — .cm-line already gives 16px.  Keep it so
-    // the syntax-highlight mark spans align with the editor gutter padding.
   },
   '.cm-codeblock-line-numbers': {
     counterReset: 'line',

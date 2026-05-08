@@ -10,6 +10,8 @@ export { mouseSelectingField, setMouseSelecting } from './core/mouseSelecting';
 export { shouldShowSource } from './core/shouldShowSource';
 export { checkUpdateAction } from './core/pluginUpdateHelper';
 export type { UpdateAction } from './core/pluginUpdateHelper';
+export { getListContext, getCodeBlockInListContext } from './core/listContext';
+export type { ListContext } from './core/listContext';
 
 // Plugins
 export { livePreviewPlugin } from './plugins/livePreview';

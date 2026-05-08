@@ -8,7 +8,7 @@
 import { EditorState, Prec, type Extension } from '@codemirror/state';
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, undo as cmUndo, redo as cmRedo } from './commands/commands';
-import { markdown, markdownLanguage, toggleBold } from './lang-markdown/index';
+import { markdown, markdownLanguage, toggleBold, insertNewlineInListCodeBlock } from './lang-markdown/index';
 import { languages } from '@codemirror/language-data';
 import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle, bracketMatching, foldNodeProp } from '@codemirror/language';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
@@ -130,6 +130,10 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
       { key: 'Tab', run: indentListLines },
       { key: 'Shift-Tab', run: dedentListLines },
       { key: 'Mod-b', run: toggleBold, preventDefault: true },
+      // Enter inside a code block nested in a list item: keep the new
+      // line indented to the parent list's content column, or close out
+      // and continue the list when on the closing fence line.
+      { key: 'Enter', run: insertNewlineInListCodeBlock },
     ])),
 
     vimMode(vimrcContent),
