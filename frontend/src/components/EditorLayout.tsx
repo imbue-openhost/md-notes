@@ -30,6 +30,7 @@ interface Props {
 let panelCounter = 0;
 
 const editorInstances = new Map<string, EditorInstance>();
+const panelScrollTops = new Map<string, number>();
 
 function layoutStorageKey(vaultName: string): string {
   return `mdnotes-layout-${vaultName}`;
@@ -150,11 +151,32 @@ export const EditorLayout: Component<Props> = (props) => {
   function handleReady(event: DockviewReadyEvent) {
     api = event.api;
 
+    let lastActivePanelId: string | undefined;
+
     api.onDidActivePanelChange((panel) => {
+      // Save scroll position of the panel we're leaving so it can be restored later.
+      if (lastActivePanelId && lastActivePanelId !== panel?.id) {
+        const prev = editorInstances.get(lastActivePanelId);
+        if (prev?.view) {
+          panelScrollTops.set(lastActivePanelId, prev.view.scrollDOM.scrollTop);
+        }
+      }
+      lastActivePanelId = panel?.id;
+
       props.onActiveFileChange((panel?.params as any)?.filePath ?? null);
       if (panel) {
         const entry = editorInstances.get(panel.id);
-        if (entry?.view) requestAnimationFrame(() => entry.view.focus());
+        if (entry?.view) {
+          // Restore on next frame: dockview may detach/reattach the panel DOM,
+          // which resets CM6's scrollDOM scrollTop to 0.
+          const saved = panelScrollTops.get(panel.id);
+          requestAnimationFrame(() => {
+            entry.view.focus();
+            if (saved !== undefined) {
+              entry.view.scrollDOM.scrollTop = saved;
+            }
+          });
+        }
       }
     });
 
@@ -164,6 +186,7 @@ export const EditorLayout: Component<Props> = (props) => {
         instance.destroy();
         editorInstances.delete(panel.id);
       }
+      panelScrollTops.delete(panel.id);
     });
 
     try {
@@ -187,6 +210,7 @@ export const EditorLayout: Component<Props> = (props) => {
       console.warn('dockview dispose threw:', e);
     }
     editorInstances.clear();
+    panelScrollTops.clear();
   });
 
   return (
