@@ -87,9 +87,22 @@ describe('listVisualIndentPlugin', () => {
     expect(replaces).toEqual([]);
   });
 
+  it('keeps source visible when the cursor is in the leading whitespace', () => {
+    // Cursor at 5 — between the two leading spaces of the depth-2 line.
+    const state = buildState('- a\n  - b\n');
+    const decos = collect(state, 5);
+    const replaces = decos.filter(
+      (d) => d.isReplace && d.from >= 4 && d.to <= 8,
+    );
+    expect(replaces).toEqual([]);
+  });
+
   it('reacts to indent changes — re-emits styling for the new doc', () => {
     const state = buildState('- hello\n');
-    expect(lineStyleAt(collect(state), 0)).toBe(
+    // Cursor away from the prefix so the prefix-reveal doesn't suppress
+    // the leading-whitespace replacement we want to assert on.
+    const cursor = 7;
+    expect(lineStyleAt(collect(state, cursor), 0)).toBe(
       'text-indent: -2ch;padding-left: calc(16px + 2ch);',
     );
 
@@ -98,10 +111,10 @@ describe('listVisualIndentPlugin', () => {
     // Top-level lists stay at depth 1 even with leading whitespace, so the
     // line styling stays the same — but the leading-whitespace replacement
     // fires now and didn't before.
-    expect(lineStyleAt(collect(next), 0)).toBe(
+    expect(lineStyleAt(collect(next, cursor + 2), 0)).toBe(
       'text-indent: -2ch;padding-left: calc(16px + 2ch);',
     );
-    const wsReplace = collect(next).find(
+    const wsReplace = collect(next, cursor + 2).find(
       (d) => d.isReplace && d.from === 0 && d.to === 2,
     );
     expect(wsReplace).toBeDefined();

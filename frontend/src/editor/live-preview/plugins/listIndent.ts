@@ -50,14 +50,15 @@ export function buildListIndentDecorations(
           // Hide leading whitespace and the space after the marker so the
           // bullet/checkbox widget is the only visible glyph in the prefix.
           // Their widths in proportional fonts are not 1ch, so leaving them
-          // visible makes text-indent over- or under-compensate. Skip the
-          // replacement when the cursor is on the marker — the bullet plugin
-          // reveals the raw `-` then, and we want the source to show as
-          // written.
-          const cursorOnMarker = ranges.some(
-            (r) => r.from <= n.to && r.to >= n.from,
+          // visible makes text-indent over- or under-compensate. Reveal the
+          // raw source whenever the cursor sits anywhere in the prefix
+          // region (line start through the post-marker space) so the user
+          // can put the cursor in the leading whitespace and edit it.
+          const prefixEnd = n.to + wsAfterMarker;
+          const cursorInPrefix = ranges.some(
+            (r) => r.from <= prefixEnd && r.to >= line.from,
           );
-          if (!cursorOnMarker) {
+          if (!cursorInPrefix) {
             if (sourceIndent > 0) {
               decorations.push(
                 Decoration.replace({}).range(line.from, line.from + sourceIndent),
