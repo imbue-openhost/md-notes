@@ -12,6 +12,7 @@ import { Sidebar } from './components/Sidebar';
 import { EditorLayout, type EditorLayoutHandle } from './components/EditorLayout';
 import { ShareModal } from './components/ShareModal';
 import { WebSettingsModal } from './components/SettingsModal';
+import { QuickOpen } from './components/QuickOpen';
 
 import DEFAULT_VIMRC from './default.vimrc?raw';
 
@@ -69,6 +70,7 @@ export const App: Component = () => {
   const [currentDocPath, setCurrentDocPath] = createSignal<string | null>(null);
   const [shareModalPath, setShareModalPath] = createSignal<string | null>(null);
   const [showWebSettings, setShowWebSettings] = createSignal(false);
+  const [showQuickOpen, setShowQuickOpen] = createSignal(false);
 
   let layoutHandle: EditorLayoutHandle | undefined;
 
@@ -201,6 +203,11 @@ export const App: Component = () => {
         e.preventDefault();
         layoutHandle?.splitPane();
       }
+      if (e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && key === 'o') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (vault()) setShowQuickOpen(true);
+      }
       if (e.ctrlKey && !e.metaKey && !e.shiftKey && key === 'h') {
         e.preventDefault();
         e.stopPropagation();
@@ -267,6 +274,13 @@ export const App: Component = () => {
           path={shareModalPath()!}
           vaultName={vault()?.name}
           onClose={() => setShareModalPath(null)}
+        />
+      </Show>
+
+      <Show when={vault() && showQuickOpen()}>
+        <QuickOpen
+          onSelect={(path) => layoutHandle?.openFile(path)}
+          onClose={() => setShowQuickOpen(false)}
         />
       </Show>
 

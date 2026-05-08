@@ -718,3 +718,61 @@ li.open > .sidebar-children {
   font-size: 13px;
   cursor: pointer;
 }
+
+/* ── Quick open palette ───────────────────────────────────── */
+.quick-open-modal {
+  position: fixed;
+  top: 15vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, 90vw);
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.quick-open-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  border: none;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  outline: none;
+  box-sizing: border-box;
+}
+
+.quick-open-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.quick-open-item {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-family: monospace;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quick-open-item.active {
+  background: hsl(var(--muted));
+}
+
+.quick-open-empty {
+  padding: 12px 14px;
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+}
