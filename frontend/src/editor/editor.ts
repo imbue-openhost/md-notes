@@ -8,7 +8,7 @@
 import { EditorState, Prec, type Extension } from '@codemirror/state';
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, undo as cmUndo, redo as cmRedo } from './commands/commands';
-import { markdown, markdownLanguage } from './lang-markdown/index';
+import { markdown, markdownLanguage, toggleBold } from './lang-markdown/index';
 import { languages } from '@codemirror/language-data';
 import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle, bracketMatching, foldNodeProp } from '@codemirror/language';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
@@ -124,9 +124,11 @@ Vim.defineAction('redo', (cm: any, actionArgs: any) => {
 function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
   return [
     // Run before vim so Tab/Shift-Tab on list lines work in any mode.
+    // Mod-b for bold also runs here so it wins over the browser default.
     Prec.highest(keymap.of([
       { key: 'Tab', run: indentListLines },
       { key: 'Shift-Tab', run: dedentListLines },
+      { key: 'Mod-b', run: toggleBold, preventDefault: true },
     ])),
 
     vimMode(vimrcContent),
