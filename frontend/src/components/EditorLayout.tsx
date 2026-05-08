@@ -134,7 +134,34 @@ export const EditorLayout: Component<Props> = (props) => {
 
     onMount(() => {
       const instance = props.createEditor(panelProps.params.filePath, container);
-      editorInstances.set(panelProps.api.id, instance);
+      const panelId = panelProps.api.id;
+      editorInstances.set(panelId, instance);
+
+      // Capture scroll on every scroll event. Reading scrollTop in
+      // onDidActivePanelChange is unreliable — by then dockview may have
+      // already detached the panel DOM, leaving scrollTop at 0.
+      const scrollDOM = instance.view.scrollDOM;
+      const onScroll = () => panelScrollTops.set(panelId, scrollDOM.scrollTop);
+      scrollDOM.addEventListener('scroll', onScroll, { passive: true });
+
+      // Restore scroll when the panel becomes visible again. Dockview
+      // detaches/reattaches the panel DOM on tab switches, which resets
+      // scrollTop to 0.
+      const restoreScroll = () => {
+        const saved = panelScrollTops.get(panelId);
+        if (saved === undefined) return;
+        requestAnimationFrame(() => {
+          scrollDOM.scrollTop = saved;
+        });
+      };
+      const visDisp = panelProps.api.onDidVisibilityChange((e) => {
+        if (e.isVisible) restoreScroll();
+      });
+
+      onCleanup(() => {
+        scrollDOM.removeEventListener('scroll', onScroll);
+        visDisp.dispose();
+      });
     });
 
     onCleanup(() => {
@@ -151,31 +178,12 @@ export const EditorLayout: Component<Props> = (props) => {
   function handleReady(event: DockviewReadyEvent) {
     api = event.api;
 
-    let lastActivePanelId: string | undefined;
-
     api.onDidActivePanelChange((panel) => {
-      // Save scroll position of the panel we're leaving so it can be restored later.
-      if (lastActivePanelId && lastActivePanelId !== panel?.id) {
-        const prev = editorInstances.get(lastActivePanelId);
-        if (prev?.view) {
-          panelScrollTops.set(lastActivePanelId, prev.view.scrollDOM.scrollTop);
-        }
-      }
-      lastActivePanelId = panel?.id;
-
       props.onActiveFileChange((panel?.params as any)?.filePath ?? null);
       if (panel) {
         const entry = editorInstances.get(panel.id);
         if (entry?.view) {
-          // Restore on next frame: dockview may detach/reattach the panel DOM,
-          // which resets CM6's scrollDOM scrollTop to 0.
-          const saved = panelScrollTops.get(panel.id);
-          requestAnimationFrame(() => {
-            entry.view.focus();
-            if (saved !== undefined) {
-              entry.view.scrollDOM.scrollTop = saved;
-            }
-          });
+          requestAnimationFrame(() => entry.view.focus());
         }
       }
     });
