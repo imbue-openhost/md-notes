@@ -19,65 +19,7 @@ const headingOverride = HighlightStyle.define([
   { tag: tags.heading, textDecoration: 'none' },
 ]);
 
-const LIST_LINE_RE = /^\s*(?:[-*+]|\d+[.)])\s/;
-
-function selectedLineRange(view: EditorView): { startLineNum: number; endLineNum: number } {
-  const { state } = view;
-  const sel = state.selection.main;
-  const startLine = state.doc.lineAt(sel.from);
-  const endLine = state.doc.lineAt(sel.to);
-  // Visual-line selections often end at the start of the line *after* the
-  // last visually-selected line. Don't include that trailing line.
-  const endLineNum =
-    sel.to > sel.from && sel.to === endLine.from && endLine.number > startLine.number
-      ? endLine.number - 1
-      : endLine.number;
-  return { startLineNum: startLine.number, endLineNum };
-}
-
-/**
- * Tab on a list line indents that line by one level (2 spaces). With a
- * multi-line selection, every selected list line is indented; non-list
- * lines in the selection are left alone. Returns false when nothing in
- * the selection is a list line, so default Tab behaviour still runs.
- */
-function indentListLines(view: EditorView): boolean {
-  const { state } = view;
-  const { startLineNum, endLineNum } = selectedLineRange(view);
-  const changes: { from: number; insert: string }[] = [];
-  for (let n = startLineNum; n <= endLineNum; n++) {
-    const line = state.doc.line(n);
-    if (LIST_LINE_RE.test(line.text)) {
-      changes.push({ from: line.from, insert: '  ' });
-    }
-  }
-  if (changes.length === 0) return false;
-  view.dispatch({ changes });
-  return true;
-}
-
-/**
- * Shift-Tab: dedent list line(s) by one level. Removes up to 2 leading
- * whitespace chars from each selected list line. Lines that aren't list
- * lines or have no leading whitespace are skipped; if no line gets
- * dedented, returns false so default Shift-Tab behaviour still runs.
- */
-function dedentListLines(view: EditorView): boolean {
-  const { state } = view;
-  const { startLineNum, endLineNum } = selectedLineRange(view);
-  const changes: { from: number; to: number; insert: string }[] = [];
-  for (let n = startLineNum; n <= endLineNum; n++) {
-    const line = state.doc.line(n);
-    if (!LIST_LINE_RE.test(line.text)) continue;
-    const ws = /^[ \t]*/.exec(line.text)![0];
-    if (ws.length === 0) continue;
-    const remove = Math.min(2, ws.length);
-    changes.push({ from: line.from, to: line.from + remove, insert: '' });
-  }
-  if (changes.length === 0) return false;
-  view.dispatch({ changes });
-  return true;
-}
+import { handleTab, handleShiftTab } from './tab';
 
 import {
   collapseOnSelectionFacet,
@@ -123,10 +65,11 @@ Vim.defineAction('redo', (cm: any, actionArgs: any) => {
 
 function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
   return [
-    // Run before vim so Tab/Shift-Tab on list lines work in any mode.
+    // Run before vim so Tab/Shift-Tab are always consumed by the editor
+    // (regardless of vim mode), never bubbling to the browser.
     Prec.highest(keymap.of([
-      { key: 'Tab', run: indentListLines },
-      { key: 'Shift-Tab', run: dedentListLines },
+      { key: 'Tab', run: handleTab, preventDefault: true },
+      { key: 'Shift-Tab', run: handleShiftTab, preventDefault: true },
     ])),
 
     vimMode(vimrcContent),
