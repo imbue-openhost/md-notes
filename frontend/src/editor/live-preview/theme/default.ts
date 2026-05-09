@@ -103,28 +103,41 @@ export const editorTheme = EditorView.theme({
     textDecoration: 'none',
   },
 
-  // ========== Bullet (unordered list) ==========
-  // Fixed inline-block width so listIndent's text-indent compensation is
-  // exact regardless of the editor font's bullet glyph metrics. Reset
-  // text-indent — the parent's negative value would otherwise inherit and
-  // pull the glyph out of its box (inline-block creates a new block
-  // formatting context and re-applies text-indent to its first line).
-  '.cm-bullet': {
-    color: 'hsl(var(--muted-foreground, 220 9% 46%))',
-    fontWeight: '700',
-    display: 'inline-block',
-    width: '1ch',
-    textIndent: '0',
+  // ========== List bullet ==========
+  // The marker widget renders `<span class="list-bullet">-</span> ` —
+  // literal dash in the DOM (so copy yields `-`, like Obsidian's source).
+  // Same CSS pattern Obsidian uses: hide the dash glyph with
+  // color: transparent; make the span an inline-flex centering box; use
+  // ::before with a zero-width space so the flex container takes its
+  // natural line height; draw the actual bullet shape with ::after as a
+  // small filled circle (no glyph required → consistent across fonts).
+  '.list-bullet': {
+    color: 'transparent',
+    position: 'relative',
+    display: 'inline-flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  '.list-bullet::before': {
+    content: '"\\200B"',
+  },
+  '.list-bullet::after': {
+    position: 'absolute',
+    content: '"\\200B"',
+    pointerEvents: 'none',
+    width: '5px',
+    height: '5px',
+    borderRadius: '50%',
+    backgroundColor: 'hsl(var(--muted-foreground, 220 9% 46%))',
+    transition: 'transform 0.15s, box-shadow 0.15s',
   },
 
-  // List-indent spacer: a 1-char-wide invisible widget that the listIndent
-  // plugin uses to replace each leading-whitespace char in a list line.
-  // Fixed `width: 2ch` keeps the bullet column stable regardless of cursor
-  // position or proportional-font widths, while still leaving a real cursor
-  // landing position at every char boundary.
-  '.cm-list-indent-ws': {
-    display: 'inline-block',
-    width: '2ch',
+  // Leading-whitespace span on a list line. The widget DOM holds
+  // `2 × sourceIndent` literal space chars; width comes from those chars
+  // rendering at their natural font width.
+  '.cm-hmd-list-indent': {
+    // No width — the literal spaces inside provide the visual width.
+    // Reserved as a styling hook for future depth-specific rules.
   },
 
   // ========== Inline Styles ==========
@@ -467,8 +480,8 @@ export const editorTheme = EditorView.theme({
   // content column; default 0ch is a no-op for top-level code blocks.
   '.cm-codeblock-source': {
     background:
-      'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0ch), rgba(139, 92, 246, 0.1) var(--cb-indent, 0ch))',
-    paddingLeft: 'calc(16px + var(--cb-indent, 0ch))',
+      'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0px), rgba(139, 92, 246, 0.1) var(--cb-indent, 0px))',
+    paddingLeft: 'calc(16px + var(--cb-indent, 0px))',
     fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
     fontSize: '0.9em',
   },
@@ -510,8 +523,8 @@ export const editorTheme = EditorView.theme({
     // --cb-indent (inline-style on the line) shifts text and tint right
     // when nested in a list item; defaults to 0 for top-level blocks.
     background:
-      'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0ch), hsl(var(--muted, 220 14% 96%)) var(--cb-indent, 0ch))',
-    paddingLeft: 'calc(16px + var(--cb-indent, 0ch))',
+      'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0px), hsl(var(--muted, 220 14% 96%)) var(--cb-indent, 0px))',
+    paddingLeft: 'calc(16px + var(--cb-indent, 0px))',
     fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
     fontSize: '0.9em',
     lineHeight: '1.55',

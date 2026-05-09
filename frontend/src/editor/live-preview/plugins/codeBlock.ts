@@ -24,6 +24,7 @@ import {
 import { shouldShowSource } from '../core/shouldShowSource';
 import { mouseSelectingField } from '../core/mouseSelecting';
 import { getCodeBlockInListContext } from '../core/listContext';
+import { spaceWidth, setSpaceWidth } from '../core/spaceWidth';
 import {
   createCodeBlockSourceToggleWidget,
   createCodeBlockWidget,
@@ -132,7 +133,7 @@ class CodeBlockHeaderWidget extends WidgetType {
     readonly from: number,
     readonly to: number,
     readonly showCopyButton: boolean,
-    readonly indentCh: number = 0,
+    readonly indentPx: number = 0,
   ) {
     super();
   }
@@ -144,14 +145,14 @@ class CodeBlockHeaderWidget extends WidgetType {
       other.from === this.from &&
       other.to === this.to &&
       other.showCopyButton === this.showCopyButton &&
-      other.indentCh === this.indentCh
+      other.indentPx === this.indentPx
     );
   }
 
   toDOM(view?: EditorView): HTMLElement {
     const header = document.createElement('div');
     header.className = 'cm-codeblock-header';
-    if (this.indentCh > 0) header.style.marginLeft = `${this.indentCh}ch`;
+    if (this.indentPx > 0) header.style.marginLeft = `${this.indentPx}px`;
 
     // Language badge
     if (this.language && this.language !== 'text') {
@@ -228,18 +229,18 @@ class CodeBlockHeaderWidget extends WidgetType {
  * Visual element: rounded bottom + background color
  */
 class CodeBlockFooterWidget extends WidgetType {
-  constructor(readonly indentCh: number = 0) {
+  constructor(readonly indentPx: number = 0) {
     super();
   }
 
   eq(other: CodeBlockFooterWidget): boolean {
-    return other.indentCh === this.indentCh;
+    return other.indentPx === this.indentPx;
   }
 
   toDOM(): HTMLElement {
     const footer = document.createElement('div');
     footer.className = 'cm-codeblock-footer';
-    if (this.indentCh > 0) footer.style.marginLeft = `${this.indentCh}ch`;
+    if (this.indentPx > 0) footer.style.marginLeft = `${this.indentPx}px`;
     return footer;
   }
 
@@ -340,10 +341,17 @@ function buildCodeBlockInlineDecorations(
       // visual indent so its widgets and lines align with the list's
       // content column. Source-mode lines also get the same indent so
       // toggling between modes doesn't shift the block sideways.
+      //
+      // Visual prefix = (sourceIndent × 2 + markerLength) × spaceWidth.
+      // contentColumn = sourceIndent + markerLength, so:
+      //   visualPx = (listMarkerIndent + contentColumn) × spaceWidth.
       const inListCtx = getCodeBlockInListContext(state, node.from);
-      const indentCh = inListCtx ? inListCtx.list.contentColumn : 0;
-      const indentStyle = indentCh > 0
-        ? `--cb-indent: ${indentCh}ch;`
+      const sw = spaceWidth(state);
+      const indentPx = inListCtx
+        ? (inListCtx.list.listMarkerIndent + inListCtx.list.contentColumn) * sw
+        : 0;
+      const indentStyle = indentPx > 0
+        ? `--cb-indent: ${indentPx}px;`
         : '';
 
       if (showSource) {
@@ -383,7 +391,7 @@ function buildCodeBlockInlineDecorations(
           node.from,
           node.to,
           options.copyButton,
-          indentCh,
+          indentPx,
         );
         decorations.push(
           Decoration.replace({
@@ -424,7 +432,7 @@ function buildCodeBlockInlineDecorations(
         // 4. Replace closing fence line with footer widget.
         //    Use inclusiveStart so the cursor cannot land between
         //    the last content line and the footer.
-        const footerWidget = new CodeBlockFooterWidget(indentCh);
+        const footerWidget = new CodeBlockFooterWidget(indentPx);
         decorations.push(
           Decoration.replace({
             widget: footerWidget,
@@ -554,11 +562,15 @@ function createCodeBlockField(
     },
 
     update(deco, tr) {
-      // Rebuild on document or config change
+      // Rebuild on document, config, source-mode toggle, or measured
+      // space-width change (the latter shifts every list-nested code
+      // block's --cb-indent and the header/footer widget margins).
       if (
         tr.docChanged ||
         tr.reconfigured ||
-        tr.effects.some((effect) => effect.is(setCodeBlockSourceMode))
+        tr.effects.some(
+          (effect) => effect.is(setCodeBlockSourceMode) || effect.is(setSpaceWidth),
+        )
       ) {
         return buildFn(tr.state, options);
       }

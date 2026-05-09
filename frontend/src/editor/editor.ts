@@ -27,8 +27,9 @@ import {
   setMouseSelecting,
   markdownStylePlugin,
   taskListPlugin,
-  bulletListPlugin,
   listVisualIndentPlugin,
+  spaceWidthField,
+  spaceWidthMeasurer,
   codeBlockField,
   editorTheme,
 } from './live-preview/index';
@@ -116,9 +117,10 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     collapseOnSelectionFacet.of(true),
     mouseSelectingField,
     editorTheme,
+    spaceWidthField,
+    spaceWidthMeasurer,
     markdownStylePlugin,
     taskListPlugin,
-    bulletListPlugin,
     listVisualIndentPlugin,
     codeBlockField({ interaction: 'inline' }),
 

@@ -8,11 +8,21 @@ import {
   ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
+import { listLineLayout } from '../core/listLineLayout';
+import { spaceWidthField } from '../core/spaceWidth';
+
+// Visual pixel width of the rendered checkbox widget plus its
+// margin-right. Used for the task line's hanging-indent math so wrapped
+// task text lines up under the task's text column rather than under the
+// checkbox. Empirical: native `<input type=checkbox>` is ~13–16px across
+// browsers/OSes; the theme adds a 0.4em right margin (~6.4px at 16px).
+// One value is fine — checkboxes don't scale with the editor font.
+const CHECKBOX_PX = 22;
 
 class CheckboxWidget extends WidgetType {
   constructor(
     readonly checked: boolean,
-    readonly from: number
+    readonly from: number,
   ) {
     super();
   }
@@ -37,15 +47,15 @@ class CheckboxWidget extends WidgetType {
   }
 
   ignoreEvent() {
-    // Let the widget handle its own click; don't forward to the editor.
     return true;
   }
 }
 
 /**
- * Renders GFM task list markers (`[ ]` / `[x]`) as real checkbox widgets,
- * regardless of cursor position. Lines whose marker is checked get a
- * `cm-task-checked` class so the theme can strike them through.
+ * GFM task list rendering. Reuses the shared list-line layout (so indent,
+ * line `text-indent`/`padding-inline-start`, and depth class match a
+ * non-task bullet at the same nesting depth) and overlays a checkbox
+ * widget that replaces the `- [ ]` marker run.
  */
 export const taskListPlugin = ViewPlugin.fromClass(
   class {
@@ -56,11 +66,15 @@ export const taskListPlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
+      const spaceWidthChanged =
+        update.startState.field(spaceWidthField, false) !==
+        update.state.field(spaceWidthField, false);
       if (
         update.docChanged ||
         update.viewportChanged ||
         update.selectionSet ||
-        syntaxTree(update.startState) !== syntaxTree(update.state)
+        syntaxTree(update.startState) !== syntaxTree(update.state) ||
+        spaceWidthChanged
       ) {
         this.decorations = this.build(update.view);
       }
@@ -72,35 +86,58 @@ export const taskListPlugin = ViewPlugin.fromClass(
       const ranges = state.selection.ranges;
       const tree = syntaxTree(state);
 
-      // Iterate only the visible viewport ranges. On a 1.5MB file, walking the
-      // full tree on every selection/viewport change costs hundreds of ms and
-      // throttles cursor movement to a few updates per second.
       for (const { from, to } of view.visibleRanges) {
+        let listDepth = 0;
         tree.iterate({
           from,
           to,
           enter: (node) => {
+            if (node.name === 'BulletList' || node.name === 'OrderedList') {
+              listDepth++;
+              return;
+            }
             if (node.name !== 'TaskMarker') return;
 
             const text = state.doc.sliceString(node.from, node.to);
             const checked = /^\[[xX]\]$/.test(text);
 
             const line = state.doc.lineAt(node.from);
-            const prefix = state.doc.sliceString(line.from, node.from);
-            const bulletMatch = prefix.match(/^(\s*)(?:[-*+]|\d+[.)])\s+$/);
-            const replaceFrom = bulletMatch
-              ? line.from + bulletMatch[1].length
-              : node.from;
+            const prefix = line.text.slice(0, node.from - line.from);
+            // Marker run on the source line: leading WS, the list marker
+            // (`-`/`*`/`+`/`N.`), and the whitespace before `[ ]`.
+            const bulletMatch = prefix.match(/^(\s*)([-*+]|\d+[.)])(\s+)$/);
+            if (!bulletMatch) return;
+
+            const indentLen = bulletMatch[1].length;
+            const markLen = bulletMatch[2].length;
+            const listMarkFrom = line.from + indentLen;
+            const listMarkTo = listMarkFrom + markLen;
+
+            const layout = listLineLayout(
+              state,
+              line,
+              { from: listMarkFrom, to: listMarkTo },
+              listDepth,
+              CHECKBOX_PX,
+            );
+            if (layout.indentDecoration) decorations.push(layout.indentDecoration);
+            decorations.push(layout.lineDecoration);
+
+            // Checkbox replaces from the bullet through `[ ]`. We don't
+            // include the trailing space after the checkbox so the cursor
+            // can land between the checkbox and the task text.
+            const replaceFrom = listMarkFrom;
+            const replaceTo = node.to;
 
             const cursorOnMarker = ranges.some(
-              (r) => r.from <= node.to && r.to >= replaceFrom
+              (r) => r.from <= replaceTo && r.to >= replaceFrom,
             );
 
             if (!cursorOnMarker) {
               decorations.push(
                 Decoration.replace({
                   widget: new CheckboxWidget(checked, node.from),
-                }).range(replaceFrom, node.to)
+                }).range(replaceFrom, replaceTo),
               );
             }
 
@@ -110,17 +147,20 @@ export const taskListPlugin = ViewPlugin.fromClass(
               const markFrom = node.to + leadingWs;
               if (markFrom < line.to) {
                 decorations.push(
-                  Decoration.mark({ class: 'cm-task-checked' }).range(markFrom, line.to)
+                  Decoration.mark({ class: 'cm-task-checked' }).range(markFrom, line.to),
                 );
               }
             }
+          },
+          leave: (node) => {
+            if (node.name === 'BulletList' || node.name === 'OrderedList') listDepth--;
           },
         });
       }
 
       return Decoration.set(
         decorations.sort((a, b) => a.from - b.from),
-        true
+        true,
       );
     }
   },
@@ -130,5 +170,5 @@ export const taskListPlugin = ViewPlugin.fromClass(
       EditorView.atomicRanges.of((view) => {
         return view.plugin(plugin)?.decorations || Decoration.none;
       }),
-  }
+  },
 );

@@ -75,25 +75,28 @@ describe('codeBlock decorations: nested in list item', () => {
     }
   });
 
-  it('list-nested code block sets --cb-indent on content lines', () => {
+  it('list-nested code block sets --cb-indent (in px) on content lines', () => {
+    // visualPx = (listMarkerIndent + contentColumn) × spaceWidth.
+    // Top-level list: listMarkerIndent=0, contentColumn=2, sw=4 → 8px.
     const doc = '- ```python\n  x = 1\n  ```\n';
     const state = buildState(doc);
     const decos = collectDecorations(state);
     const contentLines = decos.filter((d) => d.cls?.includes('cm-codeblock-content'));
     expect(contentLines.length).toBeGreaterThan(0);
     for (const d of contentLines) {
-      expect(d.style ?? '').toContain('--cb-indent: 2ch');
+      expect(d.style ?? '').toContain('--cb-indent: 8px');
     }
   });
 
   it('deeper nesting uses the inner list item content column', () => {
+    // Inner list-item: listMarkerIndent=2, contentColumn=4, sw=4 → 24px.
     const doc = '- a\n  - ```python\n    x\n    ```\n';
     const state = buildState(doc);
     const decos = collectDecorations(state);
     const contentLines = decos.filter((d) => d.cls?.includes('cm-codeblock-content'));
     expect(contentLines.length).toBeGreaterThan(0);
     for (const d of contentLines) {
-      expect(d.style ?? '').toContain('--cb-indent: 4ch');
+      expect(d.style ?? '').toContain('--cb-indent: 24px');
     }
   });
 });

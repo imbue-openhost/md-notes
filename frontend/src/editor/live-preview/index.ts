@@ -12,12 +12,12 @@ export { checkUpdateAction } from './core/pluginUpdateHelper';
 export type { UpdateAction } from './core/pluginUpdateHelper';
 export { getListContext, getCodeBlockInListContext } from './core/listContext';
 export type { ListContext } from './core/listContext';
+export { spaceWidthField, spaceWidthMeasurer, spaceWidth, setSpaceWidth } from './core/spaceWidth';
 
 // Plugins
 export { livePreviewPlugin } from './plugins/livePreview';
 export { markdownStylePlugin } from './plugins/markdownStyle';
 export { taskListPlugin } from './plugins/task';
-export { bulletListPlugin } from './plugins/bullet';
 export { listVisualIndentPlugin } from './plugins/listIndent';
 export { codeBlockField } from './plugins/codeBlock';
 export type { CodeBlockOptions } from './plugins/codeBlock';
