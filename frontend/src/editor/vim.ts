@@ -47,7 +47,7 @@ export interface ActionLineRange {
  * mode (clearing the CM selection) before the ex handler runs, so the line
  * range is passed in via `range` instead of read from `state.selection`.
  */
-function toggleTaskAtSelection(view: EditorView, range?: ActionLineRange): boolean {
+export function toggleTaskAtSelection(view: EditorView, range?: ActionLineRange): boolean {
   const { state } = view;
 
   let startLineNum: number;

@@ -38,7 +38,7 @@ import { markdownFolding } from './folding';
 import { foldPersistence } from './fold-persistence';
 import { Vim } from '@replit/codemirror-vim';
 
-import { vimMode } from './vim';
+import { vimMode, toggleTaskAtSelection } from './vim';
 import { createSyncSession, createShareSyncSession, undoRedoFacet, type SyncSession } from './sync';
 
 Vim.defineAction('undo', (cm: any, actionArgs: any) => {
@@ -74,6 +74,7 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
       { key: 'Tab', run: handleTab, preventDefault: true },
       { key: 'Shift-Tab', run: handleShiftTab, preventDefault: true },
       { key: 'Mod-b', run: toggleBold, preventDefault: true },
+      { key: 'Mod-l', run: (view) => toggleTaskAtSelection(view), preventDefault: true },
       // Enter inside a code block nested in a list item: keep the new
       // line indented to the parent list's content column, or close out
       // and continue the list when on the closing fence line.
