@@ -106,8 +106,12 @@ function findListItemAncestor(
 export function buildListIndentDecorations(
   state: EditorState,
   visibleRanges: readonly { from: number; to: number }[],
-): DecorationSet {
+): { decorations: DecorationSet; atomic: DecorationSet } {
   const decorations: Range<Decoration>[] = [];
+  // Only the replace widgets should be atomic. The cm-list-N mark below
+  // covers the whole text region of a list line — if it ended up in
+  // atomicRanges, Backspace would delete the entire line text in one shot.
+  const atomicDecorations: Range<Decoration>[] = [];
   const tree = syntaxTree(state);
   const ranges = state.selection.ranges;
   // Track which line numbers were handled as marker lines so the
@@ -137,7 +141,10 @@ export function buildListIndentDecorations(
         markerLineNums.add(line.number);
 
         const layout = listLineLayout(state, line, n, listDepth);
-        if (layout.indentDecoration) decorations.push(layout.indentDecoration);
+        if (layout.indentDecoration) {
+          decorations.push(layout.indentDecoration);
+          atomicDecorations.push(layout.indentDecoration);
+        }
         decorations.push(layout.lineDecoration);
 
         const markerText = state.doc.sliceString(n.from, n.to);
@@ -151,9 +158,12 @@ export function buildListIndentDecorations(
           const widget = isOrdered
             ? new OrderedMarkerWidget(markerText, listDepth)
             : new BulletMarkerWidget(listDepth);
-          decorations.push(
-            Decoration.replace({ widget }).range(layout.markerFrom, layout.markerEnd),
+          const markerDeco = Decoration.replace({ widget }).range(
+            layout.markerFrom,
+            layout.markerEnd,
           );
+          decorations.push(markerDeco);
+          atomicDecorations.push(markerDeco);
         }
 
         // Mark the rest of the line text with cm-list-N. Empty list items
@@ -207,9 +217,9 @@ export function buildListIndentDecorations(
 
       const lineSourceIndent = /^[ \t]*/.exec(line.text)![0].length;
       if (lineSourceIndent > 0) {
-        decorations.push(
-          hideLeadingWs.range(line.from, line.from + lineSourceIndent),
-        );
+        const wsDeco = hideLeadingWs.range(line.from, line.from + lineSourceIndent);
+        decorations.push(wsDeco);
+        atomicDecorations.push(wsDeco);
       }
       // Match the marker line's hanging-indent math: text-indent pulls
       // first-line content back to the natural cm-line margin, padding
@@ -226,15 +236,21 @@ export function buildListIndentDecorations(
     }
   }
 
-  return Decoration.set(decorations.sort((a, b) => a.from - b.from), true);
+  return {
+    decorations: Decoration.set(decorations.sort((a, b) => a.from - b.from), true),
+    atomic: Decoration.set(atomicDecorations.sort((a, b) => a.from - b.from), true),
+  };
 }
 
 export const listVisualIndentPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    atomic: DecorationSet;
 
     constructor(view: EditorView) {
-      this.decorations = buildListIndentDecorations(view.state, view.visibleRanges);
+      const built = buildListIndentDecorations(view.state, view.visibleRanges);
+      this.decorations = built.decorations;
+      this.atomic = built.atomic;
     }
 
     update(update: ViewUpdate) {
@@ -248,10 +264,12 @@ export const listVisualIndentPlugin = ViewPlugin.fromClass(
         syntaxTree(update.startState) !== syntaxTree(update.state) ||
         spaceWidthChanged
       ) {
-        this.decorations = buildListIndentDecorations(
+        const built = buildListIndentDecorations(
           update.state,
           update.view.visibleRanges,
         );
+        this.decorations = built.decorations;
+        this.atomic = built.atomic;
       }
     }
   },
@@ -259,7 +277,7 @@ export const listVisualIndentPlugin = ViewPlugin.fromClass(
     decorations: (v) => v.decorations,
     provide: (plugin) =>
       EditorView.atomicRanges.of((view) => {
-        return view.plugin(plugin)?.decorations || Decoration.none;
+        return view.plugin(plugin)?.atomic || Decoration.none;
       }),
   },
 );

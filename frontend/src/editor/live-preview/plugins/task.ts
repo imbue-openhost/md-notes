@@ -60,9 +60,12 @@ class CheckboxWidget extends WidgetType {
 export const taskListPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    atomic: DecorationSet;
 
     constructor(view: EditorView) {
-      this.decorations = this.build(view);
+      const built = this.build(view);
+      this.decorations = built.decorations;
+      this.atomic = built.atomic;
     }
 
     update(update: ViewUpdate) {
@@ -76,12 +79,18 @@ export const taskListPlugin = ViewPlugin.fromClass(
         syntaxTree(update.startState) !== syntaxTree(update.state) ||
         spaceWidthChanged
       ) {
-        this.decorations = this.build(update.view);
+        const built = this.build(update.view);
+        this.decorations = built.decorations;
+        this.atomic = built.atomic;
       }
     }
 
-    build(view: EditorView) {
+    build(view: EditorView): { decorations: DecorationSet; atomic: DecorationSet } {
       const decorations: Range<Decoration>[] = [];
+      // Only replace widgets are atomic. The cm-task-checked mark covers
+      // the whole text region of a checked task line — letting it into
+      // atomicRanges would cause Backspace to delete the entire line text.
+      const atomicDecorations: Range<Decoration>[] = [];
       const { state } = view;
       const ranges = state.selection.ranges;
       const tree = syntaxTree(state);
@@ -120,7 +129,10 @@ export const taskListPlugin = ViewPlugin.fromClass(
               listDepth,
               CHECKBOX_PX,
             );
-            if (layout.indentDecoration) decorations.push(layout.indentDecoration);
+            if (layout.indentDecoration) {
+              decorations.push(layout.indentDecoration);
+              atomicDecorations.push(layout.indentDecoration);
+            }
             decorations.push(layout.lineDecoration);
 
             // Checkbox replaces from the bullet through `[ ]`. We don't
@@ -134,11 +146,11 @@ export const taskListPlugin = ViewPlugin.fromClass(
             );
 
             if (!cursorOnMarker) {
-              decorations.push(
-                Decoration.replace({
-                  widget: new CheckboxWidget(checked, node.from),
-                }).range(replaceFrom, replaceTo),
-              );
+              const checkboxDeco = Decoration.replace({
+                widget: new CheckboxWidget(checked, node.from),
+              }).range(replaceFrom, replaceTo);
+              decorations.push(checkboxDeco);
+              atomicDecorations.push(checkboxDeco);
             }
 
             if (checked) {
@@ -158,17 +170,17 @@ export const taskListPlugin = ViewPlugin.fromClass(
         });
       }
 
-      return Decoration.set(
-        decorations.sort((a, b) => a.from - b.from),
-        true,
-      );
+      return {
+        decorations: Decoration.set(decorations.sort((a, b) => a.from - b.from), true),
+        atomic: Decoration.set(atomicDecorations.sort((a, b) => a.from - b.from), true),
+      };
     }
   },
   {
     decorations: (v) => v.decorations,
     provide: (plugin) =>
       EditorView.atomicRanges.of((view) => {
-        return view.plugin(plugin)?.decorations || Decoration.none;
+        return view.plugin(plugin)?.atomic || Decoration.none;
       }),
   },
 );

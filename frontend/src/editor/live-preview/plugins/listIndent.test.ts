@@ -31,8 +31,8 @@ function buildState(doc: string, cursor = 0) {
 
 function collect(state: EditorState, cursor = 0): DecoSpec[] {
   const s = state.update({ selection: EditorSelection.cursor(cursor) }).state;
-  const set = buildListIndentDecorations(s, [{ from: 0, to: s.doc.length }]);
-  return iter(set);
+  const { decorations } = buildListIndentDecorations(s, [{ from: 0, to: s.doc.length }]);
+  return iter(decorations);
 }
 
 function iter(set: DecorationSet): DecoSpec[] {
@@ -170,8 +170,8 @@ describe('listVisualIndentPlugin', () => {
     });
     // CommonMark parses `  - b` as a top-level (depth-1) list with
     // sourceIndent=2. prefixPx = (2 × 2 + 2) × 4 = 24; padding adds 16.
-    const set = buildListIndentDecorations(state, [{ from: 0, to: state.doc.length }]);
-    const decos = iter(set);
+    const { decorations } = buildListIndentDecorations(state, [{ from: 0, to: state.doc.length }]);
+    const decos = iter(decorations);
     expect(lineStyleAt(decos, 0)).toBe(
       `text-indent: -24px; padding-inline-start: 40px;`,
     );
