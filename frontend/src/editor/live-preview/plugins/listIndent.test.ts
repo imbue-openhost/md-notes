@@ -8,6 +8,8 @@ import { buildListIndentDecorations } from './listIndent';
 // `spaceWidth` falls back to 4 when the field isn't installed (jsdom can't
 // measure layout). Encode that here so the px math is predictable.
 const SW = 4;
+// Matches CM_LINE_PADDING_PX in core/listLineLayout.ts.
+const CM_LINE_PAD = 16;
 
 interface DecoSpec {
   from: number;
@@ -68,8 +70,9 @@ describe('listVisualIndentPlugin', () => {
     // No indent decoration on a depth-1 line (sourceIndent = 0).
     const indent = decos.find((d) => d.isReplace && d.from === 0);
     expect(indent).toBeUndefined();
+    const prefix = 2 * SW;
     expect(lineStyleAt(decos, 0)).toBe(
-      `text-indent: -${2 * SW}px; padding-inline-start: ${2 * SW}px;`,
+      `text-indent: -${prefix}px; padding-inline-start: ${CM_LINE_PAD + prefix}px;`,
     );
   });
 
@@ -80,8 +83,9 @@ describe('listVisualIndentPlugin', () => {
     const indent = decos.find((d) => d.isReplace && d.from === 4 && d.to === 6);
     expect(indent).toBeDefined();
     // prefixPx = (sourceIndent × 2 + markerLength) × sw = (4 + 2) × 4 = 24.
+    const prefix = (2 * 2 + 2) * SW;
     expect(lineStyleAt(decos, 4)).toBe(
-      `text-indent: -${(2 * 2 + 2) * SW}px; padding-inline-start: ${(2 * 2 + 2) * SW}px;`,
+      `text-indent: -${prefix}px; padding-inline-start: ${CM_LINE_PAD + prefix}px;`,
     );
   });
 
@@ -91,8 +95,9 @@ describe('listVisualIndentPlugin', () => {
     const indent = decos.find((d) => d.isReplace && d.from === 10 && d.to === 14);
     expect(indent).toBeDefined();
     // prefixPx = (4 × 2 + 2) × 4 = 40.
+    const prefix = (4 * 2 + 2) * SW;
     expect(lineStyleAt(decos, 10)).toBe(
-      `text-indent: -${(4 * 2 + 2) * SW}px; padding-inline-start: ${(4 * 2 + 2) * SW}px;`,
+      `text-indent: -${prefix}px; padding-inline-start: ${CM_LINE_PAD + prefix}px;`,
     );
   });
 
@@ -164,11 +169,11 @@ describe('listVisualIndentPlugin', () => {
       extensions: [markdown({ base: markdownLanguage }), spaceWidthField],
     });
     // CommonMark parses `  - b` as a top-level (depth-1) list with
-    // sourceIndent=2. prefixPx = (2 × 2 + 2) × 4 = 24.
+    // sourceIndent=2. prefixPx = (2 × 2 + 2) × 4 = 24; padding adds 16.
     const set = buildListIndentDecorations(state, [{ from: 0, to: state.doc.length }]);
     const decos = iter(set);
     expect(lineStyleAt(decos, 0)).toBe(
-      `text-indent: -24px; padding-inline-start: 24px;`,
+      `text-indent: -24px; padding-inline-start: 40px;`,
     );
   });
 });

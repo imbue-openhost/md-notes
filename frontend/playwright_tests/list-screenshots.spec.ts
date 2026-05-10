@@ -106,6 +106,22 @@ const cases: Case[] = [
     doc:
       '- first item with a long line\n  and an explicit continuation paragraph that should align under the first letter of "first"\n- next item\n  - nested\n    with its own continuation that should align under the first letter of "nested"\n',
   },
+  {
+    // Reference layout from Obsidian — bullet sits at the editor margin
+    // (same column as "stuff"), L2 wraps with continuation aligned under
+    // its own text, L3 task aligns with the L3 bullet.
+    name: '18-obsidian-reference',
+    doc:
+      'stuff\n' +
+      '- l1 bullet\n' +
+      '  - l2 bullet (with cursor over bullet)' +
+      'asdffasdddddddddddddddddddd dlkasdflkasdf adslkfsadflsad asdfkasdl\n' +
+      '    - l3 bullet\n' +
+      '    - [ ] asdf\n',
+    // Cursor over the L2 marker — that's the highlighted state Obsidian
+    // shows in the reference image.
+    cursorPositions: [20],
+  },
 ];
 
 test.describe('list rendering screenshots', () => {

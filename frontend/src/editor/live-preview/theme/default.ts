@@ -117,13 +117,24 @@ export const editorTheme = EditorView.theme({
     display: 'inline-flex',
     justifyContent: 'center',
     alignItems: 'center',
+    // CM6 widget DOM under `contenteditable="false"` collapses inline
+    // flex containers to width 0; pin the column width explicitly so
+    // ::after's centered bullet has somewhere to live and hangs at the
+    // right horizontal position.
+    width: '1ch',
   },
   '.list-bullet::before': {
     content: '"\\200B"',
   },
   '.list-bullet::after': {
-    position: 'absolute',
     content: '"\\200B"',
+    position: 'absolute',
+    // Center the bullet dot inside the .list-bullet box rather than
+    // pinning it to the top-left, so it sits visually under the dash
+    // glyph the user would otherwise see when editing the marker.
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
     pointerEvents: 'none',
     width: '5px',
     height: '5px',

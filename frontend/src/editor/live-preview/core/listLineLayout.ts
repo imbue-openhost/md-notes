@@ -20,6 +20,12 @@ import { EditorState, Range } from '@codemirror/state';
 import { Decoration, WidgetType } from '@codemirror/view';
 import { spaceWidth } from './spaceWidth';
 
+// Natural left padding of `.cm-line` in the editor theme (`padding: 0 16px`).
+// List lines need to *add* their hanging-indent prefix to this rather than
+// replace it, so the bullet on a list line sits at the same column as the
+// first character of a non-list line. Kept in sync with theme/default.ts.
+const CM_LINE_PADDING_PX = 16;
+
 class IndentSpacesWidget extends WidgetType {
   constructor(
     readonly sourceIndent: number,
@@ -104,9 +110,14 @@ export function listLineLayout(
         }).range(line.from, line.from + sourceIndent)
       : null;
 
+  // padding-inline-start = natural cm-line padding + the prefix, so the
+  // first-line text-indent pulls the bullet back to the *natural* margin
+  // (where non-list lines like a leading paragraph sit). Wrapped lines
+  // start at margin + prefix so they align under the bullet's text.
+  const padPx = CM_LINE_PADDING_PX + prefixPx;
   const lineDecoration = Decoration.line({
     attributes: {
-      style: `text-indent: -${prefixPx}px; padding-inline-start: ${prefixPx}px;`,
+      style: `text-indent: -${prefixPx}px; padding-inline-start: ${padPx}px;`,
     },
   }).range(line.from);
 

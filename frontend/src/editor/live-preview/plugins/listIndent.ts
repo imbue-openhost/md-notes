@@ -211,10 +211,15 @@ export function buildListIndentDecorations(
           hideLeadingWs.range(line.from, line.from + lineSourceIndent),
         );
       }
+      // Match the marker line's hanging-indent math: text-indent pulls
+      // first-line content back to the natural cm-line margin, padding
+      // pads it out to align under the bullet's text column. Adding the
+      // 16px keeps non-list and list lines vertically aligned at their
+      // left edges (same constant as listLineLayout).
       decorations.push(
         Decoration.line({
           attributes: {
-            style: `padding-inline-start: ${prefixPx}px;`,
+            style: `padding-inline-start: ${16 + prefixPx}px;`,
           },
         }).range(line.from),
       );
