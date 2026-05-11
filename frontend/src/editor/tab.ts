@@ -5,20 +5,22 @@
  * fall through to the browser, which would shift focus). Behaviour:
  *
  *   - On a list line, indent/dedent the line(s) in the selection by
- *     one level (2 spaces).
+ *     one level (using the detected indent unit).
  *   - With a non-empty selection (visual mode or otherwise), Tab indents
  *     every selected line, Shift-Tab dedents.
- *   - With an empty selection on a non-list line, Tab inserts
- *     `state.tabSize` spaces. Shift-Tab dedents the current line if it
- *     has leading whitespace; otherwise no-op (but still consumes the
- *     event).
+ *   - With an empty selection on a non-list line, Tab inserts one indent
+ *     unit. Shift-Tab dedents the current line if it has leading
+ *     whitespace; otherwise no-op (but still consumes the event).
  *
  * The handlers always return true so CM6 calls preventDefault and the
  * browser doesn't capture the Tab.
  */
 
 import { EditorView } from '@codemirror/view';
+import { EditorState } from '@codemirror/state';
 import { indentMore, indentLess } from './commands/commands';
+import { indentUnitOf } from './indent/indentUnitField';
+import { indentUnitString, indentUnitLength } from './indent/detectIndent';
 
 const LIST_LINE_RE = /^\s*(?:[-*+]|\d+[.)])\s/;
 
@@ -53,25 +55,37 @@ function hasListLineInRange(view: EditorView, range: LineRange): boolean {
   return false;
 }
 
+function indentStringFor(state: EditorState): string {
+  return indentUnitString(indentUnitOf(state));
+}
+
+function dedentChars(state: EditorState, ws: string): number {
+  const unit = indentUnitOf(state);
+  const insert = indentUnitString(unit);
+  if (ws.startsWith(insert)) return insert.length;
+  return Math.min(indentUnitLength(unit), ws.length);
+}
+
 /**
- * Indent every list line in the selection by 2 spaces. Non-list lines
- * are skipped.
+ * Indent every list line in the selection by one indent unit. Non-list
+ * lines are skipped.
  */
 function indentListLinesOnly(view: EditorView, range: LineRange): void {
   const { state } = view;
+  const insert = indentStringFor(state);
   const changes: { from: number; insert: string }[] = [];
   for (let n = range.startLineNum; n <= range.endLineNum; n++) {
     const line = state.doc.line(n);
     if (LIST_LINE_RE.test(line.text)) {
-      changes.push({ from: line.from, insert: '  ' });
+      changes.push({ from: line.from, insert });
     }
   }
   if (changes.length > 0) view.dispatch({ changes });
 }
 
 /**
- * Dedent every list line in the selection by up to 2 leading whitespace
- * chars. Non-list lines and lines without leading whitespace are skipped.
+ * Dedent every list line in the selection by one indent unit. Non-list
+ * lines and lines without leading whitespace are skipped.
  */
 function dedentListLinesOnly(view: EditorView, range: LineRange): void {
   const { state } = view;
@@ -81,7 +95,7 @@ function dedentListLinesOnly(view: EditorView, range: LineRange): void {
     if (!LIST_LINE_RE.test(line.text)) continue;
     const ws = /^[ \t]*/.exec(line.text)![0];
     if (ws.length === 0) continue;
-    const remove = Math.min(2, ws.length);
+    const remove = dedentChars(state, ws);
     changes.push({ from: line.from, to: line.from + remove, insert: '' });
   }
   if (changes.length > 0) view.dispatch({ changes });
@@ -110,7 +124,7 @@ export function handleTab(view: EditorView): boolean {
     return true;
   }
 
-  const insert = ' '.repeat(view.state.tabSize);
+  const insert = indentStringFor(view.state);
   view.dispatch(
     view.state.update(view.state.replaceSelection(insert), {
       scrollIntoView: true,

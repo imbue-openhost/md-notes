@@ -34,6 +34,8 @@ import {
 import { SyntaxNode } from '@lezer/common';
 import { listLineLayout } from '../core/listLineLayout';
 import { spaceWidth, spaceWidthField } from '../core/spaceWidth';
+import { indentUnitField, indentUnitOf } from '../../indent/indentUnitField';
+import { indentVisualMultiplier } from '../../indent/detectIndent';
 
 class BulletMarkerWidget extends WidgetType {
   constructor(readonly depth: number) {
@@ -191,6 +193,7 @@ export function buildListIndentDecorations(
     // under the bullet's text column, and hide the literal leading
     // whitespace so it doesn't double-indent.
     const sw = spaceWidth(state);
+    const multiplier = indentVisualMultiplier(indentUnitOf(state));
     const startLine = state.doc.lineAt(from).number;
     const endLine = state.doc.lineAt(to).number;
     for (let lineNum = startLine; lineNum <= endLine; lineNum++) {
@@ -213,7 +216,7 @@ export function buildListIndentDecorations(
       const parentSourceIndent = m[1].length;
       // Marker run = marker chars + one trailing space (rest is text).
       const parentMarkerLen = m[2].length + 1;
-      const prefixPx = (parentSourceIndent * 2 + parentMarkerLen) * sw;
+      const prefixPx = (parentSourceIndent * multiplier + parentMarkerLen) * sw;
 
       const lineSourceIndent = /^[ \t]*/.exec(line.text)![0].length;
       if (lineSourceIndent > 0) {
@@ -257,12 +260,16 @@ export const listVisualIndentPlugin = ViewPlugin.fromClass(
       const spaceWidthChanged =
         update.startState.field(spaceWidthField, false) !==
         update.state.field(spaceWidthField, false);
+      const indentUnitChanged =
+        update.startState.field(indentUnitField, false) !==
+        update.state.field(indentUnitField, false);
       if (
         update.docChanged ||
         update.viewportChanged ||
         update.selectionSet ||
         syntaxTree(update.startState) !== syntaxTree(update.state) ||
-        spaceWidthChanged
+        spaceWidthChanged ||
+        indentUnitChanged
       ) {
         const built = buildListIndentDecorations(
           update.state,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EditorState, EditorSelection, type SelectionRange, type TransactionSpec } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { handleTab, handleShiftTab } from './tab';
+import { indentDetection } from './indent/indentUnitField';
 
 /**
  * Minimal stand-in for an EditorView. Holds a state and applies any
@@ -13,7 +14,7 @@ function makeStubView(doc: string, range: SelectionRange, tabSize = 2): EditorVi
   let state = EditorState.create({
     doc,
     selection,
-    extensions: [EditorState.tabSize.of(tabSize)],
+    extensions: [EditorState.tabSize.of(tabSize), indentDetection()],
   });
   const stub = {
     get state() {
@@ -43,6 +44,24 @@ describe('handleTab', () => {
     expect(view.state.doc.toString()).toBe('  - foo');
   });
 
+  it('indents a list line by 4 spaces when doc uses 4-space indent', () => {
+    // Establish 4-space indent context with a nested list before the
+    // target line. Cursor is on the unindented "- foo" line.
+    const doc = '- a\n    - b\n- foo';
+    const cursor = doc.length - 1;
+    const view = makeStubView(doc, EditorSelection.cursor(cursor));
+    handleTab(view);
+    expect(view.state.doc.toString()).toBe('- a\n    - b\n    - foo');
+  });
+
+  it('indents a list line by a tab when doc uses tab indent', () => {
+    const doc = '- a\n\t- b\n- foo';
+    const cursor = doc.length - 1;
+    const view = makeStubView(doc, EditorSelection.cursor(cursor));
+    handleTab(view);
+    expect(view.state.doc.toString()).toBe('- a\n\t- b\n\t- foo');
+  });
+
   it('indents only list lines in a multi-line selection', () => {
     const doc = '- foo\nplain text\n- bar';
     const view = makeStubView(doc, EditorSelection.range(0, doc.length));
@@ -50,17 +69,27 @@ describe('handleTab', () => {
     expect(view.state.doc.toString()).toBe('  - foo\nplain text\n  - bar');
   });
 
-  it('inserts spaces on a non-list line with empty selection', () => {
+  it('inserts the detected indent unit on a non-list line (default 2 spaces)', () => {
     const view = makeStubView('hello', EditorSelection.cursor(2), 4);
     const consumed = handleTab(view);
     expect(consumed).toBe(true);
-    expect(view.state.doc.toString()).toBe('he    llo');
+    expect(view.state.doc.toString()).toBe('he  llo');
   });
 
-  it('uses tabSize when inserting on non-list line (2 spaces)', () => {
-    const view = makeStubView('abc', EditorSelection.cursor(0), 2);
+  it('inserts 4 spaces on a non-list line when doc uses 4-space indent', () => {
+    const doc = '- a\n    - b\nhello';
+    const cursor = doc.indexOf('hello') + 2;
+    const view = makeStubView(doc, EditorSelection.cursor(cursor));
     handleTab(view);
-    expect(view.state.doc.toString()).toBe('  abc');
+    expect(view.state.doc.toString()).toBe('- a\n    - b\nhe    llo');
+  });
+
+  it('inserts a tab on a non-list line when doc uses tab indent', () => {
+    const doc = '- a\n\t- b\nhello';
+    const cursor = doc.indexOf('hello') + 2;
+    const view = makeStubView(doc, EditorSelection.cursor(cursor));
+    handleTab(view);
+    expect(view.state.doc.toString()).toBe('- a\n\t- b\nhe\tllo');
   });
 
   it('indents the whole selected block on a non-list multi-line selection', () => {
@@ -103,6 +132,22 @@ describe('handleShiftTab', () => {
     const consumed = handleShiftTab(view);
     expect(consumed).toBe(true);
     expect(view.state.doc.toString()).toBe('  - foo');
+  });
+
+  it('dedents a list line by 4 spaces when doc uses 4-space indent', () => {
+    const doc = '- a\n    - b\n        - foo';
+    const cursor = doc.length - 1;
+    const view = makeStubView(doc, EditorSelection.cursor(cursor));
+    handleShiftTab(view);
+    expect(view.state.doc.toString()).toBe('- a\n    - b\n    - foo');
+  });
+
+  it('dedents a list line by one tab when doc uses tab indent', () => {
+    const doc = '- a\n\t- b\n\t\t- foo';
+    const cursor = doc.length - 1;
+    const view = makeStubView(doc, EditorSelection.cursor(cursor));
+    handleShiftTab(view);
+    expect(view.state.doc.toString()).toBe('- a\n\t- b\n\t- foo');
   });
 
   it('dedents list lines but skips non-list lines in selection', () => {

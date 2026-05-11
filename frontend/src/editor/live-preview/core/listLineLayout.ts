@@ -19,6 +19,8 @@
 import { EditorState, Range } from '@codemirror/state';
 import { Decoration, WidgetType } from '@codemirror/view';
 import { spaceWidth } from './spaceWidth';
+import { indentUnitOf } from '../../indent/indentUnitField';
+import { indentVisualMultiplier } from '../../indent/detectIndent';
 
 // Natural left padding of `.cm-line` in the editor theme (`padding: 0 16px`).
 // List lines need to *add* their hanging-indent prefix to this rather than
@@ -30,18 +32,24 @@ class IndentSpacesWidget extends WidgetType {
   constructor(
     readonly sourceIndent: number,
     readonly depth: number,
+    readonly multiplier: number,
   ) {
     super();
   }
   eq(other: IndentSpacesWidget) {
-    return other.sourceIndent === this.sourceIndent && other.depth === this.depth;
+    return (
+      other.sourceIndent === this.sourceIndent &&
+      other.depth === this.depth &&
+      other.multiplier === this.multiplier
+    );
   }
   toDOM() {
     const span = document.createElement('span');
     span.className = `cm-hmd-list-indent cm-hmd-list-indent-${this.depth - 1}`;
-    // 2× source whitespace, all literal spaces (no tab expansion logic).
-    // Tabs in source would map to 2 visual chars each — same rule.
-    span.textContent = ' '.repeat(this.sourceIndent * 2);
+    // visualChars = sourceIndent × multiplier. Multiplier comes from the
+    // detected indent unit so each level renders as 4 visual columns:
+    // 2-space → ×2, 4-space → ×1, tab → ×4.
+    span.textContent = ' '.repeat(this.sourceIndent * this.multiplier);
     return span;
   }
   ignoreEvent() {
@@ -100,13 +108,14 @@ export function listLineLayout(
   const markerLength = markerEnd - markerFrom;
 
   const sw = spaceWidth(state);
+  const multiplier = indentVisualMultiplier(indentUnitOf(state));
   const markerPx = markerWidthPxOverride ?? markerLength * sw;
-  const prefixPx = sourceIndent * 2 * sw + markerPx;
+  const prefixPx = sourceIndent * multiplier * sw + markerPx;
 
   const indentDecoration =
     sourceIndent > 0
       ? Decoration.replace({
-          widget: new IndentSpacesWidget(sourceIndent, depth),
+          widget: new IndentSpacesWidget(sourceIndent, depth, multiplier),
         }).range(line.from, line.from + sourceIndent)
       : null;
 
