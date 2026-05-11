@@ -197,6 +197,63 @@ li.open > .sidebar-children {
   background: hsl(25 95% 53%);
 }
 
+.editor-sync-overlay {
+  position: absolute;
+  inset: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  font-size: 13px;
+}
+
+.editor-sync-overlay-error {
+  color: hsl(0 84% 60%);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  padding: 20px 24px;
+  max-width: 420px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.modal p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-actions button {
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .sidebar-sync-dot[data-status="syncing"] {
   background: hsl(48 96% 53%);
   animation: sync-pulse 1.5s ease-in-out infinite;

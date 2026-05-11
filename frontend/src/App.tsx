@@ -5,6 +5,7 @@ import {
   listVaults, createVault, deleteVault, getServerVimrc,
 } from './api/client';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
+import { clearVaultCache } from './editor/sync';
 import { connectionState, UnauthorizedError, startHeartbeat } from './api/connection';
 import { serverUrl, getShareUuid, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
 import type { VaultConfig } from './api/types';
@@ -72,6 +73,7 @@ export const App: Component = () => {
   const [shareModalPath, setShareModalPath] = createSignal<string | null>(null);
   const [showWebSettings, setShowWebSettings] = createSignal(false);
   const [showQuickOpen, setShowQuickOpen] = createSignal(false);
+  const [syncErrorPath, setSyncErrorPath] = createSignal<string | null>(null);
 
   let layoutHandle: EditorLayoutHandle | undefined;
 
@@ -203,13 +205,18 @@ export const App: Component = () => {
     layoutHandle?.openFile(path);
   }
 
-  function makeEditorForPath(path: string, container: HTMLElement): EditorInstance {
+  function makeEditorForPath(
+    path: string,
+    container: HTMLElement,
+    onSyncFailed: (err: Error) => void,
+  ): EditorInstance {
     const v = vault();
     return createEditor(container, {
       vimrcContent: activeVimrc(),
       syncVault: v?.name || undefined,
       syncFilePath: path,
       syncServerUrl: serverUrl,
+      onSyncFailed,
     });
   }
 
@@ -224,6 +231,7 @@ export const App: Component = () => {
 
   async function handleVaultRemove(name: string) {
     await deleteVault(name);
+    await clearVaultCache(name);
     await loadWebVaults();
   }
 
@@ -305,6 +313,7 @@ export const App: Component = () => {
           ref={(h) => { layoutHandle = h; }}
           createEditor={makeEditorForPath}
           onActiveFileChange={setCurrentDocPath}
+          onSyncFailed={(path) => setSyncErrorPath(path)}
           vaultName={vault()!.name}
         />
       </Show>
@@ -330,6 +339,22 @@ export const App: Component = () => {
           onSaved={(v) => { setActiveVimrc(v); setShowWebSettings(false); }}
           onClose={() => setShowWebSettings(false)}
         />
+      </Show>
+
+      <Show when={syncErrorPath()}>
+        <div class="modal-backdrop" onClick={() => setSyncErrorPath(null)}>
+          <div class="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Can't reach the backend</h3>
+            <p>
+              Couldn't open <code>{syncErrorPath()}</code>. Docs can only be
+              opened while the server is reachable so you don't end up editing
+              stale content.
+            </p>
+            <div class="modal-actions">
+              <button onClick={() => setSyncErrorPath(null)}>OK</button>
+            </div>
+          </div>
+        </div>
       </Show>
     </>
   );

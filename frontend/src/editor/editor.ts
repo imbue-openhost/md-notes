@@ -158,6 +158,8 @@ export interface EditorOptions {
   shareDocPath?: string;
   readOnly?: boolean;
   onDocChange?: (content: string) => void;
+  /** Called when the initial server handshake fails (timeout or connection error). */
+  onSyncFailed?: (error: Error) => void;
 }
 
 export interface EditorInstance {
@@ -208,12 +210,44 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     parent: container,
   });
 
+  // Block input until the sync session reports a successful first handshake
+  // with the server. Until then we don't know whether what we're showing
+  // matches the doc's authoritative state, and IDB alone isn't sufficient
+  // (see the comment block at the top of sync.ts). The overlay sits above the
+  // editor and is removed once the doc is known to be current.
+  let overlay: HTMLDivElement | null = null;
+  if (syncSession) {
+    const containerStyle = window.getComputedStyle(container);
+    if (containerStyle.position === 'static') {
+      container.style.position = 'relative';
+    }
+    overlay = document.createElement('div');
+    overlay.className = 'editor-sync-overlay';
+    overlay.textContent = 'Connecting…';
+    container.appendChild(overlay);
+
+    syncSession.ready.then(() => {
+      overlay?.remove();
+      overlay = null;
+    }).catch((err: Error) => {
+      // Leave the overlay (now showing an error) so the panel renders
+      // something coherent until the caller closes it via onSyncFailed.
+      if (overlay) {
+        overlay.textContent = "Can't reach backend.";
+        overlay.classList.add('editor-sync-overlay-error');
+      }
+      options.onSyncFailed?.(err);
+    });
+  }
+
   let destroyed = false;
   return {
     view,
     destroy: () => {
       if (destroyed) return;
       destroyed = true;
+      overlay?.remove();
+      overlay = null;
       syncSession?.destroy();
       view.destroy();
     },

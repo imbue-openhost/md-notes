@@ -18,11 +18,19 @@ export interface EditorLayoutHandle {
   focusTabRight: () => void;
 }
 
-type CreateEditorFn = (path: string, container: HTMLElement) => EditorInstance;
+type CreateEditorFn = (
+  path: string,
+  container: HTMLElement,
+  onSyncFailed: (error: Error) => void,
+) => EditorInstance;
 
 interface Props {
   createEditor: CreateEditorFn;
   onActiveFileChange: (path: string | null) => void;
+  /** Notified when a panel's initial sync handshake fails. Caller decides
+   * what UI to surface (e.g. a "can't reach backend" modal). The panel is
+   * closed before this fires. */
+  onSyncFailed?: (path: string, error: Error) => void;
   vaultName: string;
   ref?: (handle: EditorLayoutHandle) => void;
 }
@@ -133,7 +141,14 @@ export const EditorLayout: Component<Props> = (props) => {
     let container!: HTMLDivElement;
 
     onMount(() => {
-      const instance = props.createEditor(panelProps.params.filePath, container);
+      const filePath = panelProps.params.filePath;
+      const instance = props.createEditor(filePath, container, (err) => {
+        // Close the panel first, then notify the host. Closing first means
+        // the host's UI (e.g. a modal) is the only thing left on screen and
+        // the user doesn't have to dismiss a dead editor pane.
+        try { panelProps.api.close(); } catch {}
+        props.onSyncFailed?.(filePath, err);
+      });
       const panelId = panelProps.api.id;
       editorInstances.set(panelId, instance);
 

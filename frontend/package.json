@@ -39,6 +39,7 @@
     "solid-js": "^1.9.12",
     "vite-plugin-solid": "^2.11.12",
     "y-codemirror.next": "^0.3.5",
+    "y-indexeddb": "^9.0.12",
     "y-websocket": "^3.0.0",
     "yjs": "^13.6.30"
   }

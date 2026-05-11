@@ -4,6 +4,7 @@
 
 import type { FileEntry, VaultConfig } from './types';
 import * as api from './client';
+import { clearVaultDocCache } from '../editor/sync';
 
 let activeVault: VaultConfig | null = null;
 
@@ -37,5 +38,9 @@ export async function renameFile(oldPath: string, newPath: string): Promise<void
 }
 
 export async function deleteFile(path: string): Promise<void> {
-  await api.deleteFile(requireVaultName(), path);
+  const vault = requireVaultName();
+  await api.deleteFile(vault, path);
+  // Drop any cached CRDT state so a future file at this path doesn't open
+  // pre-populated with the deleted doc's content.
+  await clearVaultDocCache(vault, path);
 }
