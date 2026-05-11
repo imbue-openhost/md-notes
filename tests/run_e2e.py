@@ -107,8 +107,11 @@ def run_playwright(extra_args: list[str]) -> int:
         **os.environ,
         "PLAYWRIGHT_BASE_URL": f"http://localhost:{ROUTER_PORT}",
     }
+    # list-screenshots.spec.ts is a vite-dev-only visual harness; screenshots.html
+    # isn't part of the production bundle so it 404s against the container stack.
+    default_args = ["--grep-invert", "list rendering"]
     proc = subprocess.run(
-        ["npx", "playwright", "test", *extra_args],
+        ["npx", "playwright", "test", *default_args, *extra_args],
         cwd=PROJECT_ROOT / "frontend",
         env=env,
     )
