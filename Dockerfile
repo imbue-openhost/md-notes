@@ -28,6 +28,10 @@ COPY --from=frontend-build /build/frontend/dist frontend/dist
 # Caddy config
 COPY Caddyfile /etc/caddy/Caddyfile
 
+# Entrypoint generates runtime-config.js from env at container start.
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 EXPOSE 8080
 
-CMD sh -c "caddy run --config /etc/caddy/Caddyfile & .venv/bin/python -u -m server"
+CMD ["/app/entrypoint.sh"]

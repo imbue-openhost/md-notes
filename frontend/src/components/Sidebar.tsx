@@ -5,6 +5,7 @@ import { listFiles, createFile, deleteFile, renameFile } from '../api/vault-ops'
 import { InputDialog } from './InputDialog';
 
 export type SyncStatus = 'connected' | 'disconnected' | 'connecting' | 'no-remote' | 'error' | 'syncing';
+export type BackendStatus = 'connected' | 'disconnected' | 'unauthorized';
 
 interface Props {
   vaultName?: string;
@@ -18,6 +19,7 @@ interface Props {
   showSyncStatus?: boolean;
   syncStatus?: SyncStatus;
   syncErrorMsg?: string;
+  backendStatus?: BackendStatus;
   currentPath: string | null;
 }
 
@@ -28,6 +30,12 @@ const SYNC_LABELS: Record<string, string> = {
   'no-remote': 'No remote configured',
   error: 'Connection error (click for details)',
   syncing: 'Syncing files...',
+};
+
+const BACKEND_LABELS: Record<BackendStatus, string> = {
+  connected: 'Connected',
+  disconnected: 'Disconnected',
+  unauthorized: 'Not logged in',
 };
 
 export const Sidebar: Component<Props> = (props) => {
@@ -223,6 +231,13 @@ export const Sidebar: Component<Props> = (props) => {
           >
             <span class="sidebar-sync-dot" data-status={props.syncStatus ?? 'disconnected'} />
             <span>{SYNC_LABELS[props.syncStatus ?? 'disconnected'] ?? props.syncStatus}</span>
+          </div>
+        </Show>
+
+        <Show when={props.backendStatus}>
+          <div class="sidebar-sync-status">
+            <span class="sidebar-sync-dot" data-status={props.backendStatus} />
+            <span>{BACKEND_LABELS[props.backendStatus!]}</span>
           </div>
         </Show>
 

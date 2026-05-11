@@ -5,7 +5,8 @@ import {
   listVaults, createVault, deleteVault, getServerVimrc,
 } from './api/client';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
-import { serverUrl, getShareUuid, fetchShareInfo, type ShareInfo } from './config';
+import { connectionState, UnauthorizedError, startHeartbeat } from './api/connection';
+import { serverUrl, getShareUuid, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
 import type { VaultConfig } from './api/types';
 import { VaultPicker } from './components/VaultPicker';
 import { Sidebar } from './components/Sidebar';
@@ -93,6 +94,10 @@ export const App: Component = () => {
     } catch {}
     await loadWebVaults();
     setBooting(false);
+    // Heartbeat keeps the connection indicator fresh while the user is idle.
+    // Re-uses listVaults as a cheap authed probe; failure routes to the
+    // connection-state signal but does NOT trigger a redirect.
+    startHeartbeat(async () => { await listVaults(); });
   }
 
   async function fetchVaultList(): Promise<VaultConfig[]> {
@@ -106,6 +111,7 @@ export const App: Component = () => {
       try {
         return await fetchVaultList();
       } catch (e) {
+        if (e instanceof UnauthorizedError) throw e;
         console.warn('Backend not ready, retrying:', e);
         await new Promise((r) => setTimeout(r, delay));
         delay = Math.min(delay * 2, 5000);
@@ -114,7 +120,23 @@ export const App: Component = () => {
   }
 
   async function loadWebVaults() {
-    const vaults = await fetchVaultListWithRetry();
+    let vaults: VaultConfig[];
+    try {
+      vaults = await fetchVaultListWithRetry();
+    } catch (e) {
+      if (e instanceof UnauthorizedError) {
+        const loginUrl = getLoginUrl();
+        if (loginUrl) {
+          window.location.href = loginUrl;
+          return;
+        }
+        // No login URL configured (e.g. local dev): fall through so the user
+        // sees the "Unauthorized" status indicator rather than a blank screen.
+        setBooting(false);
+        return;
+      }
+      throw e;
+    }
     setVaultList(vaults);
 
     // Per-tab last-vault: sessionStorage scopes to this tab, so a refresh keeps
@@ -250,6 +272,12 @@ export const App: Component = () => {
         <div style={{ padding: '2rem', color: '#888' }}>Connecting to server…</div>
       </Show>
 
+      <Show when={!booting() && !vault() && !showVaultPicker() && connectionState() === 'unauthorized'}>
+        <div style={{ padding: '2rem', color: '#888' }}>
+          Not logged in. Configure <code>OPENHOST_ZONE_DOMAIN</code> to enable automatic redirect to login.
+        </div>
+      </Show>
+
       <Show when={!booting() && showVaultPicker() && !vault()}>
         <VaultPicker
           vaults={vaultList()}
@@ -269,6 +297,7 @@ export const App: Component = () => {
           onManageVaults={switchVault}
           onRefreshVaults={refreshVaultList}
           onSettings={() => setShowWebSettings(true)}
+          backendStatus={connectionState()}
           currentPath={currentDocPath()}
         />
 

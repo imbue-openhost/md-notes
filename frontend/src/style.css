@@ -193,6 +193,10 @@ li.open > .sidebar-children {
   background: hsl(0 84% 60%);
 }
 
+.sidebar-sync-dot[data-status="unauthorized"] {
+  background: hsl(25 95% 53%);
+}
+
 .sidebar-sync-dot[data-status="syncing"] {
   background: hsl(48 96% 53%);
   animation: sync-pulse 1.5s ease-in-out infinite;

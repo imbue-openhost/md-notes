@@ -2,6 +2,16 @@
  * Runtime environment detection and configuration.
  */
 
+interface RuntimeConfig {
+  loginUrl: string | null;
+}
+
+declare global {
+  interface Window {
+    __CONFIG__?: RuntimeConfig;
+  }
+}
+
 export interface ShareInfo {
   uuid: string;
   doc_path: string;
@@ -12,6 +22,11 @@ export interface ShareInfo {
 export const serverUrl = typeof window !== 'undefined'
   ? window.location.origin
   : 'http://localhost:8080';
+
+/** OpenHost login URL, injected at container start via runtime-config.js. */
+export function getLoginUrl(): string | null {
+  return typeof window !== 'undefined' ? window.__CONFIG__?.loginUrl ?? null : null;
+}
 
 /** UUID extracted from /share/<uuid> URLs, or null for the regular app. */
 export function getShareUuid(): string | null {

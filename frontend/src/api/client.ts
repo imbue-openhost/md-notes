@@ -3,6 +3,9 @@
  */
 
 import type { FileEntry } from './types';
+import {
+  markConnected, markDisconnected, markUnauthorized, UnauthorizedError,
+} from './connection';
 
 let baseUrl = '';
 
@@ -17,11 +20,26 @@ export function getApiBaseUrl(): string {
 }
 
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  const res = await fetch(`${baseUrl}${path}`, init);
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, init);
+  } catch (e) {
+    markDisconnected();
+    throw e;
+  }
+  if (res.status === 401 || res.status === 403) {
+    markUnauthorized();
+    throw new UnauthorizedError();
+  }
   if (!res.ok) {
+    // 5xx and other non-OK → backend reachable but failing. Treat as connected
+    // for the purposes of the status indicator; the caller surfaces the error.
+    if (res.status >= 500) markDisconnected();
+    else markConnected();
     const body = await res.text();
     throw new Error(`API ${res.status}: ${body}`);
   }
+  markConnected();
   return res;
 }
 
