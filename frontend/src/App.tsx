@@ -5,7 +5,11 @@ import {
   listVaults, createVault, deleteVault, getServerVimrc,
 } from './api/client';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
-import { clearVaultCache } from './editor/sync';
+import {
+  clearVaultCache,
+  onConnectionStatus, onConnectionError, onLastSyncedAt, onIdbError,
+  type ConnectionStatus,
+} from './editor/sync';
 import { connectionState, UnauthorizedError, startHeartbeat } from './api/connection';
 import { serverUrl, getShareUuid, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
 import type { VaultConfig } from './api/types';
@@ -74,6 +78,10 @@ export const App: Component = () => {
   const [showWebSettings, setShowWebSettings] = createSignal(false);
   const [showQuickOpen, setShowQuickOpen] = createSignal(false);
   const [syncErrorPath, setSyncErrorPath] = createSignal<string | null>(null);
+  const [syncStatus, setSyncStatus] = createSignal<ConnectionStatus>('connecting');
+  const [syncErrorMsg, setSyncErrorMsg] = createSignal<string | null>(null);
+  const [lastSyncedAtTs, setLastSyncedAtTs] = createSignal<number | null>(null);
+  const [idbError, setIdbError] = createSignal<string | null>(null);
 
   let layoutHandle: EditorLayoutHandle | undefined;
 
@@ -238,6 +246,12 @@ export const App: Component = () => {
   onMount(() => {
     boot().catch(console.error);
 
+    const unsubStatus = onConnectionStatus((s) => setSyncStatus(s));
+    const unsubError = onConnectionError((m) => setSyncErrorMsg(m));
+    const unsubSynced = onLastSyncedAt((ts) => setLastSyncedAtTs(ts));
+    const unsubIdb = onIdbError((m) => setIdbError(m));
+    onCleanup(() => { unsubStatus(); unsubError(); unsubSynced(); unsubIdb(); });
+
     const onKey = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
@@ -305,7 +319,12 @@ export const App: Component = () => {
           onManageVaults={switchVault}
           onRefreshVaults={refreshVaultList}
           onSettings={() => setShowWebSettings(true)}
+          showSyncStatus={true}
+          syncStatus={syncStatus()}
+          syncErrorMsg={syncErrorMsg() ?? undefined}
           backendStatus={connectionState()}
+          lastSyncedAt={lastSyncedAtTs()}
+          idbError={idbError()}
           currentPath={currentDocPath()}
         />
 

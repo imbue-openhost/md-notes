@@ -197,6 +197,18 @@ li.open > .sidebar-children {
   background: hsl(25 95% 53%);
 }
 
+.sidebar-sync-detail {
+  padding: 2px 12px 6px;
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+}
+
+.sidebar-sync-warning {
+  padding: 4px 12px 6px;
+  font-size: 10px;
+  color: hsl(25 95% 53%);
+}
+
 .editor-sync-overlay {
   position: absolute;
   inset: 0;
