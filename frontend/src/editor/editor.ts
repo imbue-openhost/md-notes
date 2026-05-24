@@ -128,6 +128,21 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     codeBlockField({ interaction: 'inline' }),
 
     EditorView.domEventHandlers({
+      // Dockview sets its panel JSON ({"viewId","groupId","panelId"}) as
+      // text/plain on tab drags; without this guard CodeMirror inserts it.
+      drop: (event) => {
+        const text = event.dataTransfer?.getData('text/plain');
+        if (text) {
+          try {
+            const obj = JSON.parse(text);
+            if (obj && typeof obj === 'object' && 'panelId' in obj) {
+              event.preventDefault();
+              return true;
+            }
+          } catch {}
+        }
+        return false;
+      },
       keydown: (event) => {
         if (event.key === 'Escape') {
           event.preventDefault();

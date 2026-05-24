@@ -13,7 +13,12 @@ set ignorecase
 set smartcase
 set incsearch
 
-" Vim-easyclip emulation: d/x delete to black hole, m cuts
+" Vim-easyclip emulation: d/x delete to black hole, m cuts.
+" Normal-mode `m` is registered as a direct operator (not keyToKey) in
+" vim.ts because codemirror-vim's key matcher fires full matches
+" immediately — a keyToKey `m`→`d` would always consume the key before
+" `mm` could match. As a direct operator, `mm` works via the built-in
+" "same operator twice = linewise" logic.
 nnoremap d "_d
 xnoremap d "_d
 nnoremap dd "_dd
@@ -21,8 +26,6 @@ nnoremap D "_D
 xnoremap D "_D
 nnoremap x "_x
 xnoremap x "_x
-nnoremap m d
-nnoremap mm dd
 xnoremap m d
 
 " Folding
