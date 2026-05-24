@@ -468,7 +468,7 @@ export function vimMode(vimrcContent?: string): Extension[] {
   // `noremap m d` would always consume `m` before `mm` could match.
   // As a direct operator, `mm` works via processOperator's "same
   // operator twice = linewise" logic, same as the built-in `dd`.
-  Vim.mapCommand('m', 'operator', 'delete', {});
+  Vim.mapCommand('m', 'operator', 'delete', {}, {});
 
   return extensions;
 }
