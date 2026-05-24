@@ -353,15 +353,35 @@ export function applyExmaps(exmaps: VimExmap[]): void {
  * has a chance to match.
  */
 export function applyMappings(mappings: VimMapping[], mapleader?: string): void {
+  // Built-in vim keys (like `m` for set-mark, or the leader key) fire
+  // immediately on press. When one of these keys is also a prefix of a
+  // longer mapping (e.g. `m` → operator AND `mm` → line operation), the
+  // built-in fires before the multi-char mapping gets a chance to match.
+  // Unmapping the built-in first lets the key matcher wait for the full
+  // sequence.
+  const keysToUnmap = new Set<string>();
   if (mapleader && mapleader.length === 1) {
     const usedAsPrefix = mappings.some(
       (m) => m.lhs.length > 1 && m.lhs.startsWith(mapleader),
     );
-    // Pass undefined ctx (despite the .d.ts requiring string): default
-    // mappings have no context field, and unmap uses strict equality, so
-    // ctx must be undefined to match them.
-    if (usedAsPrefix) (Vim.unmap as (lhs: string, ctx?: string) => unknown)(mapleader);
+    if (usedAsPrefix) keysToUnmap.add(mapleader);
   }
+  for (const m of mappings) {
+    if (m.lhs.length !== 1) continue;
+    const isPrefix = mappings.some(
+      (other) => other.lhs.length > 1 && other.lhs[0] === m.lhs,
+    );
+    if (isPrefix) keysToUnmap.add(m.lhs);
+  }
+  // Pass undefined ctx (despite the .d.ts requiring string): default
+  // mappings have no context field, and unmap uses strict equality, so
+  // ctx must be undefined to match them.
+  for (const key of keysToUnmap) {
+    try {
+      (Vim.unmap as (lhs: string, ctx?: string) => unknown)(key);
+    } catch {}
+  }
+
   for (const m of mappings) {
     if (m.noremap) {
       Vim.noremap(m.lhs, m.rhs, m.context);
