@@ -13,6 +13,10 @@ set ignorecase
 set smartcase
 set incsearch
 
+" Navigate visual lines, not logical lines
+nnoremap j gj
+nnoremap k gk
+
 " Vim-easyclip emulation: d/x delete to black hole, m cuts.
 " Normal-mode `m` is registered as a direct operator (not keyToKey) in
 " vim.ts because codemirror-vim's key matcher fires full matches
