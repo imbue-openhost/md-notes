@@ -136,4 +136,15 @@ describe('applyMappings: built-in key unmapping', () => {
     expect(unmappedKeys).not.toContain('D');
     expect(unmappedKeys).not.toContain('m');
   });
+
+  it('does NOT unmap j when j (normal) and jk (insert) are in different contexts', () => {
+    applyMappings([
+      mapping('j', 'gj', 'normal'),
+      mapping('k', 'gk', 'normal'),
+      mapping('jk', '<Esc>', 'insert'),
+    ]);
+    const unmappedKeys = unmapSpy.mock.calls.map((c: unknown[]) => c[0]);
+    expect(unmappedKeys).not.toContain('j');
+    expect(unmappedKeys).not.toContain('k');
+  });
 });

@@ -374,7 +374,8 @@ export function applyMappings(mappings: VimMapping[], mapleader?: string): void 
     if (m.lhs.length !== 1) continue;
     if (NATIVE_OPERATORS.has(m.lhs)) continue;
     const isPrefix = mappings.some(
-      (other) => other.lhs.length > 1 && other.lhs[0] === m.lhs,
+      (other) => other.lhs.length > 1 && other.lhs[0] === m.lhs
+        && (other.context === m.context || other.context === '' || m.context === ''),
     );
     if (isPrefix) keysToUnmap.add(m.lhs);
   }

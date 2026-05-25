@@ -203,4 +203,26 @@ test.describe('Easyclip: d = black-hole delete, m = cut', () => {
     const afterPaste = await editorText(page);
     expect(afterPaste).toContain('bcdef');
   });
+
+  test('j/k work in visual mode to extend selection', async ({ page }) => {
+    await setContent(page, ['line1', 'line2', 'line3']);
+
+    // Enter visual-line mode on line 1, then j to extend to line 2
+    await page.keyboard.type('gg');
+    await page.waitForTimeout(100);
+    await page.keyboard.type('V');
+    await page.waitForTimeout(100);
+    await page.keyboard.type('j');
+    await page.waitForTimeout(100);
+
+    // Cut the selection (visual m = cut)
+    await page.keyboard.type('m');
+    await page.waitForTimeout(300);
+
+    const afterCut = await editorText(page);
+    // Both line1 and line2 should be gone (j extended the selection)
+    expect(afterCut).not.toContain('line1');
+    expect(afterCut).not.toContain('line2');
+    expect(afterCut).toContain('line3');
+  });
 });
