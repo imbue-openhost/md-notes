@@ -14,7 +14,7 @@ import { EditorView } from '@codemirror/view';
 import { EditorState, type Extension } from '@codemirror/state';
 import { unfoldAll, toggleFold, foldCode, unfoldCode } from '@codemirror/language';
 import { foldAllRecursive } from './folding';
-import { installVimClipboardSync } from './clipboard-sync';
+
 
 /**
  * Line range from a parsed `:` ex command. `start` and `end` are 0-based
@@ -450,7 +450,6 @@ export function settingsToExtensions(settings: VimSetting[]): Extension[] {
  * it is parsed and the resulting mappings/settings are applied.
  */
 export function vimMode(vimrcContent?: string): Extension[] {
-  installVimClipboardSync();
   const extensions: Extension[] = [vim({ status: true })];
 
   if (vimrcContent) {
