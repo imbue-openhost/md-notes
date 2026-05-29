@@ -20,11 +20,11 @@ from server.models.vaults import VaultBody
 class VaultsController(Controller):
     path = "/api/vaults"
 
-    @get("/")
+    @get("")
     async def list_all(self, config: Config) -> list[Vault]:
         return list_vaults(config.vault_path)
 
-    @post("/", status_code=HTTP_201_CREATED)
+    @post("", status_code=HTTP_201_CREATED)
     async def create(self, data: VaultBody, config: Config) -> Vault:
         return create_vault(config.vault_path, data.name)
 
