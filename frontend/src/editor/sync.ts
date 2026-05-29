@@ -42,13 +42,23 @@ import { Facet, type Extension } from '@codemirror/state';
 
 const MAX_RETRIES = 3;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
+const IDB_HEALTH_INTERVAL_MS = 120_000;
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 type StatusListener = (status: ConnectionStatus) => void;
 type ErrorListener = (message: string) => void;
+type LastSyncedListener = (ts: number) => void;
+type IdbErrorListener = (message: string | null) => void;
+
 const statusListeners: StatusListener[] = [];
 const errorListeners: ErrorListener[] = [];
+const lastSyncedListeners: LastSyncedListener[] = [];
+const idbErrorListeners: IdbErrorListener[] = [];
+
 let lastError: string | null = null;
+let lastSyncedAt: number | null = null;
+let lastSyncedDebounce: ReturnType<typeof setTimeout> | null = null;
+let lastIdbError: string | null = null;
 
 interface UndoRedoProvider {
   undo(): boolean;
@@ -75,8 +85,32 @@ export function onConnectionError(listener: ErrorListener): () => void {
   };
 }
 
+export function onLastSyncedAt(listener: LastSyncedListener): () => void {
+  lastSyncedListeners.push(listener);
+  return () => {
+    const idx = lastSyncedListeners.indexOf(listener);
+    if (idx >= 0) lastSyncedListeners.splice(idx, 1);
+  };
+}
+
+export function onIdbError(listener: IdbErrorListener): () => void {
+  idbErrorListeners.push(listener);
+  return () => {
+    const idx = idbErrorListeners.indexOf(listener);
+    if (idx >= 0) idbErrorListeners.splice(idx, 1);
+  };
+}
+
 export function getLastConnectionError(): string | null {
   return lastError;
+}
+
+export function getLastSyncedAt(): number | null {
+  return lastSyncedAt;
+}
+
+export function getLastIdbError(): string | null {
+  return lastIdbError;
 }
 
 function notifyStatus(status: ConnectionStatus): void {
@@ -90,6 +124,21 @@ function notifyError(message: string): void {
   for (const listener of errorListeners) {
     listener(message);
   }
+}
+
+function notifyLastSynced(): void {
+  lastSyncedAt = Date.now();
+  if (lastSyncedDebounce) return;
+  lastSyncedDebounce = setTimeout(() => {
+    lastSyncedDebounce = null;
+    for (const listener of lastSyncedListeners) listener(lastSyncedAt!);
+  }, 1000);
+}
+
+function notifyIdbError(message: string | null): void {
+  if (message === lastIdbError) return;
+  lastIdbError = message;
+  for (const listener of idbErrorListeners) listener(message);
 }
 
 function getWsUrl(serverUrl: string): string {
@@ -129,7 +178,14 @@ function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSess
   ready.finally(() => clearTimeout(handshakeTimer)).catch(() => {});
 
   provider.on('sync', (isSynced: boolean) => {
-    if (isSynced) resolveReady();
+    if (isSynced) {
+      resolveReady();
+      notifyLastSynced();
+    }
+  });
+
+  ydoc.on('update', (_update: Uint8Array, origin: any) => {
+    if (provider.wsconnected) notifyLastSynced();
   });
 
   provider.on('status', (event: { status: string }) => {
@@ -162,6 +218,26 @@ function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSess
     }
   });
 
+  let idbHealthInterval: ReturnType<typeof setInterval> | null = null;
+  idbPersistence.whenSynced
+    .then(() => {
+      idbHealthInterval = setInterval(() => {
+        try {
+          const db = (idbPersistence as any).db as IDBDatabase | undefined;
+          if (db && db.objectStoreNames.length > 0) {
+            const tx = db.transaction(db.objectStoreNames[0], 'readonly');
+            tx.abort();
+          }
+          if (lastIdbError) notifyIdbError(null);
+        } catch {
+          notifyIdbError('Local storage connection lost — recent edits may not be saved locally');
+        }
+      }, IDB_HEALTH_INTERVAL_MS);
+    })
+    .catch((err: Error) => {
+      notifyIdbError(`Local storage failed to load: ${err.message}`);
+    });
+
   const extension: Extension = [
     yCollab(ytext, provider.awareness, { undoManager }),
     undoRedoFacet.of({
@@ -180,6 +256,7 @@ function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSess
       if (destroyed) return;
       destroyed = true;
       clearTimeout(handshakeTimer);
+      if (idbHealthInterval) clearInterval(idbHealthInterval);
       rejectReady(new Error('Session destroyed'));
       provider.disconnect();
       provider.destroy();

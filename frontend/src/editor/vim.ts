@@ -14,7 +14,7 @@ import { EditorView } from '@codemirror/view';
 import { EditorState, type Extension } from '@codemirror/state';
 import { unfoldAll, toggleFold, foldCode, unfoldCode } from '@codemirror/language';
 import { foldAllRecursive } from './folding';
-import { installVimClipboardSync } from './clipboard-sync';
+
 
 /**
  * Line range from a parsed `:` ex command. `start` and `end` are 0-based
@@ -352,16 +352,42 @@ export function applyExmaps(exmaps: VimExmap[]): void {
  * `,` (repeat-char-search-reverse) before the buffered `,x` mapping
  * has a chance to match.
  */
+// Operator keys enter operator-pending mode and naturally wait for a
+// motion, so `dd`/`cc`/`yy` work without unmapping. Unmapping these
+// would destroy the operator binding that noremap rhs keys depend on
+// (e.g. `noremap d "_d` needs the built-in `d` operator to exist).
+const NATIVE_OPERATORS = new Set(['d', 'c', 'y', '>', '<', '!', '=']);
+
 export function applyMappings(mappings: VimMapping[], mapleader?: string): void {
+  // Non-operator built-in keys (like `m` for set-mark, or the leader
+  // key) fire immediately on press, consuming the next character before
+  // the key matcher can recognize a multi-char mapping. Unmapping the
+  // built-in first lets the matcher wait for the full sequence.
+  const keysToUnmap = new Set<string>();
   if (mapleader && mapleader.length === 1) {
     const usedAsPrefix = mappings.some(
       (m) => m.lhs.length > 1 && m.lhs.startsWith(mapleader),
     );
-    // Pass undefined ctx (despite the .d.ts requiring string): default
-    // mappings have no context field, and unmap uses strict equality, so
-    // ctx must be undefined to match them.
-    if (usedAsPrefix) (Vim.unmap as (lhs: string, ctx?: string) => unknown)(mapleader);
+    if (usedAsPrefix) keysToUnmap.add(mapleader);
   }
+  for (const m of mappings) {
+    if (m.lhs.length !== 1) continue;
+    if (NATIVE_OPERATORS.has(m.lhs)) continue;
+    const isPrefix = mappings.some(
+      (other) => other.lhs.length > 1 && other.lhs[0] === m.lhs
+        && (other.context === m.context || other.context === '' || m.context === ''),
+    );
+    if (isPrefix) keysToUnmap.add(m.lhs);
+  }
+  // Pass undefined ctx (despite the .d.ts requiring string): default
+  // mappings have no context field, and unmap uses strict equality, so
+  // ctx must be undefined to match them.
+  for (const key of keysToUnmap) {
+    try {
+      (Vim.unmap as (lhs: string, ctx?: string) => unknown)(key);
+    } catch {}
+  }
+
   for (const m of mappings) {
     if (m.noremap) {
       Vim.noremap(m.lhs, m.rhs, m.context);
@@ -424,7 +450,6 @@ export function settingsToExtensions(settings: VimSetting[]): Extension[] {
  * it is parsed and the resulting mappings/settings are applied.
  */
 export function vimMode(vimrcContent?: string): Extension[] {
-  installVimClipboardSync();
   const extensions: Extension[] = [vim({ status: true })];
 
   if (vimrcContent) {
@@ -436,6 +461,14 @@ export function vimMode(vimrcContent?: string): Extension[] {
     applyMappings(result.mappings, result.mapleader);
     extensions.push(...settingsToExtensions(result.settings));
   }
+
+  // Register `m` as a direct delete operator for normal mode (easyclip
+  // "cut" key). This can't be done via vimrc keyToKey mapping because
+  // codemirror-vim's key matcher fires full matches immediately — a
+  // `noremap m d` would always consume `m` before `mm` could match.
+  // As a direct operator, `mm` works via processOperator's "same
+  // operator twice = linewise" logic, same as the built-in `dd`.
+  Vim.mapCommand('m', 'operator', 'delete', {}, {});
 
   return extensions;
 }

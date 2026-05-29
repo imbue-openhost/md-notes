@@ -28,6 +28,12 @@ repos:
         language: system
         pass_filenames: false
         types: [python]
+      - id: tsc
+        name: "tsc"
+        entry: bash -c 'cd frontend && npx tsc --noEmit'
+        language: system
+        pass_filenames: false
+        types_or: [ts, tsx]
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.24.2
     hooks:
