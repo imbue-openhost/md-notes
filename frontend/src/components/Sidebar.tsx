@@ -248,6 +248,7 @@ export const Sidebar: Component<Props> = (props) => {
         <Show when={props.showSyncStatus}>
           <div
             class="sidebar-sync-status"
+            data-status={props.syncStatus ?? 'disconnected'}
             title={props.syncErrorMsg ?? ''}
             style={props.syncStatus === 'error' ? { cursor: 'pointer' } : {}}
             onClick={() => { if (props.syncStatus === 'error' && props.syncErrorMsg) alert(props.syncErrorMsg); }}
@@ -258,7 +259,7 @@ export const Sidebar: Component<Props> = (props) => {
         </Show>
 
         <Show when={props.backendStatus && props.backendStatus !== 'connected'}>
-          <div class="sidebar-sync-status">
+          <div class="sidebar-sync-status" data-status={props.backendStatus}>
             <span class="sidebar-sync-dot" data-status={props.backendStatus} />
             <span>{BACKEND_LABELS[props.backendStatus!]}</span>
           </div>

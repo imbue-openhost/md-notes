@@ -11,7 +11,7 @@ import {
   type ConnectionStatus,
 } from './editor/sync';
 import { connectionState, UnauthorizedError, startHeartbeat } from './api/connection';
-import { serverUrl, getShareUuid, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
+import { serverUrl, getShareUuid, getVaultNameFromUrl, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
 import type { VaultConfig } from './api/types';
 import { VaultPicker } from './components/VaultPicker';
 import { Sidebar } from './components/Sidebar';
@@ -149,10 +149,14 @@ export const App: Component = () => {
     }
     setVaultList(vaults);
 
-    // Per-tab last-vault: sessionStorage scopes to this tab, so a refresh keeps
-    // the same vault even if another tab has since selected a different one.
-    // Fall back to localStorage so a freshly opened tab/window still gets a
-    // reasonable default from the user's most recent choice.
+    // Priority: URL path > sessionStorage > localStorage > VaultPicker
+    const urlVault = getVaultNameFromUrl();
+    if (urlVault) {
+      const match = vaults.find((v) => v.name === urlVault);
+      if (match) { openVault(match); return; }
+      history.replaceState({}, '', '/');
+    }
+
     try {
       const lastName =
         sessionStorage.getItem('mdnotes-last-vault') ??
@@ -185,12 +189,11 @@ export const App: Component = () => {
     setVault(v);
     setShowVaultPicker(false);
     if (v.name) {
-      // Write to both: sessionStorage pins this tab's choice across refreshes,
-      // localStorage seeds future new tabs/windows with the most recent choice.
       try {
         sessionStorage.setItem('mdnotes-last-vault', v.name);
         localStorage.setItem('mdnotes-last-vault', v.name);
       } catch {}
+      history.replaceState({}, '', '/' + encodeURIComponent(v.name));
     }
     if (v.sync && v.name) {
       createVault(v.name).catch(() => {});

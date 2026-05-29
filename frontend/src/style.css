@@ -165,6 +165,11 @@ li.open > .sidebar-children {
   border-top: 1px solid hsl(var(--border));
 }
 
+.sidebar-sync-status:not([data-status="connected"]):not([data-status="syncing"]) {
+  background: hsl(0 84% 60% / 0.2);
+  color: hsl(0 84% 70%);
+}
+
 .sidebar-sync-dot {
   width: 7px;
   height: 7px;

@@ -35,6 +35,14 @@ export function getShareUuid(): string | null {
   return match ? match[1] : null;
 }
 
+/** Vault name extracted from /<vault-name> URLs, or null if at root. */
+export function getVaultNameFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const seg = window.location.pathname.replace(/^\//, '').replace(/\/.*$/, '');
+  if (!seg) return null;
+  return decodeURIComponent(seg);
+}
+
 /** Fetch share-link metadata. The UUID in the URL is the capability — no auth required. */
 export async function fetchShareInfo(uuid: string): Promise<ShareInfo> {
   const res = await fetch(`${serverUrl}/api/share/${encodeURIComponent(uuid)}`);
