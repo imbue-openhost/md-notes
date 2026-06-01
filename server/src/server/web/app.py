@@ -33,6 +33,13 @@ async def health() -> str:
     return "ok"
 
 
+# Authed counterpart used by the frontend heartbeat: passes the owner guard, so a
+# failure distinguishes disconnected from unauthorized.
+@get("/api/health", media_type=MediaType.TEXT)
+async def api_health() -> str:
+    return "ok"
+
+
 def _path_traversal_handler(request: Request[Any, Any, Any], exc: PathTraversalError) -> Response[dict[str, str]]:
     return Response({"error": str(exc)}, status_code=403)
 
@@ -81,6 +88,7 @@ def create_app(config: Config) -> Litestar:
             ShareController,
             SettingsController,
             health,
+            api_health,
         ],
         dependencies={"config": Provide(lambda: config, sync_to_thread=False)},
         guards=[requires_owner],

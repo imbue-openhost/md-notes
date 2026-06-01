@@ -18,7 +18,7 @@ repos:
           - "--force-exclude"  # respect pyproject.toml's exclude settings even when passing in explicit file list
       - id: mypy
         name: mypy
-        entry: uv run --group dev mypy
+        entry: uv run --group dev python -m mypy
         language: system
         pass_filenames: false
         types: [python]

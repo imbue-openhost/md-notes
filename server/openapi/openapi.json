@@ -1039,6 +1039,26 @@
         },
         "deprecated": false
       }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "ApiHealth",
+        "operationId": "ApiHealthApiHealth",
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {},
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
     }
   },
   "components": {

@@ -43,6 +43,11 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
+/** Lightweight authed probe for the connection heartbeat. */
+export async function pingHealth(): Promise<void> {
+  await apiFetch('/api/health');
+}
+
 function docsBase(vaultName: string): string {
   return `/api/docs/${encodeURIComponent(vaultName)}`;
 }

@@ -5,6 +5,10 @@ const apiTarget = `http://localhost:${process.env.VITE_API_PORT || '8000'}`;
 
 export default defineConfig({
   plugins: [solidPlugin()],
+  // Ship source maps so dev tools show original, un-minified source.
+  build: {
+    sourcemap: true,
+  },
   optimizeDeps: {
     exclude: ['@arminmajerie/dockview-solid'],
   },

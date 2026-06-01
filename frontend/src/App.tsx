@@ -2,7 +2,7 @@ import { createSignal, createResource, createEffect, onMount, onCleanup, Show, t
 import { createEditor, type EditorInstance } from './editor/editor';
 import {
   createShareLink, listShareLinks, deleteShareLink,
-  listVaults, createVault, deleteVault, getServerVimrc,
+  listVaults, createVault, deleteVault, getServerVimrc, pingHealth,
 } from './api/client';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
 import {
@@ -105,9 +105,12 @@ export const App: Component = () => {
     await loadWebVaults();
     setBooting(false);
     // Heartbeat keeps the connection indicator fresh while the user is idle.
-    // Re-uses listVaults as a cheap authed probe; failure routes to the
-    // connection-state signal but does NOT trigger a redirect.
-    startHeartbeat(async () => { await listVaults(); });
+    // Authed probe; failure routes to the connection-state signal but does NOT
+    // trigger a redirect. Skipped while the tab is hidden.
+    startHeartbeat(async () => {
+      if (document.hidden) return;
+      await pingHealth();
+    });
   }
 
   async function fetchVaultList(): Promise<VaultConfig[]> {
