@@ -7,6 +7,7 @@ import {
   EditorState,
   type Extension,
   Transaction,
+  type TransactionSpec,
 } from '@codemirror/state';
 import {
   detectIndentUnit,
@@ -129,13 +130,13 @@ export function pasteIndentNormalization(): Extension {
       tr.newSelection.mainIndex,
     );
 
-    const spec: Parameters<EditorState['update']>[0] = {
+    const ue = tr.annotation(Transaction.userEvent);
+    const spec: TransactionSpec = {
       changes: adjusted as ChangeSpec,
       selection: sel,
       scrollIntoView: tr.scrollIntoView,
+      userEvent: ue,
     };
-    const ue = tr.annotation(Transaction.userEvent);
-    if (ue !== undefined) spec.userEvent = ue;
     return spec;
   });
 }
