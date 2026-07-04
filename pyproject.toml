@@ -16,6 +16,8 @@ dependencies = [
 dev = [
     "ruff",
     "mypy",
+    "pytest",
+    "openhost[test-harness] @ git+https://github.com/imbue-openhost/openhost@main",
 ]
 
 [build-system]
@@ -52,6 +54,9 @@ case-sensitive = true
 known-first-party = [
     "server",
 ]
+
+[tool.pytest.ini_options]
+markers = ["containers: tests requiring podman container build"]
 
 [tool.mypy]
 python_version = "3.12"

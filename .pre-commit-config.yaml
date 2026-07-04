@@ -30,7 +30,7 @@ repos:
         types: [python]
       - id: tsc
         name: "tsc"
-        entry: bash -c 'cd frontend && npx tsc --noEmit'
+        entry: bash -c 'cd frontend && node_modules/.bin/tsc --noEmit'
         language: system
         pass_filenames: false
         types_or: [ts, tsx]
