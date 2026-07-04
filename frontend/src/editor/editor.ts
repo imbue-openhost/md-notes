@@ -37,6 +37,7 @@ import {
 import { markdownFolding } from './folding';
 import { foldPersistence } from './fold-persistence';
 import { indentDetection } from './indent/indentUnitField';
+import { pasteIndentNormalization } from './indent/pasteIndent';
 import { Vim } from '@replit/codemirror-vim';
 
 import { vimMode, toggleTaskAtSelection } from './vim';
@@ -120,6 +121,7 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     mouseSelectingField,
     editorTheme,
     indentDetection(),
+    pasteIndentNormalization(),
     spaceWidthField,
     spaceWidthMeasurer,
     markdownStylePlugin,
