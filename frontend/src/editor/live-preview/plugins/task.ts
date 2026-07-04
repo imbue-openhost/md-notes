@@ -36,6 +36,7 @@ class CheckboxWidget extends WidgetType {
     input.type = 'checkbox';
     input.checked = this.checked;
     input.className = 'cm-task-checkbox';
+    input.autocomplete = 'off';
     input.addEventListener('click', (e) => {
       e.preventDefault();
       const insert = this.checked ? '[ ]' : '[x]';
