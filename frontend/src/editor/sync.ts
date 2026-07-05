@@ -49,7 +49,8 @@ const IDB_HEALTH_INTERVAL_MS = 120_000;
 // when it merges, so stale caches must be dropped, never synced. Each doc-open compares this against a
 // per-doc localStorage marker and clears that doc's IndexedDB cache on mismatch.
 // 1: initial epoch (2026-07: recovery from the paste-indent sync corruption bug).
-const CRDT_CACHE_EPOCH = 1;
+// 2: 2026-07 vault-wide dedup — server sidecars rewritten, so stale client caches must be dropped.
+const CRDT_CACHE_EPOCH = 2;
 const EPOCH_MARKER_PREFIX = 'mdnotes:crdt-epoch:';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
