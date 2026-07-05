@@ -416,113 +416,6 @@
         "deprecated": false
       }
     },
-    "/api/docs/{vault_name}/search": {
-      "get": {
-        "summary": "Search",
-        "operationId": "ApiDocsVaultNameSearchSearch",
-        "parameters": [
-          {
-            "name": "vault_name",
-            "in": "path",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 50
-            },
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "normalize",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "default": true
-            },
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {},
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SearchHit"
-                  },
-                  "type": "array"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request syntax or unsupported method",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status_code": {
-                      "type": "integer"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "extra": {
-                      "additionalProperties": {},
-                      "type": [
-                        "null",
-                        "object",
-                        "array"
-                      ]
-                    }
-                  },
-                  "type": "object",
-                  "required": [
-                    "detail",
-                    "status_code"
-                  ],
-                  "description": "Validation Exception",
-                  "examples": [
-                    {
-                      "status_code": 400,
-                      "detail": "Bad Request",
-                      "extra": {}
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
     "/api/vaults": {
       "get": {
         "summary": "ListAll",
@@ -1255,22 +1148,6 @@
         ],
         "title": "FileEntry"
       },
-      "MatchRange": {
-        "properties": {
-          "start": {
-            "type": "integer"
-          },
-          "end": {
-            "type": "integer"
-          }
-        },
-        "type": "object",
-        "required": [
-          "end",
-          "start"
-        ],
-        "title": "MatchRange"
-      },
       "OkResponse": {
         "properties": {
           "ok": {
@@ -1292,37 +1169,6 @@
           "newPath"
         ],
         "title": "RenameBody"
-      },
-      "SearchHit": {
-        "properties": {
-          "path": {
-            "type": "string"
-          },
-          "line_number": {
-            "type": "integer"
-          },
-          "text": {
-            "type": "string"
-          },
-          "ranges": {
-            "items": {
-              "$ref": "#/components/schemas/MatchRange"
-            },
-            "type": "array"
-          },
-          "score": {
-            "type": "number"
-          }
-        },
-        "type": "object",
-        "required": [
-          "line_number",
-          "path",
-          "ranges",
-          "score",
-          "text"
-        ],
-        "title": "SearchHit"
       },
       "ShareLink": {
         "properties": {

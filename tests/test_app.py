@@ -96,42 +96,6 @@ def test_path_traversal_blocked(stack: OpenhostStack) -> None:
     s.delete(f"{base}/api/vaults/{vault}")
 
 
-def test_search(stack: OpenhostStack) -> None:
-    s = stack.owner_session
-    base = stack.url
-    vault = "search-test"
-
-    s.post(f"{base}/api/vaults", json={"name": vault})
-    s.post(f"{base}/api/docs/{vault}/file?path=exact.md", json={"content": "intro\nthe quick brown fox\n"})
-    s.post(f"{base}/api/docs/{vault}/file?path=variant.md", json={"content": "Quick-Brown fox jumps\n"})
-    s.post(f"{base}/api/docs/{vault}/file?path=decoy.md", json={"content": "nothing relevant\n"})
-
-    r = s.get(f"{base}/api/docs/{vault}/search?q=quick%20brown")
-    assert r.status_code == 200
-    hits = r.json()
-    paths = [h["path"] for h in hits]
-    assert set(paths[:2]) == {"exact.md", "variant.md"}
-    assert "decoy.md" not in paths
-    exact = hits[paths.index("exact.md")]
-    assert exact["line_number"] == 2
-    (rng,) = exact["ranges"]
-    assert exact["text"][rng["start"] : rng["end"]] == "quick brown"
-
-    r = s.get(f"{base}/api/docs/{vault}/search?q=Quick-Brown&normalize=false")
-    assert r.status_code == 200
-    top = [h["path"] for h in r.json() if h["score"] == 100.0]
-    assert top == ["variant.md"]
-
-    r = s.get(f"{base}/api/docs/{vault}/search?q=")
-    assert r.status_code == 200
-    assert r.json() == []
-
-    r = s.get(f"{base}/api/docs/no-such-vault/search?q=x")
-    assert r.status_code == 404
-
-    s.delete(f"{base}/api/vaults/{vault}")
-
-
 def test_vimrc_roundtrip(stack: OpenhostStack) -> None:
     s = stack.owner_session
     base = stack.url

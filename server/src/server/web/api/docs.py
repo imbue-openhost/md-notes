@@ -35,7 +35,6 @@ from server.models.common import OkResponse
 from server.models.files import CreateFileBody
 from server.models.files import FileEntry
 from server.models.files import RenameBody
-from server.models.search import SearchHit
 from server.web.api.channel import LitestarWebsocketChannel
 
 
@@ -49,16 +48,6 @@ class DocsController(Controller):
     @get("/file", media_type=MediaType.TEXT)
     async def get_file(self, vault_name: str, path: str, config: Config) -> str:
         return read_file(vault_root(config.vault_path, vault_name), path)
-
-    @get("/search", sync_to_thread=True)
-    def search(
-        self, vault_name: str, q: str, config: Config, limit: int = 50, normalize: bool = True
-    ) -> list[SearchHit]:
-        """One-shot search for API clients; the interactive UI uses search_websocket instead.
-
-        Sync handler on the threadpool (unlike the async handlers above) because the scan is CPU-bound.
-        """
-        return search_vault(vault_root(config.vault_path, vault_name), q, limit, normalize)
 
     @websocket("/search_websocket")
     async def search_websocket(self, socket: WebSocket[Any, Any, Any], vault_name: str, config: Config) -> None:
