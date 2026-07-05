@@ -1,6 +1,10 @@
+import threading
 from pathlib import Path
 
+import pytest
+
 from server.core.search import SNIPPET_WINDOW
+from server.core.search import SearchCancelled
 from server.core.search import normalize
 from server.core.search import search_vault
 
@@ -113,6 +117,14 @@ def test_non_utf8_file_skipped(tmp_path: Path) -> None:
     vault = make_vault(tmp_path, {"good.md": "findme\n"})
     (tmp_path / "bad.md").write_bytes(b"\xff\xfe findme \xff")
     assert [h.path for h in search_vault(vault, "findme")] == ["good.md"]
+
+
+def test_cancel_event_aborts_scan(tmp_path: Path) -> None:
+    vault = make_vault(tmp_path, {"a.md": "findme\n"})
+    cancel = threading.Event()
+    cancel.set()
+    with pytest.raises(SearchCancelled):
+        search_vault(vault, "findme", cancel=cancel)
 
 
 def test_empty_query_and_empty_vault(tmp_path: Path) -> None:

@@ -9,6 +9,7 @@ Matching is per-line: a phrase spanning a hard line break won't match.
 """
 
 import os
+import threading
 import unicodedata
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -26,6 +27,10 @@ SCORE_CUTOFF = 60.0
 SNIPPET_WINDOW = 200
 DEFAULT_LIMIT = 50
 MIN_LINES_PER_CHUNK = 10_000
+
+
+class SearchCancelled(Exception):
+    """Raised when the caller sets the cancel event (e.g. the client disconnected)."""
 
 
 # Kept 1:1 by the fold so that fold(content).splitlines() aligns with content.splitlines().
@@ -110,8 +115,16 @@ def _snippet(folded_query: str, line: str, fold: Callable[[str], str]) -> tuple[
     return text, ranges
 
 
-def _score(folded_query: str, choices: list[str]) -> "np.ndarray[tuple[int], np.dtype[np.float32]]":
+def _check_cancel(cancel: threading.Event | None) -> None:
+    if cancel is not None and cancel.is_set():
+        raise SearchCancelled
+
+
+def _score(
+    folded_query: str, choices: list[str], cancel: threading.Event | None
+) -> "np.ndarray[tuple[int], np.dtype[np.float32]]":
     def score_chunk(chunk: list[str]) -> "np.ndarray[tuple[int], np.dtype[np.float32]]":
+        _check_cancel(cancel)
         result: np.ndarray[tuple[int], np.dtype[np.float32]] = process.cdist(
             [folded_query], chunk, scorer=fuzz.partial_ratio, score_cutoff=SCORE_CUTOFF, dtype=np.float32
         )[0]
@@ -127,11 +140,16 @@ def _score(folded_query: str, choices: list[str]) -> "np.ndarray[tuple[int], np.
 
 
 def search_vault(
-    vault_root: Path, query: str, limit: int = DEFAULT_LIMIT, do_normalize: bool = True
+    vault_root: Path,
+    query: str,
+    limit: int = DEFAULT_LIMIT,
+    do_normalize: bool = True,
+    cancel: threading.Event | None = None,
 ) -> list[SearchHit]:
     """Top `limit` matching lines across the vault, ranked purely by score (a file may appear repeatedly).
 
     With do_normalize=False the fold is skipped, so case/punctuation/diacritics count toward the distance.
+    Setting `cancel` aborts the scan at the next file/chunk boundary by raising SearchCancelled.
     """
     if do_normalize:
         fold: Callable[[str], str] = normalize
@@ -145,6 +163,7 @@ def search_vault(
     lines: list[tuple[str, int, str]] = []  # (rel_path, line_number, original_line)
     choices: list[str] = []
     for path in iter_md_files(vault_root):
+        _check_cancel(cancel)
         try:
             content = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
@@ -160,7 +179,7 @@ def search_vault(
     if not choices:
         return []
 
-    scores = _score(folded_query, choices)
+    scores = _score(folded_query, choices, cancel)
     candidates = np.flatnonzero(scores >= SCORE_CUTOFF).tolist()
     candidates.sort(key=lambda i: (-scores[i], lines[i][0], lines[i][1]))
 

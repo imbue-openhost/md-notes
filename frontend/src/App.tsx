@@ -368,6 +368,7 @@ export const App: Component = () => {
 
       <Show when={vault() && showSearch()}>
         <SearchModal
+          vaultName={vault()!.name}
           onSelect={(path, line) => layoutHandle?.openFileAt(path, line)}
           onClose={() => setShowSearch(false)}
         />

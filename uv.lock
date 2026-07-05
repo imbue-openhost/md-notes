@@ -639,6 +639,7 @@ name = "md-notes"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "attrs" },
     { name = "hypercorn" },
     { name = "litestar" },
@@ -660,6 +661,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.13.0" },
     { name = "attrs", specifier = ">=24.0" },
     { name = "hypercorn", specifier = ">=0.17" },
     { name = "litestar", specifier = ">=2.12" },

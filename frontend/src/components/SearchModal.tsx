@@ -1,15 +1,16 @@
 import { createSignal, createEffect, onMount, onCleanup, For, Show, type Component } from 'solid-js';
 import { Dialog } from '@kobalte/core';
 import type { SearchHit } from '../api/types';
-import { searchVault } from '../api/vault-ops';
+import { createSearchSession, type SearchSession } from '../api/search-session';
+import { serverUrl } from '../config';
 import { splitByRanges } from './search-highlight';
 
 interface Props {
+  vaultName: string;
   onSelect: (path: string, line: number) => void;
   onClose: () => void;
 }
 
-const DEBOUNCE_MS = 150;
 const EXACT_MODE_KEY = 'mdnotes-search-exact';
 
 export const SearchModal: Component<Props> = (props) => {
@@ -17,49 +18,42 @@ export const SearchModal: Component<Props> = (props) => {
   const [results, setResults] = createSignal<SearchHit[]>([]);
   const [selected, setSelected] = createSignal(0);
   const [loading, setLoading] = createSignal(false);
+  const [sessionError, setSessionError] = createSignal(false);
   const [exactMode, setExactMode] = createSignal(localStorage.getItem(EXACT_MODE_KEY) === '1');
   let inputRef!: HTMLInputElement;
   let listRef: HTMLUListElement | undefined;
 
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let controller: AbortController | undefined;
-  let seq = 0;
+  // Every keystroke goes straight to the server; it cancels the superseded
+  // scan itself (no client debounce). Results are matched back by id since
+  // superseded queries never reply.
+  let latestId = 0;
+  const session: SearchSession = createSearchSession(
+    props.vaultName,
+    serverUrl,
+    (id, hits) => {
+      if (id !== latestId) return;
+      setResults(hits);
+      setLoading(false);
+      setSessionError(false);
+    },
+    () => {
+      setSessionError(true);
+      setLoading(false);
+    },
+  );
+  onCleanup(() => session.close());
 
   createEffect(() => {
     const q = query();
     const exact = exactMode();
-    clearTimeout(timer);
+    latestId++;
     if (!q.trim()) {
-      controller?.abort();
-      seq++;
       setResults([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    timer = setTimeout(async () => {
-      controller?.abort();
-      const c = new AbortController();
-      controller = c;
-      const mySeq = ++seq;
-      try {
-        const hits = await searchVault(q, !exact, c.signal);
-        if (mySeq !== seq) return; // superseded by a newer query
-        setResults(hits);
-        setLoading(false);
-      } catch (e) {
-        if (e instanceof DOMException && e.name === 'AbortError') return;
-        if (mySeq !== seq) return;
-        console.warn('Search failed:', e);
-        setResults([]);
-        setLoading(false);
-      }
-    }, DEBOUNCE_MS);
-  });
-
-  onCleanup(() => {
-    clearTimeout(timer);
-    controller?.abort();
+    session.search(latestId, q, !exact);
   });
 
   createEffect(() => {
@@ -110,7 +104,8 @@ export const SearchModal: Component<Props> = (props) => {
 
   function emptyMessage(): string {
     if (!query().trim()) return 'Type to search the vault';
-    return loading() ? 'Searching…' : 'No results';
+    if (loading()) return 'Searching…';
+    return sessionError() ? 'Search unavailable — is the server reachable?' : 'No results';
   }
 
   return (
