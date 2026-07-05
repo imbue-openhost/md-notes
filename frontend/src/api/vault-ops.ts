@@ -2,7 +2,7 @@
  * Vault-aware file operations via the REST API.
  */
 
-import type { FileEntry, VaultConfig } from './types';
+import type { FileEntry, SearchHit, VaultConfig } from './types';
 import * as api from './client';
 import { clearVaultDocCache } from '../editor/sync';
 
@@ -27,6 +27,10 @@ export async function listFiles(): Promise<FileEntry[]> {
 
 export async function readFile(path: string): Promise<string> {
   return api.readFile(requireVaultName(), path);
+}
+
+export async function searchVault(q: string, normalize: boolean, signal?: AbortSignal): Promise<SearchHit[]> {
+  return api.searchVault(requireVaultName(), q, normalize, 50, signal);
 }
 
 export async function createFile(path: string, content = '', type: 'file' | 'dir' = 'file'): Promise<void> {

@@ -2,7 +2,7 @@
  * REST API client for file operations.
  */
 
-import type { FileEntry } from './types';
+import type { FileEntry, SearchHit } from './types';
 import {
   markConnected, markDisconnected, markUnauthorized, UnauthorizedError,
 } from './connection';
@@ -24,7 +24,11 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   try {
     res = await fetch(`${baseUrl}${path}`, init);
   } catch (e) {
-    markDisconnected();
+    // An intentionally aborted request (e.g. superseded search-as-you-type
+    // query) says nothing about connectivity.
+    if (!(e instanceof DOMException && e.name === 'AbortError')) {
+      markDisconnected();
+    }
     throw e;
   }
   if (res.status === 401 || res.status === 403) {
@@ -64,6 +68,18 @@ export async function listFiles(vaultName: string): Promise<FileEntry[]> {
 export async function readFile(vaultName: string, path: string): Promise<string> {
   const res = await apiFetch(fileUrl(vaultName, path));
   return res.text();
+}
+
+export async function searchVault(
+  vaultName: string,
+  q: string,
+  normalize: boolean,
+  limit = 50,
+  signal?: AbortSignal,
+): Promise<SearchHit[]> {
+  const params = new URLSearchParams({ q, normalize: String(normalize), limit: String(limit) });
+  const res = await apiFetch(`${docsBase(vaultName)}/search?${params}`, { signal });
+  return res.json();
 }
 
 export async function createFile(

@@ -7,10 +7,12 @@ import {
   type DockviewReadyEvent,
 } from '@arminmajerie/dockview-solid';
 import '@arminmajerie/dockview-solid/dist/styles/dockview.css';
+import { EditorView } from '@codemirror/view';
 import type { EditorInstance } from '../editor/editor';
 
 export interface EditorLayoutHandle {
   openFile: (path: string) => void;
+  openFileAt: (path: string, line: number) => void;
   splitPane: () => void;
   focusGroupLeft: () => void;
   focusGroupRight: () => void;
@@ -39,6 +41,22 @@ let panelCounter = 0;
 
 const editorInstances = new Map<string, EditorInstance>();
 const panelScrollTops = new Map<string, number>();
+// Line to jump to once a freshly created panel's editor has synced, keyed by panel id.
+const pendingJumps = new Map<string, number>();
+
+function jumpToLine(panelId: string, instance: EditorInstance, line: number) {
+  // The panel may have been closed while we awaited sync.
+  if (editorInstances.get(panelId) !== instance) return;
+  const { view } = instance;
+  // The search result came from disk, which can lag the live doc — clamp.
+  const n = Math.max(1, Math.min(line, view.state.doc.lines));
+  const pos = view.state.doc.line(n).from;
+  view.dispatch({
+    selection: { anchor: pos },
+    effects: EditorView.scrollIntoView(pos, { y: 'center' }),
+  });
+  view.focus();
+}
 
 function layoutStorageKey(vaultName: string): string {
   return `mdnotes-layout-${vaultName}`;
@@ -67,23 +85,44 @@ function syncPanelCounter(api: DockviewApi) {
 export const EditorLayout: Component<Props> = (props) => {
   let api: DockviewApi | undefined;
 
+  function openPanel(path: string, line?: number) {
+    if (!api) return;
+    for (const panel of api.panels) {
+      if ((panel.params as any)?.filePath === path) {
+        if (line !== undefined) {
+          const instance = editorInstances.get(panel.id);
+          if (instance) {
+            // Suppress the visibility-restore scroll (it would race the jump
+            // and yank the view back to the pre-jump position).
+            panelScrollTops.delete(panel.id);
+            instance.ready.then(() => jumpToLine(panel.id, instance, line));
+          } else {
+            // Panel exists but its editor hasn't mounted yet (e.g. layout
+            // just restored); let onMount perform the jump.
+            pendingJumps.set(panel.id, line);
+          }
+        }
+        panel.api.setActive();
+        return;
+      }
+    }
+    const panelId = `file-${++panelCounter}`;
+    if (line !== undefined) pendingJumps.set(panelId, line);
+    const name = path.replace(/\.md$/, '').split('/').pop() || path;
+    api.addPanel({
+      id: panelId,
+      component: 'editor',
+      title: name,
+      params: { filePath: path },
+    });
+  }
+
   const handle: EditorLayoutHandle = {
     openFile(path: string) {
-      if (!api) return;
-      for (const panel of api.panels) {
-        if ((panel.params as any)?.filePath === path) {
-          panel.api.setActive();
-          return;
-        }
-      }
-      const panelId = `file-${++panelCounter}`;
-      const name = path.replace(/\.md$/, '').split('/').pop() || path;
-      api.addPanel({
-        id: panelId,
-        component: 'editor',
-        title: name,
-        params: { filePath: path },
-      });
+      openPanel(path);
+    },
+    openFileAt(path: string, line: number) {
+      openPanel(path, line);
     },
     splitPane() {
       if (!api) return;
@@ -151,6 +190,12 @@ export const EditorLayout: Component<Props> = (props) => {
       });
       const panelId = panelProps.api.id;
       editorInstances.set(panelId, instance);
+
+      const pendingLine = pendingJumps.get(panelId);
+      if (pendingLine !== undefined) {
+        pendingJumps.delete(panelId);
+        instance.ready.then(() => jumpToLine(panelId, instance, pendingLine));
+      }
 
       // Capture scroll on every scroll event. Reading scrollTop in
       // onDidActivePanelChange is unreliable — by then dockview may have
@@ -234,6 +279,7 @@ export const EditorLayout: Component<Props> = (props) => {
     }
     editorInstances.clear();
     panelScrollTops.clear();
+    pendingJumps.clear();
   });
 
   return (

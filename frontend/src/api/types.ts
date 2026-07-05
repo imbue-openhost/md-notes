@@ -10,3 +10,17 @@ export interface VaultConfig {
   path: string;
   sync: boolean;
 }
+
+/** Codepoint offsets into SearchHit.text; end-exclusive. */
+export interface MatchRange {
+  start: number;
+  end: number;
+}
+
+export interface SearchHit {
+  path: string;
+  line_number: number;
+  text: string;
+  ranges: MatchRange[];
+  score: number;
+}

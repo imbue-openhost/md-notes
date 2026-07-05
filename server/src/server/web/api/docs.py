@@ -19,6 +19,7 @@ from server.core.files import list_files
 from server.core.files import read_file
 from server.core.files import rename_file
 from server.core.files import write_file
+from server.core.search import search_vault
 from server.core.sync import SyncManager
 from server.core.sync import SyncNotRunning
 from server.core.vaults import vault_root
@@ -26,6 +27,7 @@ from server.models.common import OkResponse
 from server.models.files import CreateFileBody
 from server.models.files import FileEntry
 from server.models.files import RenameBody
+from server.models.search import SearchHit
 from server.web.api.channel import LitestarWebsocketChannel
 
 
@@ -39,6 +41,14 @@ class DocsController(Controller):
     @get("/file", media_type=MediaType.TEXT)
     async def get_file(self, vault_name: str, path: str, config: Config) -> str:
         return read_file(vault_root(config.vault_path, vault_name), path)
+
+    @get("/search", sync_to_thread=True)
+    def search(
+        self, vault_name: str, q: str, config: Config, limit: int = 50, normalize: bool = True
+    ) -> list[SearchHit]:
+        # Sync handler on the threadpool (unlike the async handlers above): the scan + scoring is
+        # CPU-bound and search-as-you-type requests overlap, so it must not block the event loop.
+        return search_vault(vault_root(config.vault_path, vault_name), q, limit, normalize)
 
     @post("/file", status_code=HTTP_201_CREATED)
     async def create_file(self, vault_name: str, path: str, data: CreateFileBody, config: Config) -> OkResponse:

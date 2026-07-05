@@ -84,3 +84,39 @@ def test_yjs_sync_between_tabs(stack: OpenhostStack, page: Page) -> None:
 
     ctx1.close()
     ctx2.close()
+
+
+def test_search_palette(stack: OpenhostStack, page: Page) -> None:
+    s = stack.owner_session
+    s.post(
+        f"{stack.url}/api/docs/{VAULT}/file?path=search-target.md",
+        json={"content": "top line\n\nfind the Golden-Nugget here\n"},
+    )
+
+    stack.playwright_login(page)
+    page.goto(stack.url)
+    page.locator(".vault-picker-item-name", has_text=VAULT).click()
+    page.wait_for_selector("#sidebar")
+
+    # App handles metaKey || ctrlKey, so Control works cross-platform.
+    page.keyboard.press("Control+Shift+F")
+    search_input = page.locator(".search-modal input")
+    expect(search_input).to_be_visible()
+
+    # Fuzzy default: query with different case/punctuation still matches, highlighted.
+    search_input.type("golden nugget")
+    hit = page.locator(".search-hit", has_text="search-target.md")
+    expect(hit.first).to_be_visible()
+    expect(page.locator("mark.search-hl").first).to_have_text("Golden-Nugget")
+
+    # Selecting the hit opens the file with the cursor on the matched line.
+    hit.first.click()
+    page.wait_for_selector(".cm-editor", timeout=10_000)
+    expect(page.locator(".cm-content")).to_contain_text("Golden-Nugget")
+    expect(page.locator(".cm-activeLine")).to_contain_text("Golden-Nugget", timeout=10_000)
+
+    # Escape closes the palette.
+    page.keyboard.press("Control+Shift+F")
+    expect(page.locator(".search-modal input")).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(page.locator(".search-modal input")).not_to_be_visible()

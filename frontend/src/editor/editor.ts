@@ -181,6 +181,9 @@ export interface EditorOptions {
 
 export interface EditorInstance {
   view: EditorView;
+  /** Resolves once the doc content is authoritative (first server sync; immediate when not syncing).
+   * Never rejects — sync failure is surfaced via onSyncFailed. */
+  ready: Promise<void>;
   destroy: () => void;
 }
 
@@ -260,6 +263,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   let destroyed = false;
   return {
     view,
+    ready: syncSession ? syncSession.ready.catch(() => {}) : Promise.resolve(),
     destroy: () => {
       if (destroyed) return;
       destroyed = true;

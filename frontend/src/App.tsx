@@ -19,6 +19,7 @@ import { EditorLayout, type EditorLayoutHandle } from './components/EditorLayout
 import { ShareModal } from './components/ShareModal';
 import { WebSettingsModal } from './components/SettingsModal';
 import { QuickOpen } from './components/QuickOpen';
+import { SearchModal } from './components/SearchModal';
 
 import DEFAULT_VIMRC from './default.vimrc?raw';
 
@@ -77,6 +78,7 @@ export const App: Component = () => {
   const [shareModalPath, setShareModalPath] = createSignal<string | null>(null);
   const [showWebSettings, setShowWebSettings] = createSignal(false);
   const [showQuickOpen, setShowQuickOpen] = createSignal(false);
+  const [showSearch, setShowSearch] = createSignal(false);
   const [syncErrorPath, setSyncErrorPath] = createSignal<string | null>(null);
   const [syncStatus, setSyncStatus] = createSignal<ConnectionStatus>('connecting');
   const [syncErrorMsg, setSyncErrorMsg] = createSignal<string | null>(null);
@@ -269,6 +271,11 @@ export const App: Component = () => {
         e.stopPropagation();
         if (vault()) setShowQuickOpen(true);
       }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && key === 'f') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (vault()) setShowSearch(true);
+      }
       if (e.ctrlKey && !e.metaKey && !e.shiftKey && key === 'h') {
         e.preventDefault();
         e.stopPropagation();
@@ -320,6 +327,7 @@ export const App: Component = () => {
           vaultName={vault()!.name}
           vaults={vaultList()}
           onSelect={handleFileSelect}
+          onSearch={() => setShowSearch(true)}
           onShare={setShareModalPath}
           onSwitchToVault={switchToVault}
           onManageVaults={switchVault}
@@ -355,6 +363,13 @@ export const App: Component = () => {
         <QuickOpen
           onSelect={(path) => layoutHandle?.openFile(path)}
           onClose={() => setShowQuickOpen(false)}
+        />
+      </Show>
+
+      <Show when={vault() && showSearch()}>
+        <SearchModal
+          onSelect={(path, line) => layoutHandle?.openFileAt(path, line)}
+          onClose={() => setShowSearch(false)}
         />
       </Show>
 
