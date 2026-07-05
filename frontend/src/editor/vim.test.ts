@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { Vim } from '@replit/codemirror-vim';
-import { parseVimrc, applyMappings, type VimMapping } from './vim';
+import { Vim, type CodeMirrorV, type MotionArgs, type Pos, type vimState } from '@replit/codemirror-vim';
+import { parseVimrc, applyMappings, moveByDisplayLines, type VimMapping } from './vim';
 
 describe('parseVimrc: easyclip-style d/m remapping', () => {
   // Normal-mode m/mm are handled via Vim.mapCommand in vimMode(), not vimrc
@@ -146,5 +146,72 @@ describe('applyMappings: built-in key unmapping', () => {
     const unmappedKeys = unmapSpy.mock.calls.map((c: unknown[]) => c[0]);
     expect(unmappedKeys).not.toContain('j');
     expect(unmappedKeys).not.toContain('k');
+  });
+});
+
+describe('moveByDisplayLines: gj/gk without the hitSide coords fallback', () => {
+  function makeVimState(overrides: Partial<vimState> = {}): vimState {
+    return { lastMotion: null, lastHSPos: 0, lastHPos: 0, ...overrides } as vimState;
+  }
+
+  function makeCm(findPosVResult: Pos & { hitSide?: boolean }, charLeft = 42) {
+    return {
+      charCoords: vi.fn().mockReturnValue({ left: charLeft, top: 100, bottom: 116 }),
+      findPosV: vi.fn().mockReturnValue(findPosVResult),
+      coordsChar: vi.fn(),
+    } as unknown as CodeMirrorV;
+  }
+
+  const args = (forward: boolean, repeat = 1) => ({ forward, repeat }) as MotionArgs;
+
+  it('gj at the end of the document stays put instead of jumping to the top', () => {
+    // findPosV clips to the doc edge and reports hitSide; the buggy built-in
+    // then re-derived the position via coordsChar, landing at offset 0.
+    const head: Pos = { line: 9, ch: 5 };
+    const cm = makeCm({ line: 9, ch: 5, hitSide: true });
+    const res = moveByDisplayLines(cm, head, args(true), makeVimState());
+    expect(res).toMatchObject({ line: 9, ch: 5 });
+    expect((cm as any).coordsChar).not.toHaveBeenCalled();
+  });
+
+  it('gk at the start of the document returns the clamped position', () => {
+    const cm = makeCm({ line: 0, ch: 0, hitSide: true });
+    const res = moveByDisplayLines(cm, { line: 0, ch: 3 }, args(false), makeVimState());
+    expect(res).toMatchObject({ line: 0, ch: 0 });
+    expect((cm as any).coordsChar).not.toHaveBeenCalled();
+  });
+
+  it('returns findPosV result for a normal downward move and records lastHPos', () => {
+    const cm = makeCm({ line: 3, ch: 7 });
+    const vimState = makeVimState();
+    const res = moveByDisplayLines(cm, { line: 2, ch: 7 }, args(true), vimState);
+    expect(res).toMatchObject({ line: 3, ch: 7 });
+    expect(vimState.lastHPos).toBe(7);
+  });
+
+  it('resets lastHSPos from the cursor when the previous motion was not vertical', () => {
+    const cm = makeCm({ line: 1, ch: 0 }, 55);
+    const vimState = makeVimState({ lastHSPos: 999 });
+    moveByDisplayLines(cm, { line: 0, ch: 0 }, args(true), vimState);
+    expect(vimState.lastHSPos).toBe(55);
+    expect((cm as any).findPosV).toHaveBeenCalledWith({ line: 0, ch: 0 }, 1, 'line', 55);
+  });
+
+  it('preserves lastHSPos across consecutive vertical motions', () => {
+    const motions: Record<string, unknown> = {};
+    const vimState = makeVimState({ lastHSPos: 123 });
+    vimState.lastMotion = moveByDisplayLines as never;
+    motions.moveByDisplayLines = vimState.lastMotion;
+    const cm = makeCm({ line: 2, ch: 0 }, 55);
+    moveByDisplayLines.call(motions, cm, { line: 1, ch: 0 }, args(true), vimState);
+    expect(vimState.lastHSPos).toBe(123);
+    expect((cm as any).charCoords).not.toHaveBeenCalled();
+  });
+
+  it('is registered as the moveByDisplayLines motion by vimMode()', async () => {
+    const defineMotionSpy = vi.spyOn(Vim, 'defineMotion');
+    const { vimMode } = await import('./vim');
+    vimMode();
+    expect(defineMotionSpy).toHaveBeenCalledWith('moveByDisplayLines', moveByDisplayLines);
   });
 });
