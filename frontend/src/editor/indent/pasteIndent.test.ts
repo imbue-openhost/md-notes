@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EditorSelection, EditorState } from '@codemirror/state';
+import { Annotation, EditorSelection, EditorState } from '@codemirror/state';
 import { markdown, markdownLanguage } from '../lang-markdown/index';
 import { indentUnitField } from './indentUnitField';
 import { detectPastedIndent, pasteIndentNormalization, reindentText } from './pasteIndent';
@@ -87,6 +87,7 @@ describe('pasteIndentNormalization (transaction filter)', () => {
     const pastedText = '- top\n    - child\n';
     const tr = state.update({
       changes: { from: state.doc.length, insert: pastedText },
+      userEvent: 'input.paste',
     });
     const result = tr.state.doc.toString();
     expect(result).toBe('- existing\n  - nested\n- top\n  - child\n');
@@ -97,9 +98,21 @@ describe('pasteIndentNormalization (transaction filter)', () => {
     const pastedText = '- top\n  - child\n';
     const tr = state.update({
       changes: { from: state.doc.length, insert: pastedText },
+      userEvent: 'input.paste',
     });
     const result = tr.state.doc.toString();
     expect(result).toBe('- existing\n    - nested\n- top\n    - child\n');
+  });
+
+  it('adjusts vim put (input.type.compose) text', () => {
+    const state = makeState('- existing\n  - nested\n');
+    const pastedText = '- top\n    - child\n';
+    const tr = state.update({
+      changes: { from: state.doc.length, insert: pastedText },
+      userEvent: 'input.type.compose',
+    });
+    const result = tr.state.doc.toString();
+    expect(result).toBe('- existing\n  - nested\n- top\n  - child\n');
   });
 
   it('does not adjust when indent units match', () => {
@@ -107,6 +120,7 @@ describe('pasteIndentNormalization (transaction filter)', () => {
     const pastedText = '- top\n  - child\n';
     const tr = state.update({
       changes: { from: state.doc.length, insert: pastedText },
+      userEvent: 'input.paste',
     });
     const result = tr.state.doc.toString();
     expect(result).toBe('- existing\n  - nested\n- top\n  - child\n');
@@ -116,6 +130,7 @@ describe('pasteIndentNormalization (transaction filter)', () => {
     const state = makeState('- existing\n  - nested\n');
     const tr = state.update({
       changes: { from: state.doc.length, insert: '    - indented' },
+      userEvent: 'input.paste',
     });
     const result = tr.state.doc.toString();
     expect(result).toBe('- existing\n  - nested\n    - indented');
@@ -126,6 +141,7 @@ describe('pasteIndentNormalization (transaction filter)', () => {
     const pastedText = '- a\n- b\n- c\n';
     const tr = state.update({
       changes: { from: state.doc.length, insert: pastedText },
+      userEvent: 'input.paste',
     });
     const result = tr.state.doc.toString();
     expect(result).toBe('- existing\n  - nested\n- a\n- b\n- c\n');
@@ -136,8 +152,44 @@ describe('pasteIndentNormalization (transaction filter)', () => {
     const pastedText = '- one\n    - two\n        - three\n';
     const tr = state.update({
       changes: { from: state.doc.length, insert: pastedText },
+      userEvent: 'input.paste',
     });
     const result = tr.state.doc.toString();
     expect(result).toBe('- a\n  - b\n- one\n  - two\n    - three\n');
+  });
+
+  // Regression tests for the sync-corruption bug: transactions not tagged as paste-like — in
+  // particular y-codemirror sync transactions, which carry an annotation but no userEvent — must
+  // pass through completely untouched, or the sync plugin re-applies them to the Y.Doc and
+  // duplicates the document.
+
+  it('does not touch multi-line inserts without a userEvent (remote sync load)', () => {
+    const state = makeState('');
+    const loaded = '- top\n    - child\n        - grandchild\n';
+    const tr = state.update({
+      changes: { from: 0, insert: loaded },
+    });
+    expect(tr.state.doc.toString()).toBe(loaded);
+  });
+
+  it('preserves annotations on non-paste transactions instead of rebuilding them', () => {
+    const syncAnnotation = Annotation.define<string>();
+    const state = makeState('- existing\n  - nested\n');
+    const tr = state.update({
+      changes: { from: state.doc.length, insert: '- top\n    - child\n' },
+      annotations: [syncAnnotation.of('remote')],
+    });
+    expect(tr.annotation(syncAnnotation)).toBe('remote');
+    expect(tr.state.doc.toString()).toBe('- existing\n  - nested\n- top\n    - child\n');
+  });
+
+  it('does not adjust a paste into an empty doc', () => {
+    const state = makeState('');
+    const pastedText = '- top\n    - child\n';
+    const tr = state.update({
+      changes: { from: 0, insert: pastedText },
+      userEvent: 'input.paste',
+    });
+    expect(tr.state.doc.toString()).toBe(pastedText);
   });
 });

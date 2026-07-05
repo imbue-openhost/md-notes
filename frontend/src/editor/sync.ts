@@ -44,6 +44,14 @@ const MAX_RETRIES = 3;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const IDB_HEALTH_INTERVAL_MS = 120_000;
 
+// Bump this whenever a release invalidates existing client-side CRDT state — e.g. after a server-side
+// restore that rewrites a doc's Y.Doc history. A cached Y.Doc from a different history doubles content
+// when it merges, so stale caches must be dropped, never synced. Each doc-open compares this against a
+// per-doc localStorage marker and clears that doc's IndexedDB cache on mismatch.
+// 1: initial epoch (2026-07: recovery from the paste-indent sync corruption bug).
+const CRDT_CACHE_EPOCH = 1;
+const EPOCH_MARKER_PREFIX = 'mdnotes:crdt-epoch:';
+
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 type StatusListener = (status: ConnectionStatus) => void;
 type ErrorListener = (message: string) => void;
@@ -156,12 +164,23 @@ export interface SyncSession {
   destroy: () => void;
 }
 
+// Returns true when the cache for idbKey is on the current epoch (clearing a stale one if needed).
+// False means a stale DB exists but couldn't be deleted (another tab holds it open) — the caller must
+// skip local persistence for the session so the stale state is never synced.
+export async function ensureFreshIdbCache(idbKey: string): Promise<boolean> {
+  const marker = EPOCH_MARKER_PREFIX + idbKey;
+  if (localStorage.getItem(marker) === String(CRDT_CACHE_EPOCH)) return true;
+  if (!(await tryDeleteIDBDatabase(idbKey))) return false;
+  localStorage.setItem(marker, String(CRDT_CACHE_EPOCH));
+  return true;
+}
+
 function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSession {
   let consecutiveFailures = 0;
+  let destroyed = false;
 
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText('content');
-  const idbPersistence = new IndexeddbPersistence(idbKey, ydoc);
   const provider = new WebsocketProvider(wsUrl, roomName, ydoc);
   const undoManager = new Y.UndoManager(ytext);
 
@@ -177,10 +196,49 @@ function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSess
   }, HANDSHAKE_TIMEOUT_MS);
   ready.finally(() => clearTimeout(handshakeTimer)).catch(() => {});
 
+  // Local persistence attaches only after the cache is confirmed on the current epoch. A stale cache
+  // that can't be cleared (another tab holds it open) fails the whole open — syncing it would double
+  // the doc's content.
+  let idbPersistence: IndexeddbPersistence | null = null;
+  let idbHealthInterval: ReturnType<typeof setInterval> | null = null;
+  const cacheReady = ensureFreshIdbCache(idbKey).then((fresh) => {
+    if (destroyed) return false;
+    if (!fresh) {
+      rejectReady(new Error('This doc\'s local cache is outdated and another tab is holding it open — close other md-notes tabs and reopen'));
+      return false;
+    }
+    const persistence = new IndexeddbPersistence(idbKey, ydoc);
+    idbPersistence = persistence;
+    persistence.whenSynced
+      .then(() => {
+        idbHealthInterval = setInterval(() => {
+          try {
+            const db = (persistence as any).db as IDBDatabase | undefined;
+            if (db && db.objectStoreNames.length > 0) {
+              const tx = db.transaction(db.objectStoreNames[0], 'readonly');
+              tx.abort();
+            }
+            if (lastIdbError) notifyIdbError(null);
+          } catch {
+            notifyIdbError('Local storage connection lost — recent edits may not be saved locally');
+          }
+        }, IDB_HEALTH_INTERVAL_MS);
+      })
+      .catch((err: Error) => {
+        notifyIdbError(`Local storage failed to load: ${err.message}`);
+      });
+    return true;
+  });
+
+  // ready gates on BOTH the server handshake and the cache-epoch check, so a failed check can't be
+  // masked by the handshake resolving first.
   provider.on('sync', (isSynced: boolean) => {
     if (isSynced) {
-      resolveReady();
-      notifyLastSynced();
+      cacheReady.then((ok) => {
+        if (!ok) return;
+        resolveReady();
+        notifyLastSynced();
+      });
     }
   });
 
@@ -218,26 +276,6 @@ function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSess
     }
   });
 
-  let idbHealthInterval: ReturnType<typeof setInterval> | null = null;
-  idbPersistence.whenSynced
-    .then(() => {
-      idbHealthInterval = setInterval(() => {
-        try {
-          const db = (idbPersistence as any).db as IDBDatabase | undefined;
-          if (db && db.objectStoreNames.length > 0) {
-            const tx = db.transaction(db.objectStoreNames[0], 'readonly');
-            tx.abort();
-          }
-          if (lastIdbError) notifyIdbError(null);
-        } catch {
-          notifyIdbError('Local storage connection lost — recent edits may not be saved locally');
-        }
-      }, IDB_HEALTH_INTERVAL_MS);
-    })
-    .catch((err: Error) => {
-      notifyIdbError(`Local storage failed to load: ${err.message}`);
-    });
-
   const extension: Extension = [
     yCollab(ytext, provider.awareness, { undoManager }),
     undoRedoFacet.of({
@@ -246,7 +284,6 @@ function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSess
     }),
   ];
 
-  let destroyed = false;
   return {
     extension,
     undoManager,
@@ -260,7 +297,7 @@ function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSess
       rejectReady(new Error('Session destroyed'));
       provider.disconnect();
       provider.destroy();
-      idbPersistence.destroy();
+      idbPersistence?.destroy();
       ydoc.destroy();
     },
   };
@@ -322,11 +359,16 @@ async function listIDBDatabases(): Promise<string[]> {
   }
 }
 
-function deleteIDBDatabase(name: string): Promise<void> {
+// Resolves false when the delete fails or is blocked by another tab holding the DB open.
+function tryDeleteIDBDatabase(name: string): Promise<boolean> {
   return new Promise((resolve) => {
     const req = indexedDB.deleteDatabase(name);
-    req.onsuccess = () => resolve();
-    req.onerror = () => resolve();
-    req.onblocked = () => resolve();
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => resolve(false);
+    req.onblocked = () => resolve(false);
   });
+}
+
+function deleteIDBDatabase(name: string): Promise<void> {
+  return tryDeleteIDBDatabase(name).then(() => undefined);
 }
