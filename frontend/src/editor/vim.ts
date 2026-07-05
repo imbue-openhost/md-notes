@@ -9,7 +9,15 @@
  *   number, relativenumber, tabstop, shiftwidth, expandtab, wrap, scrolloff
  */
 
-import { vim, Vim } from '@replit/codemirror-vim';
+import {
+  vim,
+  Vim,
+  type CodeMirrorV,
+  type MotionArgs,
+  type MotionFn,
+  type Pos,
+  type vimState,
+} from '@replit/codemirror-vim';
 import { EditorView } from '@codemirror/view';
 import { EditorState, type Extension } from '@codemirror/state';
 import { unfoldAll, toggleFold, foldCode, unfoldCode } from '@codemirror/language';
@@ -118,6 +126,45 @@ export function toggleTaskAtSelection(view: EditorView, range?: ActionLineRange)
   if (changes.length === 0) return false;
   view.dispatch({ changes });
   return true;
+}
+
+/**
+ * Replacement for the built-in `moveByDisplayLines` motion (gj/gk — and j/k
+ * when remapped to them, as in the default vimrc).
+ *
+ * The built-in motion has a CM5-era edge case: when findPosV reports hitSide
+ * (cursor clipped at a document edge), it re-derives the target from pixel
+ * coordinates via coordsChar, whose CM6 adapter falls back to offset 0 when
+ * posAtCoords returns null — so gj with the cursor at the very end of the
+ * document teleports it to the top. The CM6 findPosV already returns a
+ * properly clamped position, so use it directly.
+ *
+ * Invoked as a method on codemirror-vim's motions table; `this` is used to
+ * recognize whether the previous motion was also vertical, in which case the
+ * horizontal goal position (lastHSPos) is preserved.
+ */
+export function moveByDisplayLines(
+  this: unknown,
+  cm: CodeMirrorV,
+  head: Pos,
+  motionArgs: MotionArgs,
+  vim: vimState,
+): Pos {
+  const motions = (this ?? {}) as Record<string, MotionFn | undefined>;
+  const verticalMotions = [
+    motions.moveByDisplayLines,
+    motions.moveByScroll,
+    motions.moveByLines,
+    motions.moveToColumn,
+    motions.moveToEol,
+  ];
+  if (!vim.lastMotion || !verticalMotions.includes(vim.lastMotion)) {
+    vim.lastHSPos = cm.charCoords(head, 'div').left;
+  }
+  const repeat = motionArgs.repeat;
+  const res = cm.findPosV(head, motionArgs.forward ? repeat : -repeat, 'line', vim.lastHSPos);
+  vim.lastHPos = res.ch;
+  return res;
 }
 
 // ── Vimrc parser ──────────────────────────────────────────────────────────
@@ -469,6 +516,8 @@ export function vimMode(vimrcContent?: string): Extension[] {
   // As a direct operator, `mm` works via processOperator's "same
   // operator twice = linewise" logic, same as the built-in `dd`.
   Vim.mapCommand('m', 'operator', 'delete', {}, {});
+
+  Vim.defineMotion('moveByDisplayLines', moveByDisplayLines);
 
   return extensions;
 }
