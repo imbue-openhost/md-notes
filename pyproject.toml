@@ -10,6 +10,10 @@ dependencies = [
     "pycrdt>=0.12",
     "pycrdt-websocket>=0.16",
     "loguru>=0.7.3",
+    "rapidfuzz>=3.14.5",
+    "numpy>=2.5.1",
+    "pathspec>=1.1.1",
+    "anyio>=4.13.0",
 ]
 
 [dependency-groups]

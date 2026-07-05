@@ -1,7 +1,11 @@
 default: test
 
-# Run all tests: frontend unit tests + integration tests (builds container via openhost harness).
-test: test-frontend test-integration
+# Run all tests: server unit tests + frontend unit tests + integration tests (builds container via openhost harness).
+test: test-server test-frontend test-integration
+
+# Server unit tests (pure python, no containers).
+test-server:
+    uv run pytest tests/test_search.py -v
 
 # Frontend unit tests (vitest).
 test-frontend:

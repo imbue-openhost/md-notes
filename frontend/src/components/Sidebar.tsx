@@ -11,6 +11,7 @@ interface Props {
   vaultName?: string;
   vaults?: VaultConfig[];
   onSelect: (path: string) => void;
+  onSearch?: () => void;
   onShare?: (path: string) => void;
   onSwitchToVault?: (v: VaultConfig) => void;
   onManageVaults?: () => void;
@@ -220,6 +221,9 @@ export const Sidebar: Component<Props> = (props) => {
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
           <div class="sidebar-header-buttons">
+            <Show when={props.onSearch}>
+              <button class="sidebar-btn" title="Search vault (⌘⇧F)" onClick={props.onSearch}>{'🔍'}</button>
+            </Show>
             <button class="sidebar-btn" title="New file" onClick={handleNewFile}>+</button>
             <Show when={props.onSettings}>
               <button class="sidebar-btn" title="Settings" onClick={props.onSettings}>{'⚙️'}</button>

@@ -141,7 +141,7 @@ function notifyIdbError(message: string | null): void {
   for (const listener of idbErrorListeners) listener(message);
 }
 
-function getWsUrl(serverUrl: string): string {
+export function getWsUrl(serverUrl: string): string {
   const url = new URL(serverUrl || window.location.origin);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   return url.origin;
