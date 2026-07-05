@@ -68,9 +68,18 @@ export function reindentText(
     .join('\n');
 }
 
+// Only these user events are eligible for normalization. Transactions without a userEvent annotation —
+// notably y-codemirror sync transactions applying remote/loaded content — must pass through UNTOUCHED:
+// rebuilding them drops the ySync annotation, which makes the sync plugin re-apply the change to the
+// Y.Doc and duplicate the document.
+const PASTE_LIKE_EVENTS = ['input.paste', 'input.drop', 'input.type.compose'];
+
 export function pasteIndentNormalization(): Extension {
   return EditorState.transactionFilter.of((tr) => {
     if (!tr.docChanged) return tr;
+    if (!PASTE_LIKE_EVENTS.some((e) => tr.isUserEvent(e))) return tr;
+    // A paste into a still-empty doc has no meaningful target unit to normalize toward.
+    if (tr.startState.doc.length === 0) return tr;
 
     let hasMultiLine = false;
     tr.changes.iterChanges((_, _2, _3, _4, inserted) => {
