@@ -2,13 +2,14 @@
 
 Brute-force scan, no index: every non-blank line in every .md file is scored against the query with
 rapidfuzz's partial_ratio (best-window edit distance), so an exact substring scores 100 and near-variants
-rank just below. Scoring runs multicore: cdist executes in C++ with the GIL released, chunked across a
+rank just below. Header lines whose text exactly equals the query rank above all other hits. Scoring runs multicore: cdist executes in C++ with the GIL released, chunked across a
 thread pool (cdist's own workers option only parallelizes over queries, and we have a single query).
 
 Matching is per-line: a phrase spanning a hard line break won't match.
 """
 
 import os
+import re
 import threading
 import unicodedata
 from collections.abc import Callable
@@ -27,6 +28,9 @@ SCORE_CUTOFF = 60.0
 SNIPPET_WINDOW = 200
 DEFAULT_LIMIT = 50
 MIN_LINES_PER_CHUNK = 10_000
+
+# ATX header: up to 3 leading spaces, 1-6 hashes, whitespace, text, optional closing hashes.
+_ATX_HEADER_RE = re.compile(r"^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$")
 
 
 class SearchCancelled(Exception):
@@ -146,22 +150,28 @@ def search_vault(
     do_normalize: bool = True,
     cancel: threading.Event | None = None,
 ) -> list[SearchHit]:
-    """Top `limit` matching lines across the vault, ranked purely by score (a file may appear repeatedly).
+    """Top `limit` matching lines across the vault, ranked by score (a file may appear repeatedly).
 
+    Markdown (ATX) header lines whose text exactly equals the query — under the same fold as the query —
+    rank above everything else.
     With do_normalize=False the fold is skipped, so case/punctuation/diacritics count toward the distance.
     Setting `cancel` aborts the scan at the next file/chunk boundary by raising SearchCancelled.
     """
     if do_normalize:
         fold: Callable[[str], str] = normalize
-        folded_query = " ".join(fold(query).split())
     else:
         fold = _identity
-        folded_query = query.strip()
+
+    def canon(text: str) -> str:
+        return " ".join(fold(text).split()) if do_normalize else text.strip()
+
+    folded_query = canon(query)
     if not folded_query:
         return []
 
     lines: list[tuple[str, int, str]] = []  # (rel_path, line_number, original_line)
     choices: list[str] = []
+    header_keys: list[str | None] = []  # canon'd ATX header text, None for non-header lines
     for path in iter_md_files(vault_root):
         _check_cancel(cancel)
         try:
@@ -176,12 +186,14 @@ def search_vault(
                 continue
             lines.append((rel, line_number, line))
             choices.append(folded)
+            header = _ATX_HEADER_RE.match(line)
+            header_keys.append(canon(header.group(1)) if header else None)
     if not choices:
         return []
 
     scores = _score(folded_query, choices, cancel)
     candidates = np.flatnonzero(scores >= SCORE_CUTOFF).tolist()
-    candidates.sort(key=lambda i: (-scores[i], lines[i][0], lines[i][1]))
+    candidates.sort(key=lambda i: (header_keys[i] != folded_query, -scores[i], lines[i][0], lines[i][1]))
 
     hits: list[SearchHit] = []
     for i in candidates[: max(0, limit)]:

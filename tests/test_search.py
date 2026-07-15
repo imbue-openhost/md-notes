@@ -72,6 +72,57 @@ def test_exact_mode_distinguishes_case_and_punctuation(tmp_path: Path) -> None:
     assert [h.line_number for h in exact if h.score == 100.0] == [2]
 
 
+def test_exact_header_match_ranks_first(tmp_path: Path) -> None:
+    vault = make_vault(
+        tmp_path,
+        {
+            "a.md": "sync protocol is described elsewhere\n",
+            "b.md": "## Sync Protocol\nbody text\n",
+        },
+    )
+    hits = search_vault(vault, "sync protocol")
+    assert (hits[0].path, hits[0].line_number) == ("b.md", 1)
+    assert "a.md" in [h.path for h in hits]
+
+
+def test_header_boost_folds_case_punctuation_and_closing_hashes(tmp_path: Path) -> None:
+    vault = make_vault(
+        tmp_path,
+        {
+            "a.md": "sync-protocol mentioned in passing\n",
+            "b.md": "### Sync—Protocol ##\n",
+        },
+    )
+    hits = search_vault(vault, "sync protocol")
+    assert (hits[0].path, hits[0].line_number) == ("b.md", 1)
+
+
+def test_partial_header_match_not_boosted(tmp_path: Path) -> None:
+    vault = make_vault(
+        tmp_path,
+        {
+            "a.md": "alpha beta in a plain line\n",
+            "b.md": "# alpha beta gamma\n",
+        },
+    )
+    hits = search_vault(vault, "alpha beta")
+    # header text != query, so plain score/path ordering applies
+    assert hits[0].path == "a.md"
+
+
+def test_header_boost_respects_exact_mode(tmp_path: Path) -> None:
+    vault = make_vault(
+        tmp_path,
+        {
+            "a.md": "notes on sync protocol and Sync Protocol usage\n",
+            "b.md": "# Sync Protocol\n",
+        },
+    )
+    # a.md scores 100 for both queries; b.md wins only when the case-sensitive header boost applies
+    assert search_vault(vault, "sync protocol", do_normalize=False)[0].path == "a.md"
+    assert search_vault(vault, "Sync Protocol", do_normalize=False)[0].path == "b.md"
+
+
 # ── snippets ───────────────────────────────────────────────────────────────
 
 
