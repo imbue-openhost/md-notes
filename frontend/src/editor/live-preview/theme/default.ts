@@ -166,10 +166,33 @@ export const editorTheme = EditorView.theme({
   },
 
   // ========== Task List Checkboxes ==========
+  // A styled <span>, not a native <input> — see the task plugin.
   '.cm-task-checkbox': {
+    display: 'inline-block',
+    boxSizing: 'border-box',
+    width: '14px',
+    height: '14px',
     margin: '0 0.4em 0 0',
+    border: '1.5px solid hsl(var(--muted-foreground, 220 9% 46%))',
+    borderRadius: '3px',
     cursor: 'pointer',
     verticalAlign: 'middle',
+    position: 'relative',
+  },
+  '.cm-task-checkbox[aria-checked="true"]': {
+    backgroundColor: 'hsl(var(--primary, 220 90% 56%))',
+    borderColor: 'hsl(var(--primary, 220 90% 56%))',
+  },
+  '.cm-task-checkbox[aria-checked="true"]::after': {
+    content: "''",
+    position: 'absolute',
+    left: '3.5px',
+    top: '0.5px',
+    width: '4px',
+    height: '8px',
+    border: 'solid hsl(var(--background, 0 0% 100%))',
+    borderWidth: '0 2px 2px 0',
+    transform: 'rotate(45deg)',
   },
   '.cm-task-checked': {
     textDecoration: 'line-through',
