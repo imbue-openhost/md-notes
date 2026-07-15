@@ -41,6 +41,61 @@ body {
   position: relative;
 }
 
+/* ── Pane collapse ───────────────────────────────────────── */
+.pane-collapse-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  font-size: 15px;
+  padding: 0 10px;
+  height: 100%;
+}
+
+.pane-collapse-btn:hover {
+  color: hsl(var(--foreground));
+}
+
+.dv-groupview.pane-collapsed > .dv-tabs-and-actions-container,
+.dv-groupview.pane-collapsed > .dv-content-container {
+  display: none;
+}
+
+.pane-collapsed-strip {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+  cursor: pointer;
+  background: hsl(var(--muted));
+  overflow: hidden;
+  user-select: none;
+}
+
+.pane-collapsed-strip:hover {
+  background: hsl(var(--primary) / 0.08);
+}
+
+.pane-collapsed-chevron {
+  font-size: 14px;
+  color: hsl(var(--muted-foreground));
+}
+
+.pane-collapsed-strip:hover .pane-collapsed-chevron {
+  color: hsl(var(--primary));
+}
+
+.pane-collapsed-label {
+  writing-mode: vertical-rl;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #editor-container .cm-editor {
   height: 100%;
 }

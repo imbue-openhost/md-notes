@@ -262,9 +262,13 @@ export const App: Component = () => {
 
     const onKey = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === '\\') {
         e.preventDefault();
         layoutHandle?.splitPane();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.code === 'Backslash') {
+        e.preventDefault();
+        layoutHandle?.toggleCollapseActivePane();
       }
       if (e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && key === 'o') {
         e.preventDefault();

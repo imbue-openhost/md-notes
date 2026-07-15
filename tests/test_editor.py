@@ -86,6 +86,43 @@ def test_yjs_sync_between_tabs(stack: OpenhostStack, page: Page) -> None:
     ctx2.close()
 
 
+def test_pane_collapse(stack: OpenhostStack, page: Page) -> None:
+    _open_file(stack, page)
+
+    page.keyboard.press("Control+\\")
+    expect(page.locator(".dv-groupview")).to_have_count(2)
+    page.wait_for_timeout(500)
+
+    # The tab-bar button collapses a pane to a thin strip labeled with the file name.
+    page.locator(".pane-collapse-btn").first.click()
+    strip = page.locator(".pane-collapsed-strip")
+    expect(strip).to_have_count(1)
+    expect(strip).to_contain_text("test")
+    box = page.locator(".dv-groupview.pane-collapsed").bounding_box()
+    assert box is not None and box["width"] < 40
+    expect(page.locator(".dv-groupview:not(.pane-collapsed) .cm-editor").first).to_be_visible()
+
+    # Collapsed state survives a reload.
+    page.reload()
+    page.wait_for_selector(".pane-collapsed-strip", timeout=10_000)
+
+    # Clicking the strip expands the pane back to a usable width.
+    page.locator(".pane-collapsed-strip").click()
+    expect(strip).to_have_count(0)
+    for group in page.locator(".dv-groupview").all():
+        gbox = group.bounding_box()
+        assert gbox is not None and gbox["width"] >= 100
+
+    # Ctrl+Shift+\ collapses the active pane; focusing it again (ctrl+l) expands it.
+    groups = page.locator(".dv-groupview").all()
+    rightmost = max(groups, key=lambda g: (g.bounding_box() or {"x": 0})["x"])
+    rightmost.locator(".cm-content").click()
+    page.keyboard.press("Control+Shift+Backslash")
+    expect(strip).to_have_count(1)
+    page.keyboard.press("Control+l")
+    expect(strip).to_have_count(0)
+
+
 def test_search_palette(stack: OpenhostStack, page: Page) -> None:
     s = stack.owner_session
     s.post(

@@ -44,6 +44,7 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 - **Vimrc parser** — supports `map`/`noremap` (with mode prefixes `nmap`, `imap`, `vmap`, etc.) and `set` commands (`number`, `relativenumber`, `tabstop`, `shiftwidth`, `expandtab`, `wrap`, `scrolloff`)
 - **Header-based folding** — click the fold gutter to collapse sections
 - **File tree sidebar** with create (+ button), rename/delete (right-click context menu)
+- **Pane collapse** — with split panes, the `«`/`»` button in a pane's tab bar collapses it to a thin strip so the other pane gets the full width; click the strip (or focus the pane) to restore. `Cmd/Ctrl+Shift+\` toggles the active pane.
 
 ### tauri native editor
 
