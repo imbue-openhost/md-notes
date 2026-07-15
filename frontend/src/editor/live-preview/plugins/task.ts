@@ -14,42 +14,47 @@ import { spaceWidthField } from '../core/spaceWidth';
 // Visual pixel width of the rendered checkbox widget plus its
 // margin-right. Used for the task line's hanging-indent math so wrapped
 // task text lines up under the task's text column rather than under the
-// checkbox. Empirical: native `<input type=checkbox>` is ~13–16px across
-// browsers/OSes; the theme adds a 0.4em right margin (~6.4px at 16px).
-// One value is fine — checkboxes don't scale with the editor font.
+// checkbox. The theme sizes the box at 14px plus a 0.4em right margin
+// (~6.4px at 16px). One value is fine — checkboxes don't scale with the
+// editor font.
 const CHECKBOX_PX = 22;
 
+// The checkbox is a styled <span>, not an <input>: password-manager
+// extensions (e.g. Apple's iCloud Passwords) scan every input that
+// appears in the DOM and could steal focus to their native app. For the
+// same reason eq() must not depend on document position — otherwise any
+// edit above a task would recreate the DOM node, and the position is
+// resolved at click time instead.
 class CheckboxWidget extends WidgetType {
-  constructor(
-    readonly checked: boolean,
-    readonly from: number,
-  ) {
+  constructor(readonly checked: boolean) {
     super();
   }
 
   eq(other: CheckboxWidget) {
-    return other.checked === this.checked && other.from === this.from;
+    return other.checked === this.checked;
   }
 
   toDOM(view: EditorView) {
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.checked = this.checked;
-    input.className = 'cm-task-checkbox';
-    input.autocomplete = 'off';
-    input.addEventListener('click', (e) => {
-      e.preventDefault();
-      const insert = this.checked ? '[ ]' : '[x]';
-      view.dispatch({
-        changes: { from: this.from, to: this.from + 3, insert },
-      });
-    });
-    return input;
+    const box = document.createElement('span');
+    box.className = 'cm-task-checkbox';
+    box.setAttribute('role', 'checkbox');
+    box.setAttribute('aria-checked', String(this.checked));
+    box.addEventListener('click', () => toggleTaskAtWidget(view, box));
+    return box;
   }
 
   ignoreEvent() {
     return true;
   }
+}
+
+function toggleTaskAtWidget(view: EditorView, dom: HTMLElement) {
+  const line = view.state.doc.lineAt(view.posAtDOM(dom));
+  const match = line.text.match(/^\s*(?:[-*+]|\d+[.)])\s+\[([ xX])\]/);
+  if (!match) return;
+  const from = line.from + match[0].length - 3;
+  const insert = match[1] === ' ' ? '[x]' : '[ ]';
+  view.dispatch({ changes: { from, to: from + 3, insert } });
 }
 
 /**
@@ -148,7 +153,7 @@ export const taskListPlugin = ViewPlugin.fromClass(
 
             if (!cursorOnMarker) {
               const checkboxDeco = Decoration.replace({
-                widget: new CheckboxWidget(checked, node.from),
+                widget: new CheckboxWidget(checked),
               }).range(replaceFrom, replaceTo);
               decorations.push(checkboxDeco);
               atomicDecorations.push(checkboxDeco);
