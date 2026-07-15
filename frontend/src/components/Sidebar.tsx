@@ -4,7 +4,7 @@ import type { FileEntry, VaultConfig } from '../api/types';
 import { listFiles, createFile, deleteFile, renameFile } from '../api/vault-ops';
 import { InputDialog } from './InputDialog';
 
-export type SyncStatus = 'connected' | 'disconnected' | 'connecting' | 'no-remote' | 'error' | 'syncing';
+export type SyncStatus = 'connected' | 'disconnected' | 'connecting';
 export type BackendStatus = 'connected' | 'disconnected' | 'unauthorized';
 
 interface Props {
@@ -18,7 +18,8 @@ interface Props {
   onRefreshVaults?: () => void;
   onSettings?: () => void;
   showSyncStatus?: boolean;
-  syncStatus?: SyncStatus;
+  /** null/undefined = no docs open, so there's no sync state to report. */
+  syncStatus?: SyncStatus | null;
   syncErrorMsg?: string;
   backendStatus?: BackendStatus;
   lastSyncedAt?: number | null;
@@ -26,13 +27,10 @@ interface Props {
   currentPath: string | null;
 }
 
-const SYNC_LABELS: Record<string, string> = {
+const SYNC_LABELS: Record<SyncStatus, string> = {
   connected: 'Synced',
   disconnected: 'Offline',
   connecting: 'Connecting...',
-  'no-remote': 'No remote configured',
-  error: 'Connection error (click for details)',
-  syncing: 'Syncing files...',
 };
 
 const BACKEND_LABELS: Record<BackendStatus, string> = {
@@ -249,17 +247,17 @@ export const Sidebar: Component<Props> = (props) => {
           </Show>
         </div>
 
-        <Show when={props.showSyncStatus}>
-          <div
-            class="sidebar-sync-status"
-            data-status={props.syncStatus ?? 'disconnected'}
-            title={props.syncErrorMsg ?? ''}
-            style={props.syncStatus === 'error' ? { cursor: 'pointer' } : {}}
-            onClick={() => { if (props.syncStatus === 'error' && props.syncErrorMsg) alert(props.syncErrorMsg); }}
-          >
-            <span class="sidebar-sync-dot" data-status={props.syncStatus ?? 'disconnected'} />
-            <span>{SYNC_LABELS[props.syncStatus ?? 'disconnected'] ?? props.syncStatus}</span>
-          </div>
+        <Show when={props.showSyncStatus && props.syncStatus}>
+          {(status) => (
+            <div
+              class="sidebar-sync-status"
+              data-status={status()}
+              title={props.syncErrorMsg ?? ''}
+            >
+              <span class="sidebar-sync-dot" data-status={status()} />
+              <span>{SYNC_LABELS[status()]}</span>
+            </div>
+          )}
         </Show>
 
         <Show when={props.backendStatus && props.backendStatus !== 'connected'}>

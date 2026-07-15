@@ -1,5 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ensureFreshIdbCache } from './sync';
+import { aggregateSessionStatuses, ensureFreshIdbCache } from './sync';
+
+describe('aggregateSessionStatuses', () => {
+  it('returns null with no sessions', () => {
+    expect(aggregateSessionStatuses([])).toBe(null);
+  });
+
+  it('returns connected only when all sessions are connected', () => {
+    expect(aggregateSessionStatuses(['connected'])).toBe('connected');
+    expect(aggregateSessionStatuses(['connected', 'connected'])).toBe('connected');
+  });
+
+  it('worst-wins: any disconnected session dominates', () => {
+    expect(aggregateSessionStatuses(['connected', 'disconnected'])).toBe('disconnected');
+    expect(aggregateSessionStatuses(['disconnected', 'connecting'])).toBe('disconnected');
+  });
+
+  it('connecting dominates connected, regardless of order', () => {
+    expect(aggregateSessionStatuses(['connected', 'connecting'])).toBe('connecting');
+    expect(aggregateSessionStatuses(['connecting', 'connected'])).toBe('connecting');
+  });
+});
 
 type DeleteOutcome = 'success' | 'blocked' | 'error';
 

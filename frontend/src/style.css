@@ -220,7 +220,7 @@ li.open > .sidebar-children {
   border-top: 1px solid hsl(var(--border));
 }
 
-.sidebar-sync-status:not([data-status="connected"]):not([data-status="syncing"]) {
+.sidebar-sync-status:not([data-status="connected"]) {
   background: hsl(0 84% 60% / 0.2);
   color: hsl(0 84% 70%);
 }
@@ -239,18 +239,16 @@ li.open > .sidebar-children {
 
 .sidebar-sync-dot[data-status="connecting"] {
   background: hsl(48 96% 53%);
+  animation: sync-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes sync-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .sidebar-sync-dot[data-status="disconnected"] {
   background: hsl(var(--muted-foreground));
-}
-
-.sidebar-sync-dot[data-status="no-remote"] {
-  background: hsl(var(--muted-foreground));
-}
-
-.sidebar-sync-dot[data-status="error"] {
-  background: hsl(0 84% 60%);
 }
 
 .sidebar-sync-dot[data-status="unauthorized"] {
@@ -326,15 +324,6 @@ li.open > .sidebar-children {
   cursor: pointer;
 }
 
-.sidebar-sync-dot[data-status="syncing"] {
-  background: hsl(48 96% 53%);
-  animation: sync-pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes sync-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
 
 /* ── Context menu (Kobalte) ───────────────────────────────── */
 .sidebar-context-menu {
