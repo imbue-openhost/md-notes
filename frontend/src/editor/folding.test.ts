@@ -1,15 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { EditorState, Prec } from '@codemirror/state';
-import { foldable } from '@codemirror/language';
+import { codeFolding, foldable, foldedRanges, foldNodeProp, syntaxTree } from '@codemirror/language';
+import type { EditorView } from '@codemirror/view';
 import { markdown, markdownLanguage } from './lang-markdown/index';
-import { markdownFoldService } from './folding';
+import { markdownFoldService, foldAllRecursive } from './folding';
 
 function makeState(doc: string): EditorState {
   return EditorState.create({
     doc,
     extensions: [
-      markdown({ base: markdownLanguage }),
+      // Mirrors the editor config: suppress lang-markdown's default folds for
+      // non-heading blocks so only headings fold.
+      markdown({
+        base: markdownLanguage,
+        extensions: {
+          props: [
+            foldNodeProp.add({
+              'CodeBlock FencedCode Blockquote HorizontalRule ListItem HTMLBlock LinkReference Paragraph CommentBlock ProcessingInstructionBlock Table': () => null,
+            }),
+          ],
+        },
+      }),
       Prec.high(markdownFoldService),
+      codeFolding(),
     ],
   });
 }
@@ -87,5 +100,46 @@ describe('markdown header folding', () => {
     // (those belong to B's section, not A's). What matters is that the lines
     // BETWEEN the placeholder and `## B` are identical.
     expect(foldHeading(loose, '## A')).toBe(expectedALoose);
+  });
+});
+
+describe('folding on a partially parsed document', () => {
+  // On state creation CodeMirror only parses a ~3000-char prefix; the rest of
+  // the tree fills in asynchronously. These docs put a second heading well
+  // past that window, which used to make the first section fold to the end
+  // of the document — swallowing every later section, whatever its level.
+  const filler = 'text\n'.repeat(2000);
+
+  function makeFakeView(state: EditorState) {
+    const obj = {
+      state,
+      dispatch(spec: any) {
+        obj.state = obj.state.update(spec).state;
+      },
+    };
+    return obj as unknown as EditorView;
+  }
+
+  it('does not fold past a sibling heading beyond the initial parse window', () => {
+    const doc = `# A\n${filler}# B\ntail\n`;
+    const state = makeState(doc);
+    expect(syntaxTree(state).length).toBeLessThan(doc.length); // partial-parse precondition
+    const range = foldable(state, 0, state.doc.line(1).to);
+    expect(range).not.toBeNull();
+    expect(range!.to).toBeLessThan(doc.indexOf('# B'));
+  });
+
+  it('foldAllRecursive folds every section, not just the parsed prefix', () => {
+    const doc = `# A\nx\n${filler}# B\ny\n# C\nz\n`;
+    const view = makeFakeView(makeState(doc));
+    foldAllRecursive(view);
+    const folds: { from: number; to: number }[] = [];
+    foldedRanges(view.state).between(0, view.state.doc.length, (from, to) => {
+      folds.push({ from, to });
+    });
+    expect(folds.length).toBe(3);
+    expect(folds[0].to).toBeLessThan(doc.indexOf('# B'));
+    expect(folds[1].to).toBeLessThan(doc.indexOf('# C'));
+    expect(folds[2].to).toBe(doc.length);
   });
 });

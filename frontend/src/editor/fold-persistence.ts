@@ -11,13 +11,13 @@
 import { ViewPlugin, type ViewUpdate, type EditorView } from '@codemirror/view';
 import { type Extension, type EditorState } from '@codemirror/state';
 import {
-  syntaxTree,
+  ensureSyntaxTree,
   foldEffect,
   foldedRanges,
   foldable,
   foldState,
 } from '@codemirror/language';
-import { foldAllRecursive } from './folding';
+import { foldAllRecursive, UNBOUNDED_PARSE_MS } from './folding';
 import { getCollapseHeadersDefault } from './editor-settings';
 
 export interface FoldPersistOpts {
@@ -50,7 +50,10 @@ interface HeadingInfo {
  * then push self. Path = ancestor stack + self.
  */
 function collectHeadings(state: EditorState): HeadingInfo[] {
-  const tree = syntaxTree(state);
+  // Force the parse to completion (no-op once parsed): a partially parsed doc would yield a truncated heading
+  // list, silently dropping folds during both apply and save.
+  const tree = ensureSyntaxTree(state, state.doc.length, UNBOUNDED_PARSE_MS);
+  if (!tree) throw new Error('fold persistence requires a language parser');
   const result: HeadingInfo[] = [];
   const stack: HeadingInfo[] = [];
 
