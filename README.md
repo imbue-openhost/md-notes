@@ -45,6 +45,7 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 - **Header-based folding** — click the fold gutter to collapse sections
 - **File tree sidebar** with create (+ button), rename/delete (right-click context menu)
 - **Pane collapse** — with split panes, the `«`/`»` button in a pane's tab bar collapses it to a thin strip so the other pane gets the full width; click the strip (or focus the pane) to restore. `Cmd/Ctrl+Shift+\` toggles the active pane.
+- **Header share links** — hover a heading to get a link button that copies a read-only or editable share link to that section (`/share/<uuid>#<slug>`, GitHub-style slugs). Opening such a link scrolls to the first matching header, cursor on it, unfolded; unknown slugs just load normally.
 
 ### tauri native editor
 
@@ -52,6 +53,18 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 - unfinished and on hold for now, to focus on the web editor.
 - supporting a nice offline mode adds complexity vs web.
 
+
+## Development
+
+Running locally without a container (faster iteration than the openhost harness):
+
+- **Server**: config comes from two env vars and fails loudly without them. Vaults are plain directories of .md files under `$OPENHOST_APP_DATA_DIR/vault/<vault-name>/`.
+  ```bash
+  OPENHOST_APP_DATA_DIR=/tmp/mdnotes OPENHOST_SQLITE_MAIN=/tmp/mdnotes/main.db uv run python -m server
+  ```
+- **Frontend**: `cd frontend && npx vite` proxies `/api` (including websockets) to `localhost:8000`. Authed routes only check for an `x-openhost-is-owner: true` header (normally set by the OpenHost router), so to skip the login flow add `headers: { 'x-openhost-is-owner': 'true' }` to the proxy entry in a local copy of `vite.config.ts`. Share pages (`/share/<uuid>`) are public and need no header.
+- **Driving it headlessly**: `@playwright/test` is a frontend devDependency. Docs load empty and fill via CRDT sync, so after `.cm-editor` appears allow ~1s before asserting on content. The editor is vim-mode: click `.cm-content`, press Escape, then vim keys.
+- **Integration tests**: `just test-integration` builds the container and deploys it on a real local OpenHost router (needs podman). The same `OpenhostStack` harness can be held open to click around a real deployment — it snapshots the working tree (tracked + untracked files), so uncommitted changes are included.
 
 ## TODO
 

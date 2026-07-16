@@ -359,6 +359,34 @@ li.open > .sidebar-children {
   background: hsl(var(--muted));
 }
 
+/* ── Header link button ───────────────────────────────────── */
+.header-link-btn {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 8px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.cm-line:hover .header-link-btn {
+  opacity: 0.6;
+}
+
+.header-link-btn:hover {
+  opacity: 1;
+  color: hsl(var(--primary));
+}
+
+.header-link-menu {
+  position: fixed;
+}
+
 /* ── Sidebar vault switcher ───────────────────────────────── */
 .sidebar-vault-trigger {
   display: flex;

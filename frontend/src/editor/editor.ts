@@ -36,6 +36,8 @@ import {
 
 import { markdownFolding } from './folding';
 import { foldPersistence } from './fold-persistence';
+import { headerAnchorJump } from './header-anchor';
+import { headerLinkButtons, type GetShareUrl } from './header-link-button';
 import { indentDetection } from './indent/indentUnitField';
 import { pasteIndentNormalization } from './indent/pasteIndent';
 import { Vim } from '@replit/codemirror-vim';
@@ -174,6 +176,10 @@ export interface EditorOptions {
   shareUuid?: string;
   shareDocPath?: string;
   readOnly?: boolean;
+  /** Header slug (or raw header text) to jump to once the doc has loaded. */
+  anchorHeader?: string;
+  /** When set, heading lines get a hover button that copies a share link to that section. */
+  getShareUrl?: GetShareUrl;
   onDocChange?: (content: string) => void;
   /** Called when the initial server handshake fails (timeout or connection error). */
   onSyncFailed?: (error: Error) => void;
@@ -218,6 +224,14 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
   if (options.syncVault && options.syncFilePath) {
     extensions.push(foldPersistence({ vault: options.syncVault, filePath: options.syncFilePath }));
+  }
+
+  if (options.anchorHeader) {
+    extensions.push(headerAnchorJump(options.anchorHeader));
+  }
+
+  if (options.getShareUrl) {
+    extensions.push(headerLinkButtons(options.getShareUrl));
   }
 
   const state = EditorState.create({
