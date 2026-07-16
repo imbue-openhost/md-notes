@@ -11,7 +11,7 @@ import {
   type AggregateConnectionStatus,
 } from './editor/sync';
 import { connectionState, UnauthorizedError, startHeartbeat } from './api/connection';
-import { serverUrl, getShareUuid, getVaultNameFromUrl, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
+import { serverUrl, getShareUuid, getVaultNameFromUrl, getUrlHeaderAnchor, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
 import type { VaultConfig } from './api/types';
 import { VaultPicker } from './components/VaultPicker';
 import { Sidebar } from './components/Sidebar';
@@ -31,6 +31,14 @@ function fileLabel(path: string | null | undefined): string | null {
   return base.replace(/\.md$/i, '');
 }
 
+/** Share URL for a doc, reusing an existing link with the right permission or creating one. */
+async function shareUrlForDoc(serverPath: string, permission: 'read' | 'write'): Promise<string> {
+  const links = await listShareLinks(serverPath);
+  const existing = links.find((l) => l.permission === permission);
+  const uuid = existing?.uuid ?? await createShareLink(serverPath, permission);
+  return `${window.location.origin}/share/${uuid}`;
+}
+
 const ShareEditor: Component<{ uuid: string; info: ShareInfo }> = (props) => {
   let container!: HTMLDivElement;
   createEffect(() => {
@@ -44,6 +52,7 @@ const ShareEditor: Component<{ uuid: string; info: ShareInfo }> = (props) => {
       shareDocPath: props.info.doc_path,
       syncServerUrl: serverUrl,
       readOnly: props.info.permission === 'read',
+      anchorHeader: getUrlHeaderAnchor() ?? undefined,
     });
   });
   return <div ref={container} id="editor-container" />;
@@ -232,6 +241,8 @@ export const App: Component = () => {
       syncVault: v?.name || undefined,
       syncFilePath: path,
       syncServerUrl: serverUrl,
+      getShareUrl: (permission) =>
+        shareUrlForDoc(v?.name ? `${v.name}/${path}` : path, permission),
       onSyncFailed,
     });
   }
