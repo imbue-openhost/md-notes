@@ -8,7 +8,7 @@ import { setActiveVault, getActiveVault } from './api/vault-ops';
 import {
   clearVaultCache,
   onConnectionStatus, onConnectionError, onLastSyncedAt, onIdbError,
-  type ConnectionStatus,
+  type AggregateConnectionStatus,
 } from './editor/sync';
 import { connectionState, UnauthorizedError, startHeartbeat } from './api/connection';
 import { serverUrl, getShareUuid, getVaultNameFromUrl, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
@@ -80,7 +80,7 @@ export const App: Component = () => {
   const [showQuickOpen, setShowQuickOpen] = createSignal(false);
   const [showSearch, setShowSearch] = createSignal(false);
   const [syncErrorPath, setSyncErrorPath] = createSignal<string | null>(null);
-  const [syncStatus, setSyncStatus] = createSignal<ConnectionStatus>('connecting');
+  const [syncStatus, setSyncStatus] = createSignal<AggregateConnectionStatus>(null);
   const [syncErrorMsg, setSyncErrorMsg] = createSignal<string | null>(null);
   const [lastSyncedAtTs, setLastSyncedAtTs] = createSignal<number | null>(null);
   const [idbError, setIdbError] = createSignal<string | null>(null);

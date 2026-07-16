@@ -54,8 +54,10 @@ const CRDT_CACHE_EPOCH = 2;
 const EPOCH_MARKER_PREFIX = 'mdnotes:crdt-epoch:';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
-type StatusListener = (status: ConnectionStatus) => void;
-type ErrorListener = (message: string) => void;
+/** Aggregate across all live sync sessions; null = no docs open. */
+export type AggregateConnectionStatus = ConnectionStatus | null;
+type StatusListener = (status: AggregateConnectionStatus) => void;
+type ErrorListener = (message: string | null) => void;
 type LastSyncedListener = (ts: number) => void;
 type IdbErrorListener = (message: string | null) => void;
 
@@ -122,13 +124,39 @@ export function getLastIdbError(): string | null {
   return lastIdbError;
 }
 
-function notifyStatus(status: ConnectionStatus): void {
+// Connection status is tracked per session and aggregated worst-wins, so one pane's teardown or
+// reconnect cycle can't masquerade as the state of the whole app (each provider only emits its own
+// transitions, so a last-writer-wins global would stick on whatever the most recent event happened
+// to be — e.g. "Offline" from a closed pane while the surviving pane is connected).
+const sessionStatuses = new Map<number, ConnectionStatus>();
+let nextSessionId = 0;
+let aggregateStatus: AggregateConnectionStatus = null;
+
+export function aggregateSessionStatuses(
+  statuses: Iterable<ConnectionStatus>,
+): AggregateConnectionStatus {
+  let agg: AggregateConnectionStatus = null;
+  for (const s of statuses) {
+    if (s === 'disconnected') return 'disconnected';
+    if (s === 'connecting' || agg === null) agg = s;
+  }
+  return agg;
+}
+
+function recomputeAggregateStatus(): void {
+  const agg = aggregateSessionStatuses(sessionStatuses.values());
+  if (agg === aggregateStatus) return;
+  aggregateStatus = agg;
   for (const listener of statusListeners) {
-    listener(status);
+    listener(agg);
   }
 }
 
-function notifyError(message: string): void {
+export function getConnectionStatus(): AggregateConnectionStatus {
+  return aggregateStatus;
+}
+
+function notifyError(message: string | null): void {
   lastError = message;
   for (const listener of errorListeners) {
     listener(message);
@@ -184,6 +212,16 @@ function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSess
   const ytext = ydoc.getText('content');
   const provider = new WebsocketProvider(wsUrl, roomName, ydoc);
   const undoManager = new Y.UndoManager(ytext);
+
+  const sessionId = nextSessionId++;
+  const setSessionStatus = (status: ConnectionStatus) => {
+    if (destroyed) return;
+    sessionStatuses.set(sessionId, status);
+    recomputeAggregateStatus();
+  };
+  // The provider starts connecting inside its constructor, before we can subscribe to 'status',
+  // so seed the initial state rather than waiting for an event.
+  setSessionStatus('connecting');
 
   let resolveReady!: () => void;
   let rejectReady!: (e: Error) => void;
@@ -243,25 +281,38 @@ function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSess
     }
   });
 
+  // Gate on `synced` (handshake done this connection), not just `wsconnected`: edits made while the
+  // socket is open but the sync handshake is still pending haven't reached the server yet.
   ydoc.on('update', (_update: Uint8Array, origin: any) => {
-    if (provider.wsconnected) notifyLastSynced();
+    if (provider.synced) notifyLastSynced();
   });
 
   provider.on('status', (event: { status: string }) => {
     if (event.status === 'connected') {
       consecutiveFailures = 0;
+      notifyError(null);
     }
-    notifyStatus(event.status as ConnectionStatus);
+    setSessionStatus(event.status as ConnectionStatus);
   });
+
+  // Giving up is only valid while the initial handshake is pending (fail the open with a clear
+  // error). After a doc has synced once, provider.disconnect() must never be called on failures:
+  // it permanently stops y-websocket's backoff reconnect, leaving the UI stuck on "Connecting..."
+  // while edits pile up locally until a page refresh. Post-handshake outages are left to the
+  // provider's own retry loop, which reconnects as soon as the server is reachable again.
+  const failHandshake = (message: string) => {
+    provider.disconnect();
+    setSessionStatus('disconnected');
+    notifyError(message);
+    rejectReady(new Error(message));
+  };
 
   provider.on('connection-error', (event: Event) => {
     const target = (event as { target?: { url?: string } }).target;
     const url = target?.url ?? wsUrl;
     consecutiveFailures++;
-    if (consecutiveFailures >= MAX_RETRIES) {
-      provider.disconnect();
-      notifyError(`Could not connect to ${url} after ${MAX_RETRIES} attempts`);
-      rejectReady(new Error(`Could not connect to ${url}`));
+    if (!settled && consecutiveFailures >= MAX_RETRIES) {
+      failHandshake(`Could not connect to ${url} after ${MAX_RETRIES} attempts`);
     }
   });
 
@@ -269,10 +320,8 @@ function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSess
     if (event && event.code !== 1000 && event.code !== 1005) {
       const reason = event.reason || `code ${event.code}`;
       consecutiveFailures++;
-      if (consecutiveFailures >= MAX_RETRIES) {
-        provider.disconnect();
-        notifyError(`WebSocket closed: ${reason} (${wsUrl})`);
-        rejectReady(new Error(`WebSocket closed: ${reason}`));
+      if (!settled && consecutiveFailures >= MAX_RETRIES) {
+        failHandshake(`WebSocket closed: ${reason} (${wsUrl})`);
       }
     }
   });
@@ -300,6 +349,8 @@ function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSess
       provider.destroy();
       idbPersistence?.destroy();
       ydoc.destroy();
+      sessionStatuses.delete(sessionId);
+      recomputeAggregateStatus();
     },
   };
 }
