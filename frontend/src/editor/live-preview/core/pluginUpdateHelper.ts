@@ -1,3 +1,4 @@
+import { syntaxTree } from '@codemirror/language';
 import { ViewUpdate } from '@codemirror/view';
 import { mouseSelectingField } from './mouseSelecting';
 
@@ -10,41 +11,26 @@ import { mouseSelectingField } from './mouseSelecting';
 export type UpdateAction = 'rebuild' | 'skip' | 'none';
 
 /**
- * Determine what action a ViewPlugin should take on update
- *
- * This helper extracts the common update logic shared by livePreviewPlugin
- * and mathPlugin, handling:
- * 1. Document/viewport/config changes → rebuild
+ * Determine what action a decoration-building ViewPlugin should take:
+ * 1. Document/config changes → rebuild
  * 2. Drag end → rebuild
- * 3. During drag → skip (avoid flickering)
- * 4. Selection change → rebuild
- *
- * @param update - The ViewUpdate from CodeMirror
- * @returns The action the plugin should take
+ * 3. During drag → skip (decorations stay frozen so layout doesn't shift under the mouse)
+ * 4. Selection/viewport/syntax-tree changes → rebuild
  *
  * @example
  * ```typescript
  * update(update: ViewUpdate) {
- *   const action = checkUpdateAction(update);
- *   if (action === 'rebuild') {
+ *   if (checkUpdateAction(update) === 'rebuild') {
  *     this.decorations = this.build(update.view);
  *   }
  * }
  * ```
  */
 export function checkUpdateAction(update: ViewUpdate): UpdateAction {
-  // Document/config changes: must rebuild.
-  // Note: viewportChanged is intentionally NOT included here because
-  // decoration changes can themselves trigger viewport changes, creating
-  // an infinite rebuild loop (InlineCoordsScan stack overflow with vim j/k).
-  if (
-    update.docChanged ||
-    update.transactions.some((t) => t.reconfigured)
-  ) {
+  if (update.docChanged || update.transactions.some((t) => t.reconfigured)) {
     return 'rebuild';
   }
 
-  // Check drag state
   const isDragging = update.state.field(mouseSelectingField, false);
   const wasDragging = update.startState.field(mouseSelectingField, false);
 
@@ -58,13 +44,17 @@ export function checkUpdateAction(update: ViewUpdate): UpdateAction {
     return 'skip';
   }
 
-  // NOTE: selectionSet intentionally NOT triggering rebuild here.
-  // Rebuilding mark decorations on selection change causes CM6's
-  // InlineCoordsScan to recurse infinitely when vim navigates with j/k.
-  // This means inline formatting marks (**, *, etc.) won't show/hide
-  // based on cursor position — they'll only update on document edits.
-  // The livePreviewPlugin has its own selection-aware update logic
-  // with an active-lines guard to handle this safely.
+  // Selection moves show/hide marks; viewport and syntax-tree changes bring
+  // newly visible or newly parsed regions that need decorating. Rebuilding
+  // on these is safe with replace decorations (taskListPlugin does the
+  // same) — the old stack overflow came from CSS font-size mark hiding.
+  if (
+    update.selectionSet ||
+    update.viewportChanged ||
+    syntaxTree(update.startState) !== syntaxTree(update.state)
+  ) {
+    return 'rebuild';
+  }
 
   return 'none';
 }

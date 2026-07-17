@@ -1,7 +1,7 @@
 /**
  * Link Widget
  *
- * Renders Markdown link preview, supports standard links and Wiki links
+ * Renders Markdown link preview
  */
 
 import { WidgetType } from '@codemirror/view';
@@ -16,8 +16,6 @@ export interface LinkData {
   url: string;
   /** Title */
   title?: string;
-  /** Whether it's a Wiki link */
-  isWikiLink: boolean;
 }
 
 /**
@@ -26,8 +24,6 @@ export interface LinkData {
 export interface LinkOptions {
   /** Whether to open in new tab, default true */
   openInNewTab?: boolean;
-  /** Wiki link click handler */
-  onWikiLinkClick?: (link: string) => void;
   /** Whether to show link preview, default false */
   showPreview?: boolean;
 }
@@ -78,7 +74,7 @@ export class LinkWidget extends WidgetType {
     return (
       other.data.text === this.data.text &&
       other.data.url === this.data.url &&
-      other.data.isWikiLink === this.data.isWikiLink
+      other.data.title === this.data.title
     );
   }
 
@@ -86,46 +82,35 @@ export class LinkWidget extends WidgetType {
    * Render to DOM element
    */
   toDOM(): HTMLElement {
-    const { text, url, title, isWikiLink } = this.data;
-    const {
-      openInNewTab = true,
-      onWikiLinkClick,
-      showPreview = false,
-    } = this.options;
+    const { text, url, title } = this.data;
+    const { openInNewTab = true, showPreview = false } = this.options;
 
     const anchor = document.createElement('a');
     anchor.textContent = text;
     anchor.title = title || '';
     anchor.tabIndex = -1; // Prevent focus stealing from editor/vim
+    anchor.className = 'cm-link-widget';
 
-    if (isWikiLink) {
-      // Wiki link style
-      anchor.className = 'cm-link-widget cm-wikilink-widget';
-      anchor.href = '';
-
-      // Wiki link click handler
-      anchor.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        onWikiLinkClick?.(url);
-      });
-    } else {
-      // Standard link
-      anchor.className = 'cm-link-widget';
-
-      const safeUrl = sanitizeUrl(url);
-      if (safeUrl) {
-        anchor.href = safeUrl;
-      }
-
-      if (openInNewTab) {
-        anchor.target = '_blank';
-        anchor.rel = 'noopener noreferrer';
-      }
+    const safeUrl = sanitizeUrl(url);
+    if (safeUrl) {
+      anchor.href = safeUrl;
     }
 
+    if (openInNewTab) {
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+    }
+
+    // Cmd/Ctrl-click opens; plain click falls through to the editor to
+    // place the cursor (which reveals the source for editing).
+    anchor.addEventListener('click', (e) => {
+      if (!(e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+      }
+    });
+
     // Link preview
-    if (showPreview && !isWikiLink) {
+    if (showPreview) {
       let previewEl: HTMLElement | null = null;
 
       anchor.addEventListener('mouseenter', () => {
@@ -147,12 +132,13 @@ export class LinkWidget extends WidgetType {
   }
 
   /**
-   * Whether to ignore events
-   *
-   * Return false to allow click to enter edit mode
+   * Cmd/Ctrl-click is handled by the widget (opens the link) — the editor
+   * must ignore it, otherwise the cursor moves into the source and swaps
+   * the widget out mid-click, swallowing the navigation. Plain clicks go
+   * to the editor to place the cursor for editing.
    */
-  ignoreEvent(): boolean {
-    return false;
+  ignoreEvent(event: Event): boolean {
+    return event instanceof MouseEvent && (event.metaKey || event.ctrlKey);
   }
 }
 

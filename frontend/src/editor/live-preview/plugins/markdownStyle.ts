@@ -85,6 +85,22 @@ export const markdownStylePlugin = ViewPlugin.fromClass(
           from,
           to,
           enter: (node) => {
+            // Blockquote lines get a left border (visible even while the
+            // `>` marks are hidden by livePreviewPlugin).
+            if (node.name === 'Blockquote') {
+              const doc = view.state.doc;
+              const first = doc.lineAt(Math.max(node.from, from));
+              const last = doc.lineAt(Math.min(node.to, to));
+              for (let l = first.number; l <= last.number; l++) {
+                decorations.push(
+                  Decoration.line({ class: 'cm-blockquote-line' }).range(
+                    doc.line(l).from
+                  )
+                );
+              }
+              return;
+            }
+
             const cls = styleMap[node.name];
             if (!cls) return;
 

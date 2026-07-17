@@ -8,14 +8,7 @@ import {
   ViewUpdate,
 } from '@codemirror/view';
 import { shouldShowSource } from '../core/shouldShowSource';
-import { mouseSelectingField } from '../core/mouseSelecting';
 import { checkUpdateAction } from '../core/pluginUpdateHelper';
-
-function setsEqual(a: Set<number>, b: Set<number>): boolean {
-  if (a.size !== b.size) return false;
-  for (const v of a) if (!b.has(v)) return false;
-  return true;
-}
 
 /**
  * Parent node types to skip
@@ -40,130 +33,113 @@ function isInsideSkippedParent(node: {
 }
 
 /**
- * Live Preview Plugin
- *
- * Handles animated show/hide of inline marks (bold, italic, strikethrough, etc.)
- * and block marks (headings, lists, quotes)
- *
- * How it works:
- * 1. Traverse syntax tree to find all mark nodes
- * 2. Decide whether to show marks based on cursor position
- * 3. Apply CSS classes to trigger animations
+ * Inline marks revealed when the selection touches the enclosing styled
+ * span (StrongEmphasis, Emphasis, Strikethrough, InlineCode) — so clicking
+ * anywhere inside **bold** shows the `**`, not just clicking the marks.
  */
+const INLINE_MARKS = new Set(['EmphasisMark', 'StrikethroughMark', 'CodeMark']);
+
+/**
+ * Live-preview mark decorations: hide formatting marks with replace
+ * decorations (the same mechanism taskListPlugin and codeBlockField use —
+ * unlike the old CSS font-size hack it doesn't break CM6 coordinate
+ * scanning under vim), and reveal them when the selection is nearby.
+ *
+ * - `#`/`>` marks: revealed while the selection touches their line
+ * - inline marks: revealed while the selection touches the styled span
+ * - ListMark and code blocks are handled by other plugins, skipped here
+ */
+export function buildLivePreviewDecorations(
+  state: EditorState,
+  ranges: readonly { from: number; to: number }[]
+): DecorationSet {
+  const decorations: Range<Decoration>[] = [];
+  const tree = syntaxTree(state);
+
+  for (const { from, to } of ranges) {
+    tree.iterate({
+      from,
+      to,
+      enter: (node) => {
+        if (node.name === 'HeaderMark' || node.name === 'QuoteMark') {
+          // Setext underlines (`===`) are their own line; leave them alone.
+          if (node.name === 'HeaderMark') {
+            const parent = node.node.parent;
+            if (!parent || !parent.name.startsWith('ATXHeading')) return;
+          }
+
+          const line = state.doc.lineAt(node.from);
+          if (shouldShowSource(state, line.from, line.to)) {
+            decorations.push(
+              Decoration.mark({ class: 'cm-formatting-mark' }).range(
+                node.from,
+                node.to
+              )
+            );
+          } else {
+            // Hide the separating space too: the one after an opening
+            // mark, or before a closing ATX mark (`## foo ##`).
+            let hideFrom = node.from;
+            let hideTo = node.to;
+            const atLineStart = /^\s*$/.test(
+              line.text.slice(0, node.from - line.from)
+            );
+            if (atLineStart) {
+              if (state.doc.sliceString(hideTo, hideTo + 1) === ' ') hideTo++;
+            } else if (state.doc.sliceString(hideFrom - 1, hideFrom) === ' ') {
+              hideFrom--;
+            }
+            decorations.push(Decoration.replace({}).range(hideFrom, hideTo));
+          }
+          return;
+        }
+
+        if (!INLINE_MARKS.has(node.name)) return;
+        if (node.from >= node.to) return;
+        if (isInsideSkippedParent(node)) return;
+
+        const parent = node.node.parent;
+        const spanFrom = parent ? parent.from : node.from;
+        const spanTo = parent ? parent.to : node.to;
+
+        if (shouldShowSource(state, spanFrom, spanTo)) {
+          decorations.push(
+            Decoration.mark({ class: 'cm-formatting-mark' }).range(
+              node.from,
+              node.to
+            )
+          );
+        } else {
+          decorations.push(Decoration.replace({}).range(node.from, node.to));
+        }
+      },
+    });
+  }
+
+  return Decoration.set(
+    decorations.sort((a, b) => a.from - b.from || a.to - b.to),
+    true
+  );
+}
+
 export const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
-    private activeLines: Set<number> = new Set();
 
     constructor(view: EditorView) {
-      this.decorations = this.build(view);
+      this.decorations = buildLivePreviewDecorations(
+        view.state,
+        view.visibleRanges
+      );
     }
 
     update(update: ViewUpdate) {
-      // Rebuild on doc edits, viewport scrolls, and syntax-tree updates from
-      // the incremental parser (so marks on regions parsed after initial load
-      // still get styled). Deliberately NOT triggered by selection changes —
-      // selection-based rebuilds cause InlineCoordsScan stack overflow with
-      // vim navigation.
-      if (
-        update.docChanged ||
-        update.viewportChanged ||
-        syntaxTree(update.startState) !== syntaxTree(update.state)
-      ) {
-        this.decorations = this.build(update.view);
+      if (checkUpdateAction(update) === 'rebuild') {
+        this.decorations = buildLivePreviewDecorations(
+          update.view.state,
+          update.view.visibleRanges
+        );
       }
-    }
-
-    private getActiveLines(state: EditorState): Set<number> {
-      const lines = new Set<number>();
-      for (const range of state.selection.ranges) {
-        const startLine = state.doc.lineAt(range.from).number;
-        const endLine = state.doc.lineAt(range.to).number;
-        for (let l = startLine; l <= endLine; l++) {
-          lines.add(l);
-        }
-      }
-      return lines;
-    }
-
-    build(view: EditorView) {
-      const decorations: Range<Decoration>[] = [];
-      const { state } = view;
-
-      // Get all active lines and cache for change detection
-      const activeLines = this.getActiveLines(state);
-      this.activeLines = activeLines;
-
-      const isDrag = state.field(mouseSelectingField, false);
-
-      // Traverse syntax tree
-      syntaxTree(state).iterate({
-        enter: (node) => {
-          // Only handle mark nodes
-          const markTypes = [
-            'EmphasisMark', // * or _
-            'StrikethroughMark', // ~~
-            'CodeMark', // `
-            'HeaderMark', // #
-            'ListMark', // - or *
-            'QuoteMark', // >
-          ];
-
-          if (!markTypes.includes(node.name)) return;
-
-          // Skip marks inside code blocks
-          if (isInsideSkippedParent(node)) {
-            return;
-          }
-
-          // Skip CodeMark for math formulas (handled by mathPlugin)
-          if (node.name === 'CodeMark') {
-            const parent = node.node.parent;
-            if (parent && parent.name === 'InlineCode') {
-              const text = state.doc.sliceString(parent.from, parent.to);
-              // If it's math formula format `$...$`, skip
-              if (text.startsWith('`$') && text.endsWith('$`')) {
-                return;
-              }
-            }
-          }
-
-          const isBlock = ['HeaderMark', 'ListMark', 'QuoteMark'].includes(
-            node.name
-          );
-          const lineNum = state.doc.lineAt(node.from).number;
-          const isActiveLine = activeLines.has(lineNum);
-
-          if (isBlock) {
-            // Block marks: use fontSize animation
-            const cls =
-              isActiveLine && !isDrag
-                ? 'cm-formatting-block cm-formatting-block-visible'
-                : 'cm-formatting-block';
-            decorations.push(
-              Decoration.mark({ class: cls }).range(node.from, node.to)
-            );
-          } else {
-            // Inline marks: use max-width animation
-            if (node.from >= node.to) return;
-
-            const isTouched = shouldShowSource(state, node.from, node.to);
-            const cls =
-              isTouched && !isDrag
-                ? 'cm-formatting-inline cm-formatting-inline-visible'
-                : 'cm-formatting-inline';
-
-            decorations.push(
-              Decoration.mark({ class: cls }).range(node.from, node.to)
-            );
-          }
-        },
-      });
-
-      return Decoration.set(
-        decorations.sort((a, b) => a.from - b.from),
-        true
-      );
     }
   },
   {

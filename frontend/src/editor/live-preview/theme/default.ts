@@ -38,41 +38,11 @@ export const editorTheme = EditorView.theme({
     backgroundColor: 'rgba(59, 130, 246, 0.4) !important',
   },
 
-  // ========== Inline Mark Animation ==========
-  // Use visibility:hidden to hide marks — keeps them in layout so
-  // CM6's InlineCoordsScan doesn't overflow recalculating positions.
-  '.cm-formatting-inline': {
-    visibility: 'hidden',
-    fontSize: '0.01px',
-    letterSpacing: '0',
-    color: 'hsl(var(--muted-foreground, 220 9% 46%) / 0.6)',
-    fontFamily: "'JetBrains Mono', monospace",
-    pointerEvents: 'none',
-  },
-
-  '.cm-formatting-inline-visible': {
-    visibility: 'visible',
-    fontSize: '0.85em',
-    opacity: '0.6',
-    margin: '0 1px',
-    pointerEvents: 'auto',
-  },
-
-  // ========== Block Mark Animation ==========
-  '.cm-formatting-block': {
-    display: 'inline',
-    overflow: 'hidden',
-    fontSize: '0.01em',
-    lineHeight: 'inherit',
-    opacity: '0',
-    color: 'hsl(var(--muted-foreground, 220 9% 46%))',
-    fontFamily: "'JetBrains Mono', monospace",
-    transition: 'font-size 0.2s ease-out, opacity 0.2s ease-out',
-  },
-
-  '.cm-formatting-block-visible': {
-    fontSize: '1em',
-    opacity: '0.6',
+  // ========== Formatting Marks ==========
+  // Hidden marks are Decoration.replace ranges (no CSS involved); this
+  // styles marks while they're revealed on the active line/span.
+  '.cm-formatting-mark': {
+    color: 'hsl(var(--muted-foreground, 220 9% 46%) / 0.7)',
   },
 
   // ========== Heading Styles ==========
@@ -165,6 +135,15 @@ export const editorTheme = EditorView.theme({
     color: 'hsl(var(--muted-foreground, 220 9% 46%))',
   },
 
+  // ========== Blockquote ==========
+  // Border keeps the quote visually identifiable while the `>` marks are
+  // hidden. 13px + 3px border matches the 16px line padding.
+  '.cm-blockquote-line': {
+    borderLeft: '3px solid hsl(var(--border, 220 13% 91%))',
+    paddingLeft: '13px',
+    color: 'hsl(var(--muted-foreground, 220 9% 46%))',
+  },
+
   // ========== Task List Checkboxes ==========
   // A styled <span>, not a native <input> — see the task plugin.
   '.cm-task-checkbox': {
@@ -207,11 +186,6 @@ export const editorTheme = EditorView.theme({
   '.cm-link': {
     color: 'hsl(var(--md-link, var(--primary, 220 90% 56%)))',
     textDecoration: 'underline',
-  },
-  '.cm-wikilink': {
-    color: 'hsl(var(--primary, 220 90% 56%))',
-    textDecoration: 'underline',
-    cursor: 'pointer',
   },
   '.cm-highlight': {
     backgroundColor: 'hsl(50 100% 50% / 0.4)',
@@ -409,17 +383,8 @@ export const editorTheme = EditorView.theme({
   '.cm-link-widget:hover': {
     color: 'hsl(var(--primary, 220 90% 56%) / 0.8)',
   },
-  '.cm-wikilink-widget': {
-    color: 'hsl(var(--primary, 220 90% 56%))',
-    textDecoration: 'none',
-    borderBottom: '1px dashed currentColor',
-    cursor: 'pointer',
-  },
   '.cm-link-source': {
     backgroundColor: 'rgba(59, 130, 246, 0.1)',
-  },
-  '.cm-wikilink-source': {
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
   },
   '.cm-link-preview': {
     position: 'absolute',

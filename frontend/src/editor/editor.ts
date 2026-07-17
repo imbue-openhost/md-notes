@@ -28,12 +28,14 @@ import {
   collapseOnSelectionFacet,
   mouseSelectingField,
   setMouseSelecting,
+  livePreviewPlugin,
   markdownStylePlugin,
   taskListPlugin,
   listVisualIndentPlugin,
   spaceWidthField,
   spaceWidthMeasurer,
   codeBlockField,
+  linkPlugin,
   editorTheme,
 } from './live-preview/index';
 
@@ -111,6 +113,8 @@ function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, use
     spaceWidthField,
     spaceWidthMeasurer,
     markdownStylePlugin,
+    livePreviewPlugin,
+    linkPlugin(),
     taskListPlugin,
     listVisualIndentPlugin,
     codeBlockField({ interaction: 'inline' }),

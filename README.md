@@ -39,7 +39,8 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 ### default web editor (built for zack specifically :) )
 
 - **CodeMirror 6 editor** with markdown language support
-- **Markdown styling** via `markdownStylePlugin` — headings render at proper sizes, bold/italic/code/links get CSS styling. Formatting marks (`**`, `*`, `#`, etc.) remain visible but styled.
+- **Markdown styling** via `markdownStylePlugin` — headings render at proper sizes, bold/italic/code/links get CSS styling.
+- **Live preview** via `livePreviewPlugin`/`linkPlugin` — formatting marks are hidden unless the cursor is nearby: `#`/`>` show while the cursor is on their line, `**`/`*`/`~~`/`` ` `` while the selection touches the styled span. Links render as just the link text; the URL shows when the cursor is inside. Cmd/Ctrl-click opens a link (plain click places the cursor to edit).
 - **Editor preference** (Settings) — "Live preview" (standard keybindings, the default) or "Live preview (vim keybindings)". Both share the same editor core; the long-term vision is that the whole editor is swappable and other frontends can target the same backend.
 - **Vim mode** (opt-in) via `@replit/codemirror-vim` with status bar showing current mode
 - **Vimrc parser** — supports `map`/`noremap` (with mode prefixes `nmap`, `imap`, `vmap`, etc.) and `set` commands (`number`, `relativenumber`, `tabstop`, `shiftwidth`, `expandtab`, `wrap`, `scrolloff`)
