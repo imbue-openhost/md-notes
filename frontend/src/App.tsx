@@ -1,5 +1,6 @@
 import { createSignal, createResource, createEffect, onMount, onCleanup, Show, type Component } from 'solid-js';
 import { createEditor, type EditorInstance } from './editor/editor';
+import { getEditorKind } from './editor/editor-settings';
 import {
   createShareLink, listShareLinks, deleteShareLink,
   listVaults, createVault, deleteVault, getServerVimrc, pingHealth,
@@ -38,8 +39,8 @@ const ShareEditor: Component<{ uuid: string; info: ShareInfo }> = (props) => {
     document.title = name ? `${name} — Shared · ${BASE_TITLE}` : `Shared · ${BASE_TITLE}`;
   });
   onMount(() => {
+    // Shares are viewed by arbitrary visitors, so always use the standard editor.
     createEditor(container, {
-      vimrcContent: DEFAULT_VIMRC,
       shareUuid: props.uuid,
       shareDocPath: props.info.doc_path,
       syncServerUrl: serverUrl,
@@ -70,6 +71,7 @@ export const App: Component = () => {
   if (shareUuid) return <ShareView uuid={shareUuid} />;
 
   const [activeVimrc, setActiveVimrc] = createSignal(DEFAULT_VIMRC);
+  const [editorKind, setEditorKind] = createSignal(getEditorKind());
   const [vault, setVault] = createSignal<VaultConfig | null>(null);
   const [vaultList, setVaultList] = createSignal<VaultConfig[]>([]);
   const [showVaultPicker, setShowVaultPicker] = createSignal(false);
@@ -228,6 +230,7 @@ export const App: Component = () => {
   ): EditorInstance {
     const v = vault();
     return createEditor(container, {
+      kind: editorKind(),
       vimrcContent: activeVimrc(),
       syncVault: v?.name || undefined,
       syncFilePath: path,
@@ -381,7 +384,7 @@ export const App: Component = () => {
       <Show when={showWebSettings()}>
         <WebSettingsModal
           initialVimrc={activeVimrc()}
-          onSaved={(v) => { setActiveVimrc(v); setShowWebSettings(false); }}
+          onSaved={(v, kind) => { setActiveVimrc(v); setEditorKind(kind); setShowWebSettings(false); }}
           onClose={() => setShowWebSettings(false)}
         />
       </Show>

@@ -40,7 +40,8 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 
 - **CodeMirror 6 editor** with markdown language support
 - **Markdown styling** via `markdownStylePlugin` — headings render at proper sizes, bold/italic/code/links get CSS styling. Formatting marks (`**`, `*`, `#`, etc.) remain visible but styled.
-- **Vim mode** via `@replit/codemirror-vim` with status bar showing current mode
+- **Editor preference** (Settings) — "Live preview" (standard keybindings, the default) or "Live preview (vim keybindings)". Both share the same editor core; the long-term vision is that the whole editor is swappable and other frontends can target the same backend.
+- **Vim mode** (opt-in) via `@replit/codemirror-vim` with status bar showing current mode
 - **Vimrc parser** — supports `map`/`noremap` (with mode prefixes `nmap`, `imap`, `vmap`, etc.) and `set` commands (`number`, `relativenumber`, `tabstop`, `shiftwidth`, `expandtab`, `wrap`, `scrolloff`)
 - **Header-based folding** — click the fold gutter to collapse sections
 - **File tree sidebar** with create (+ button), rename/delete (right-click context menu)
