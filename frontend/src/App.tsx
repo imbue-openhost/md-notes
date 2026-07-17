@@ -17,6 +17,8 @@ import type { VaultConfig } from './api/types';
 import { VaultPicker } from './components/VaultPicker';
 import { Sidebar } from './components/Sidebar';
 import { EditorLayout, type EditorLayoutHandle } from './components/EditorLayout';
+import { MobileShell } from './components/MobileShell';
+import { resolveShellKind } from './app-settings';
 import { ShareModal } from './components/ShareModal';
 import { WebSettingsModal } from './components/SettingsModal';
 import { QuickOpen } from './components/QuickOpen';
@@ -81,6 +83,7 @@ export const App: Component = () => {
 
   const [activeVimrc, setActiveVimrc] = createSignal(DEFAULT_VIMRC);
   const [editorKind, setEditorKind] = createSignal(getEditorKind());
+  const [shellKind, setShellKind] = createSignal(resolveShellKind());
   const [vault, setVault] = createSignal<VaultConfig | null>(null);
   const [vaultList, setVaultList] = createSignal<VaultConfig[]>([]);
   const [showVaultPicker, setShowVaultPicker] = createSignal(false);
@@ -241,6 +244,7 @@ export const App: Component = () => {
     return createEditor(container, {
       kind: editorKind(),
       vimrcContent: activeVimrc(),
+      touch: shellKind() === 'mobile',
       syncVault: v?.name || undefined,
       syncFilePath: path,
       syncServerUrl: serverUrl,
@@ -341,32 +345,54 @@ export const App: Component = () => {
       </Show>
 
       <Show when={vault()}>
-        <Sidebar
-          vaultName={vault()!.name}
-          vaults={vaultList()}
-          onSelect={handleFileSelect}
-          onSearch={() => setShowSearch(true)}
-          onShare={setShareModalPath}
-          onSwitchToVault={switchToVault}
-          onManageVaults={switchVault}
-          onRefreshVaults={refreshVaultList}
-          onSettings={() => setShowWebSettings(true)}
-          showSyncStatus={true}
-          syncStatus={syncStatus()}
-          syncErrorMsg={syncErrorMsg() ?? undefined}
-          backendStatus={connectionState()}
-          lastSyncedAt={lastSyncedAtTs()}
-          idbError={idbError()}
-          currentPath={currentDocPath()}
-        />
-
-        <EditorLayout
-          ref={(h) => { layoutHandle = h; }}
-          createEditor={makeEditorForPath}
-          onActiveFileChange={setCurrentDocPath}
-          onSyncFailed={(path) => setSyncErrorPath(path)}
-          vaultName={vault()!.name}
-        />
+        {(() => {
+          const sidebar = (touchMenus: boolean) => (
+            <Sidebar
+              vaultName={vault()!.name}
+              vaults={vaultList()}
+              onSelect={handleFileSelect}
+              onSearch={() => setShowSearch(true)}
+              onShare={setShareModalPath}
+              onSwitchToVault={switchToVault}
+              onManageVaults={switchVault}
+              onRefreshVaults={refreshVaultList}
+              onSettings={() => setShowWebSettings(true)}
+              touchMenus={touchMenus}
+              showSyncStatus={true}
+              syncStatus={syncStatus()}
+              syncErrorMsg={syncErrorMsg() ?? undefined}
+              backendStatus={connectionState()}
+              lastSyncedAt={lastSyncedAtTs()}
+              idbError={idbError()}
+              currentPath={currentDocPath()}
+            />
+          );
+          return (
+            <Show
+              when={shellKind() === 'desktop'}
+              fallback={
+                <MobileShell
+                  ref={(h) => { layoutHandle = h; }}
+                  createEditor={makeEditorForPath}
+                  onActiveFileChange={setCurrentDocPath}
+                  onSyncFailed={(path) => setSyncErrorPath(path)}
+                  onQuickOpen={() => setShowQuickOpen(true)}
+                  vaultName={vault()!.name}
+                  drawerContent={sidebar(true)}
+                />
+              }
+            >
+              {sidebar(false)}
+              <EditorLayout
+                ref={(h) => { layoutHandle = h; }}
+                createEditor={makeEditorForPath}
+                onActiveFileChange={setCurrentDocPath}
+                onSyncFailed={(path) => setSyncErrorPath(path)}
+                vaultName={vault()!.name}
+              />
+            </Show>
+          );
+        })()}
       </Show>
 
       <Show when={shareModalPath()}>
@@ -395,7 +421,12 @@ export const App: Component = () => {
       <Show when={showWebSettings()}>
         <WebSettingsModal
           initialVimrc={activeVimrc()}
-          onSaved={(v, kind) => { setActiveVimrc(v); setEditorKind(kind); setShowWebSettings(false); }}
+          onSaved={(v, kind) => {
+            setActiveVimrc(v);
+            setEditorKind(kind);
+            setShellKind(resolveShellKind());
+            setShowWebSettings(false);
+          }}
           onClose={() => setShowWebSettings(false)}
         />
       </Show>
