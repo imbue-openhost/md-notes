@@ -25,12 +25,14 @@ import {
   collapseOnSelectionFacet,
   mouseSelectingField,
   setMouseSelecting,
+  livePreviewPlugin,
   markdownStylePlugin,
   taskListPlugin,
   listVisualIndentPlugin,
   spaceWidthField,
   spaceWidthMeasurer,
   codeBlockField,
+  linkPlugin,
   editorTheme,
 } from './live-preview/index';
 
@@ -67,7 +69,11 @@ Vim.defineAction('redo', (cm: any, actionArgs: any) => {
   }
 });
 
-function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
+function buildExtensions(
+  vimrcContent?: string,
+  useSync = false,
+  onWikiLinkClick?: (target: string) => void,
+): Extension[] {
   return [
     // Run before vim so Tab/Shift-Tab are always consumed by the editor
     // (regardless of vim mode), never bubbling to the browser. Mod-b also
@@ -125,6 +131,8 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     spaceWidthField,
     spaceWidthMeasurer,
     markdownStylePlugin,
+    livePreviewPlugin,
+    linkPlugin({ onWikiLinkClick }),
     taskListPlugin,
     listVisualIndentPlugin,
     codeBlockField({ interaction: 'inline' }),
@@ -175,6 +183,8 @@ export interface EditorOptions {
   shareDocPath?: string;
   readOnly?: boolean;
   onDocChange?: (content: string) => void;
+  /** Called when a rendered [[wiki link]] is clicked, with the link target. */
+  onWikiLinkClick?: (target: string) => void;
   /** Called when the initial server handshake fails (timeout or connection error). */
   onSyncFailed?: (error: Error) => void;
 }
@@ -189,7 +199,7 @@ export interface EditorInstance {
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorInstance {
   const useSync = !!(options.syncServerUrl && (options.syncVault || options.shareUuid));
-  const extensions = buildExtensions(options.vimrcContent, useSync);
+  const extensions = buildExtensions(options.vimrcContent, useSync, options.onWikiLinkClick);
 
   let syncSession: SyncSession | null = null;
 

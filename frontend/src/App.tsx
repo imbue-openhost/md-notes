@@ -233,6 +233,10 @@ export const App: Component = () => {
       syncFilePath: path,
       syncServerUrl: serverUrl,
       onSyncFailed,
+      onWikiLinkClick: (target) => {
+        const path = /\.[a-zA-Z0-9]+$/.test(target) ? target : `${target}.md`;
+        layoutHandle?.openFile(path);
+      },
     });
   }
 

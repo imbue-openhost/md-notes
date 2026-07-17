@@ -78,6 +78,7 @@ export class LinkWidget extends WidgetType {
     return (
       other.data.text === this.data.text &&
       other.data.url === this.data.url &&
+      other.data.title === this.data.title &&
       other.data.isWikiLink === this.data.isWikiLink
     );
   }
@@ -103,11 +104,12 @@ export class LinkWidget extends WidgetType {
       anchor.className = 'cm-link-widget cm-wikilink-widget';
       anchor.href = '';
 
-      // Wiki link click handler
       anchor.addEventListener('click', (e) => {
         e.preventDefault();
-        e.stopPropagation();
-        onWikiLinkClick?.(url);
+        if (e.metaKey || e.ctrlKey) {
+          e.stopPropagation();
+          onWikiLinkClick?.(url);
+        }
       });
     } else {
       // Standard link
@@ -122,6 +124,14 @@ export class LinkWidget extends WidgetType {
         anchor.target = '_blank';
         anchor.rel = 'noopener noreferrer';
       }
+
+      // Cmd/Ctrl-click opens; plain click falls through to the editor to
+      // place the cursor (which reveals the source for editing).
+      anchor.addEventListener('click', (e) => {
+        if (!(e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+        }
+      });
     }
 
     // Link preview
@@ -147,12 +157,13 @@ export class LinkWidget extends WidgetType {
   }
 
   /**
-   * Whether to ignore events
-   *
-   * Return false to allow click to enter edit mode
+   * Cmd/Ctrl-click is handled by the widget (opens the link) — the editor
+   * must ignore it, otherwise the cursor moves into the source and swaps
+   * the widget out mid-click, swallowing the navigation. Plain clicks go
+   * to the editor to place the cursor for editing.
    */
-  ignoreEvent(): boolean {
-    return false;
+  ignoreEvent(event: Event): boolean {
+    return event instanceof MouseEvent && (event.metaKey || event.ctrlKey);
   }
 }
 

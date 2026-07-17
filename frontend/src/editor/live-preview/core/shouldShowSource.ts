@@ -32,7 +32,7 @@ export const shouldShowSource = (state: EditorState, from: number, to: number): 
   // 1. Check if Live Preview is enabled
   const shouldCollapse = state.facet(collapseOnSelectionFacet);
   if (!shouldCollapse) {
-    return false; // Not enabled, always show source
+    return true; // Not enabled, always show source
   }
 
   // 2. Don't show source during drag selection (avoid flickering)
