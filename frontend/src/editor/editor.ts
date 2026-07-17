@@ -54,8 +54,18 @@ import { createSyncSession, createShareSyncSession, type SyncSession } from './s
 
 export type { EditorKind };
 
-function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, useSync: boolean): Extension[] {
+function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, useSync: boolean, touch: boolean): Extension[] {
   return [
+    // Virtual keyboards want the platform text services that physical-keyboard
+    // editing usually leaves off.
+    ...(touch
+      ? [EditorView.contentAttributes.of({
+          autocapitalize: 'sentences',
+          autocorrect: 'on',
+          spellcheck: 'true',
+        })]
+      : []),
+
     // Run before vim so Tab/Shift-Tab are always consumed by the editor
     // (regardless of vim mode), never bubbling to the browser. Mod-b also
     // wins over the browser default here.
@@ -161,6 +171,8 @@ export interface EditorOptions {
   kind?: EditorKind;
   /** Only used when kind is 'live-preview-vim'. */
   vimrcContent?: string;
+  /** Touch-device editing: enables autocapitalize/autocorrect/spellcheck. */
+  touch?: boolean;
   syncVault?: string;
   syncFilePath?: string;
   syncServerUrl?: string;
@@ -186,7 +198,7 @@ export interface EditorInstance {
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorInstance {
   const useSync = !!(options.syncServerUrl && (options.syncVault || options.shareUuid));
-  const extensions = buildExtensions(options.kind ?? 'live-preview', options.vimrcContent, useSync);
+  const extensions = buildExtensions(options.kind ?? 'live-preview', options.vimrcContent, useSync, options.touch ?? false);
 
   let syncSession: SyncSession | null = null;
 

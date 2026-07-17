@@ -49,6 +49,13 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 - **Pane collapse** — with split panes, the `«`/`»` button in a pane's tab bar collapses it to a thin strip so the other pane gets the full width; click the strip (or focus the pane) to restore. `Cmd/Ctrl+Shift+\` toggles the active pane.
 - **Header share links** — hover a heading to get a link button that copies a read-only or editable share link to that section (`/share/<uuid>#<slug>`, GitHub-style slugs). Opening such a link scrolls to the first matching header, cursor on it, unfolded; unknown slugs just load normally.
 
+### mobile
+
+- **Mobile shell** (phones, Obsidian-mobile-style): one document at a time, slide-in drawer for the file tree, top bar with quick-open, and a formatting toolbar (indent/outdent, checkbox, bold) that sits above the virtual keyboard via `visualViewport` tracking.
+- **Shell selection**: autodetected (coarse pointer + small screen → mobile; tablets currently get desktop), overridable via Settings → "App layout".
+- File rename/delete on touch via a per-row `⋯` menu (iOS has no long-press path to right-click menus).
+- **PWA**: `manifest.webmanifest` + icons, installable to the home screen (standalone display). No service worker on purpose — the app is online-only by design, so offline caching would only add staleness risk.
+
 ### tauri native editor
 
 - intended to share most code with the web editor, just packaged as a native app

@@ -8,6 +8,12 @@ import {
   setEditorKind,
   type EditorKind,
 } from '../editor/editor-settings';
+import {
+  getShellPreference,
+  setShellPreference,
+  detectShellKind,
+  type ShellPreference,
+} from '../app-settings';
 
 interface WebSettingsProps {
   initialVimrc: string;
@@ -18,6 +24,7 @@ interface WebSettingsProps {
 export const WebSettingsModal: Component<WebSettingsProps> = (props) => {
   const [vimrc, setVimrc] = createSignal(props.initialVimrc);
   const [editorKind, setEditorKindValue] = createSignal<EditorKind>(getEditorKind());
+  const [shellPref, setShellPref] = createSignal<ShellPreference>(getShellPreference());
   const [collapseHeaders, setCollapseHeaders] = createSignal(getCollapseHeadersDefault());
   const [saving, setSaving] = createSignal(false);
 
@@ -27,6 +34,7 @@ export const WebSettingsModal: Component<WebSettingsProps> = (props) => {
     try {
       await saveServerVimrc(value);
       setEditorKind(editorKind());
+      setShellPreference(shellPref());
       setCollapseHeadersDefault(collapseHeaders());
       props.onSaved(value, editorKind());
     } catch (e) {
@@ -43,6 +51,18 @@ export const WebSettingsModal: Component<WebSettingsProps> = (props) => {
           <Dialog.Content class="settings-modal settings-modal-wide">
             <Dialog.Title class="settings-modal-title">Settings</Dialog.Title>
             <div class="settings-form">
+              <div class="settings-field">
+                <label class="settings-label">App layout</label>
+                <select
+                  class="settings-input"
+                  value={shellPref()}
+                  onChange={(e) => setShellPref(e.currentTarget.value as ShellPreference)}
+                >
+                  <option value="auto">{`Auto (this device: ${detectShellKind()})`}</option>
+                  <option value="desktop">Desktop</option>
+                  <option value="mobile">Mobile</option>
+                </select>
+              </div>
               <div class="settings-field">
                 <label class="settings-label">Editor preference</label>
                 <select
