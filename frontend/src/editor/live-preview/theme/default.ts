@@ -187,11 +187,6 @@ export const editorTheme = EditorView.theme({
     color: 'hsl(var(--md-link, var(--primary, 220 90% 56%)))',
     textDecoration: 'underline',
   },
-  '.cm-wikilink': {
-    color: 'hsl(var(--primary, 220 90% 56%))',
-    textDecoration: 'underline',
-    cursor: 'pointer',
-  },
   '.cm-highlight': {
     backgroundColor: 'hsl(50 100% 50% / 0.4)',
     padding: '1px 2px',
@@ -388,17 +383,8 @@ export const editorTheme = EditorView.theme({
   '.cm-link-widget:hover': {
     color: 'hsl(var(--primary, 220 90% 56%) / 0.8)',
   },
-  '.cm-wikilink-widget': {
-    color: 'hsl(var(--primary, 220 90% 56%))',
-    textDecoration: 'none',
-    borderBottom: '1px dashed currentColor',
-    cursor: 'pointer',
-  },
   '.cm-link-source': {
     backgroundColor: 'rgba(59, 130, 246, 0.1)',
-  },
-  '.cm-wikilink-source': {
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
   },
   '.cm-link-preview': {
     position: 'absolute',

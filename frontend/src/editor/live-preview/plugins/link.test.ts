@@ -4,12 +4,11 @@ import { ensureSyntaxTree } from '@codemirror/language';
 import { markdown, markdownLanguage } from '../../lang-markdown/index';
 import { collapseOnSelectionFacet } from '../core/facets';
 import { mouseSelectingField } from '../core/mouseSelecting';
-import { buildLinkDecorations, parseLinkSyntax, parseWikiLink } from './link';
+import { buildLinkDecorations, parseLinkSyntax } from './link';
 import type { LinkOptions } from '../widgets/linkWidget';
 
 const options: Required<LinkOptions> = {
   openInNewTab: true,
-  onWikiLinkClick: () => {},
   showPreview: false,
 };
 
@@ -27,7 +26,7 @@ function makeState(doc: string, cursor: number): EditorState {
   return state;
 }
 
-// Collect [kind, from, to] entries: 'widget' for replaced links, 'source' for marked ones.
+// Collect [kind, text] entries: 'widget' for replaced links, 'source' for marked ones.
 function linkDecos(doc: string, cursor: number): Array<[string, string]> {
   const state = makeState(doc, cursor);
   const set = buildLinkDecorations(
@@ -71,37 +70,12 @@ describe('standard links', () => {
   });
 });
 
-describe('wiki links', () => {
-  const doc = 'go to [[Some Note]] now\nx\n';
-
-  it('renders a widget when the cursor is outside', () => {
-    expect(linkDecos(doc, doc.indexOf('x\n'))).toEqual([
-      ['widget', '[[Some Note]]'],
-    ]);
-  });
-
-  it('shows source when the cursor is inside', () => {
-    expect(linkDecos(doc, doc.indexOf('Some'))).toEqual([
-      ['source', '[[Some Note]]'],
-    ]);
-  });
-});
-
-describe('parsers', () => {
+describe('parser', () => {
   it('parses text, url and title', () => {
     expect(parseLinkSyntax('[t](u "hi")')).toEqual({
       text: 't',
       url: 'u',
       title: 'hi',
-      isWikiLink: false,
-    });
-  });
-
-  it('parses wiki display text', () => {
-    expect(parseWikiLink('[[target|shown]]')).toEqual({
-      text: 'shown',
-      url: 'target',
-      isWikiLink: true,
     });
   });
 });

@@ -3,7 +3,6 @@
  *
  * Implements live preview for Markdown links
  * Hides URL part when cursor is outside link, shows only link text
- * Supports standard links and Wiki links
  */
 
 import { syntaxTree } from '@codemirror/language';
@@ -47,44 +46,14 @@ export function parseLinkSyntax(text: string): LinkData | null {
     text: linkText,
     url,
     title,
-    isWikiLink: false,
   };
 }
-
-/**
- * Parse Wiki link syntax
- *
- * @param text - Wiki link syntax text
- * @returns Parsed link data, or null
- */
-export function parseWikiLink(text: string): LinkData | null {
-  // Match [[target]] or [[target|display]]
-  const match = text.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
-
-  if (!match) {
-    return null;
-  }
-
-  const [, target, display] = match;
-
-  return {
-    text: display || target,
-    url: target,
-    isWikiLink: true,
-  };
-}
-
-/**
- * Wiki link regex
- */
-const WIKI_LINK_REGEX = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
 /**
  * Default options
  */
 const defaultOptions: Required<LinkOptions> = {
   openInNewTab: true,
-  onWikiLinkClick: undefined as unknown as (link: string) => void,
   showPreview: false,
 };
 
@@ -122,7 +91,6 @@ export function buildLinkDecorations(
       return skipRanges.some((r) => rFrom >= r.from && rTo <= r.to);
     };
 
-    // Process standard links
     tree.iterate({
       from,
       to,
@@ -149,33 +117,6 @@ export function buildLinkDecorations(
         }
       },
     });
-
-    // Process Wiki links (Lezer doesn't support by default, need manual matching)
-    const rangeText = state.doc.sliceString(from, to);
-    let match: RegExpExecArray | null;
-    WIKI_LINK_REGEX.lastIndex = 0;
-
-    while ((match = WIKI_LINK_REGEX.exec(rangeText)) !== null) {
-      const wFrom = from + match.index;
-      const wTo = wFrom + match[0].length;
-
-      if (isInSkipRange(wFrom, wTo)) continue;
-
-      const wikiData = parseWikiLink(match[0]);
-      if (!wikiData) continue;
-
-      if (!shouldShowSource(state, wFrom, wTo) && !isDrag) {
-        const widget = createLinkWidget(wikiData, options);
-        decorations.push(Decoration.replace({ widget }).range(wFrom, wTo));
-      } else {
-        decorations.push(
-          Decoration.mark({ class: 'cm-link-source cm-wikilink-source' }).range(
-            wFrom,
-            wTo
-          )
-        );
-      }
-    }
   }
 
   return Decoration.set(
@@ -189,22 +130,6 @@ export function buildLinkDecorations(
  *
  * @param options - Configuration options
  * @returns ViewPlugin
- *
- * @example
- * ```typescript
- * import { linkPlugin } from 'codemirror-live-markdown';
- *
- * // Use default config
- * extensions: [linkPlugin()]
- *
- * // Custom config
- * extensions: [linkPlugin({
- *   openInNewTab: true,
- *   onWikiLinkClick: (link) => {
- *     router.push(`/wiki/${link}`);
- *   },
- * })]
- * ```
  */
 export function linkPlugin(
   options?: LinkOptions

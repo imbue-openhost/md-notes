@@ -54,12 +54,7 @@ import { createSyncSession, createShareSyncSession, type SyncSession } from './s
 
 export type { EditorKind };
 
-function buildExtensions(
-  kind: EditorKind,
-  vimrcContent: string | undefined,
-  useSync: boolean,
-  onWikiLinkClick?: (target: string) => void,
-): Extension[] {
+function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, useSync: boolean): Extension[] {
   return [
     // Run before vim so Tab/Shift-Tab are always consumed by the editor
     // (regardless of vim mode), never bubbling to the browser. Mod-b also
@@ -119,7 +114,7 @@ function buildExtensions(
     spaceWidthMeasurer,
     markdownStylePlugin,
     livePreviewPlugin,
-    linkPlugin({ onWikiLinkClick }),
+    linkPlugin(),
     taskListPlugin,
     listVisualIndentPlugin,
     codeBlockField({ interaction: 'inline' }),
@@ -177,8 +172,6 @@ export interface EditorOptions {
   /** When set, heading lines get a hover button that copies a share link to that section. */
   getShareUrl?: GetShareUrl;
   onDocChange?: (content: string) => void;
-  /** Called when a rendered [[wiki link]] is clicked, with the link target. */
-  onWikiLinkClick?: (target: string) => void;
   /** Called when the initial server handshake fails (timeout or connection error). */
   onSyncFailed?: (error: Error) => void;
 }
@@ -193,7 +186,7 @@ export interface EditorInstance {
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorInstance {
   const useSync = !!(options.syncServerUrl && (options.syncVault || options.shareUuid));
-  const extensions = buildExtensions(options.kind ?? 'live-preview', options.vimrcContent, useSync, options.onWikiLinkClick);
+  const extensions = buildExtensions(options.kind ?? 'live-preview', options.vimrcContent, useSync);
 
   let syncSession: SyncSession | null = null;
 
