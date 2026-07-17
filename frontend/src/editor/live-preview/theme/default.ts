@@ -178,7 +178,10 @@ export const editorTheme = EditorView.theme({
     color: 'hsl(var(--muted-foreground, 220 9% 46%))',
   },
   '.cm-code': {
-    backgroundColor: 'hsl(var(--muted, 220 14% 96%))',
+    // Translucent (≈ --muted composited on white) so drawSelection's layer,
+    // which renders behind the text, stays visible when inline code is
+    // selected. An opaque background would hide the selection entirely.
+    backgroundColor: 'hsl(var(--foreground, 220 9% 9%) / 0.05)',
     padding: '2px 4px',
     borderRadius: '3px',
     fontFamily: 'monospace',
