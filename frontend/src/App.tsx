@@ -1,5 +1,6 @@
 import { createSignal, createResource, createEffect, onMount, onCleanup, Show, type Component } from 'solid-js';
 import { createEditor, type EditorInstance } from './editor/editor';
+import { getEditorKind } from './editor/editor-settings';
 import {
   createShareLink, listShareLinks, deleteShareLink,
   listVaults, createVault, deleteVault, getServerVimrc, pingHealth,
@@ -11,7 +12,7 @@ import {
   type AggregateConnectionStatus,
 } from './editor/sync';
 import { connectionState, UnauthorizedError, startHeartbeat } from './api/connection';
-import { serverUrl, getShareUuid, getVaultNameFromUrl, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
+import { serverUrl, getShareUuid, getVaultNameFromUrl, getUrlHeaderAnchor, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
 import type { VaultConfig } from './api/types';
 import { VaultPicker } from './components/VaultPicker';
 import { Sidebar } from './components/Sidebar';
@@ -31,6 +32,14 @@ function fileLabel(path: string | null | undefined): string | null {
   return base.replace(/\.md$/i, '');
 }
 
+/** Share URL for a doc, reusing an existing link with the right permission or creating one. */
+async function shareUrlForDoc(serverPath: string, permission: 'read' | 'write'): Promise<string> {
+  const links = await listShareLinks(serverPath);
+  const existing = links.find((l) => l.permission === permission);
+  const uuid = existing?.uuid ?? await createShareLink(serverPath, permission);
+  return `${window.location.origin}/share/${uuid}`;
+}
+
 const ShareEditor: Component<{ uuid: string; info: ShareInfo }> = (props) => {
   let container!: HTMLDivElement;
   createEffect(() => {
@@ -38,12 +47,13 @@ const ShareEditor: Component<{ uuid: string; info: ShareInfo }> = (props) => {
     document.title = name ? `${name} — Shared · ${BASE_TITLE}` : `Shared · ${BASE_TITLE}`;
   });
   onMount(() => {
+    // Shares are viewed by arbitrary visitors, so always use the standard editor.
     createEditor(container, {
-      vimrcContent: DEFAULT_VIMRC,
       shareUuid: props.uuid,
       shareDocPath: props.info.doc_path,
       syncServerUrl: serverUrl,
       readOnly: props.info.permission === 'read',
+      anchorHeader: getUrlHeaderAnchor() ?? undefined,
     });
   });
   return <div ref={container} id="editor-container" />;
@@ -70,6 +80,7 @@ export const App: Component = () => {
   if (shareUuid) return <ShareView uuid={shareUuid} />;
 
   const [activeVimrc, setActiveVimrc] = createSignal(DEFAULT_VIMRC);
+  const [editorKind, setEditorKind] = createSignal(getEditorKind());
   const [vault, setVault] = createSignal<VaultConfig | null>(null);
   const [vaultList, setVaultList] = createSignal<VaultConfig[]>([]);
   const [showVaultPicker, setShowVaultPicker] = createSignal(false);
@@ -228,10 +239,13 @@ export const App: Component = () => {
   ): EditorInstance {
     const v = vault();
     return createEditor(container, {
+      kind: editorKind(),
       vimrcContent: activeVimrc(),
       syncVault: v?.name || undefined,
       syncFilePath: path,
       syncServerUrl: serverUrl,
+      getShareUrl: (permission) =>
+        shareUrlForDoc(v?.name ? `${v.name}/${path}` : path, permission),
       onSyncFailed,
       onWikiLinkClick: (target) => {
         const path = /\.[a-zA-Z0-9]+$/.test(target) ? target : `${target}.md`;
@@ -385,7 +399,7 @@ export const App: Component = () => {
       <Show when={showWebSettings()}>
         <WebSettingsModal
           initialVimrc={activeVimrc()}
-          onSaved={(v) => { setActiveVimrc(v); setShowWebSettings(false); }}
+          onSaved={(v, kind) => { setActiveVimrc(v); setEditorKind(kind); setShowWebSettings(false); }}
           onClose={() => setShowWebSettings(false)}
         />
       </Show>

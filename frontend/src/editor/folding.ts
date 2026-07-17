@@ -8,20 +8,33 @@
  * how the source document is whitespaced. Nested headings fold independently.
  */
 
-import { syntaxTree } from '@codemirror/language';
 import { foldService } from '@codemirror/language';
 import { foldGutter } from '@codemirror/language';
 import { foldable } from '@codemirror/language';
 import { foldEffect } from '@codemirror/language';
+import { ensureSyntaxTree } from '@codemirror/language';
 import { Prec, type Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
+
+/**
+ * Parsing must run to completion wherever fold ranges are computed — CodeMirror parses docs incrementally, and a
+ * range computed from a partial tree ends at the parse frontier instead of the real section boundary, silently
+ * swallowing everything after it. The parse APIs require a timeout; this one is never meant to bind.
+ */
+export const UNBOUNDED_PARSE_MS = 1e9;
 
 /**
  * Fold service that defines ranges based on ATXHeading nodes. Exported so unit
  * tests can install just the service (without the DOM-dependent fold gutter).
  */
 export const markdownFoldService = foldService.of((state, lineStart, lineEnd) => {
-  const tree = syntaxTree(state);
+  const docLength = state.doc.length;
+  // Force the parse to completion (no-op once parsed): a partial tree can be missing this line's heading, or the
+  // next sibling heading — in which case the fold would extend to the end of the doc and swallow whole unparsed
+  // sections. Null only when no language parser is configured, so there are no headings to fold anyway.
+  const tree = ensureSyntaxTree(state, docLength, UNBOUNDED_PARSE_MS);
+  if (!tree) return null;
+
   let headingName = '';
   let headingFrom = 0;
   let headingTo = 0;
@@ -50,7 +63,6 @@ export const markdownFoldService = foldService.of((state, lineStart, lineEnd) =>
   // Fold from end of heading line to just before the next heading of equal
   // or higher level.
   const foldFrom = state.doc.lineAt(headingTo).to;
-  const docLength = state.doc.length;
 
   if (foldFrom >= docLength) return null;
 

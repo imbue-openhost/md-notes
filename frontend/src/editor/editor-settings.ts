@@ -6,6 +6,30 @@
  */
 
 const COLLAPSE_HEADERS_DEFAULT_KEY = 'mdnotes-collapse-headers-default';
+const EDITOR_KIND_KEY = 'mdnotes-editor-kind';
+
+/**
+ * Which editor component to use. 'live-preview' is the default;
+ * 'live-preview-vim' is the same editor with vim keybindings.
+ */
+export type EditorKind = 'live-preview' | 'live-preview-vim';
+
+export function getEditorKind(): EditorKind {
+  try {
+    return localStorage.getItem(EDITOR_KIND_KEY) === 'live-preview-vim' ? 'live-preview-vim' : 'live-preview';
+  } catch {
+    return 'live-preview';
+  }
+}
+
+export function setEditorKind(kind: EditorKind): void {
+  try {
+    if (kind === 'live-preview-vim') localStorage.setItem(EDITOR_KIND_KEY, kind);
+    else localStorage.removeItem(EDITOR_KIND_KEY);
+  } catch {
+    // localStorage disabled / quota — not fatal.
+  }
+}
 
 export function getCollapseHeadersDefault(): boolean {
   try {
@@ -25,4 +49,4 @@ export function setCollapseHeadersDefault(value: boolean): void {
 }
 
 // Exported for tests.
-export const _internal = { COLLAPSE_HEADERS_DEFAULT_KEY };
+export const _internal = { COLLAPSE_HEADERS_DEFAULT_KEY, EDITOR_KIND_KEY };

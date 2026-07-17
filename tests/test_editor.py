@@ -21,8 +21,12 @@ def _setup_vault(stack: OpenhostStack) -> None:
     )
 
 
-def _open_file(stack: OpenhostStack, page: Page) -> None:
+def _open_file(stack: OpenhostStack, page: Page, vim: bool = False) -> None:
     stack.playwright_login(page)
+    if vim:
+        # Editor preference is a client-side setting; opt into vim keybindings
+        # the same way the settings modal does.
+        page.add_init_script("localStorage.setItem('mdnotes-editor-kind', 'live-preview-vim')")
     page.goto(stack.url)
     page.locator(".vault-picker-item-name", has_text=VAULT).click()
     page.locator(f'.sidebar-item[data-type="file"][data-path="{FILE}"]').click()
@@ -36,8 +40,19 @@ def test_editor_loads(stack: OpenhostStack, page: Page) -> None:
     expect(page.locator(".cm-content")).to_be_visible()
 
 
-def test_vim_insert_mode(stack: OpenhostStack, page: Page) -> None:
+def test_default_editor_types_directly(stack: OpenhostStack, page: Page) -> None:
     _open_file(stack, page)
+    # The default editor has no vim status bar and inserts keystrokes directly.
+    expect(page.locator(".cm-vim-panel")).to_have_count(0)
+    content = page.locator(".cm-content")
+    content.click()
+    page.keyboard.type("HARNESS_DIRECT")
+    expect(content).to_contain_text("HARNESS_DIRECT")
+
+
+def test_vim_insert_mode(stack: OpenhostStack, page: Page) -> None:
+    _open_file(stack, page, vim=True)
+    expect(page.locator(".cm-vim-panel")).to_be_visible()
     content = page.locator(".cm-content")
     content.click()
     page.keyboard.press("Escape")
@@ -70,11 +85,8 @@ def test_yjs_sync_between_tabs(stack: OpenhostStack, page: Page) -> None:
 
     c1 = p1.locator(".cm-content")
     c1.click()
-    p1.keyboard.press("Escape")
-    p1.keyboard.type("G")
-    p1.keyboard.type("o")
+    p1.keyboard.press("Enter")
     p1.keyboard.type("SYNCED_VIA_HARNESS")
-    p1.keyboard.press("Escape")
 
     # Collaboration cursor labels ("Anonymous") render inline in
     # .cm-content and can split the typed string. Use a prefix that

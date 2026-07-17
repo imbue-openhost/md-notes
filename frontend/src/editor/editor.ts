@@ -3,11 +3,14 @@
  *
  * Each call to createEditor() returns an independent EditorInstance
  * with its own view and cleanup. No global state.
+ *
+ * options.kind selects the editor flavor: 'live-preview' (default) uses
+ * standard keybindings; 'live-preview-vim' layers vim on the same core.
  */
 
 import { EditorState, Prec, type Extension } from '@codemirror/state';
-import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, undo as cmUndo, redo as cmRedo } from './commands/commands';
+import { EditorView, keymap, drawSelection, highlightActiveLine } from '@codemirror/view';
+import { defaultKeymap, history, historyKeymap } from './commands/commands';
 import { markdown, markdownLanguage, toggleBold, insertNewlineInListCodeBlock } from './lang-markdown/index';
 import { languages } from '@codemirror/language-data';
 import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle, bracketMatching, foldNodeProp } from '@codemirror/language';
@@ -38,40 +41,23 @@ import {
 
 import { markdownFolding } from './folding';
 import { foldPersistence } from './fold-persistence';
+import { headerAnchorJump } from './header-anchor';
+import { headerLinkButtons, type GetShareUrl } from './header-link-button';
 import { indentDetection } from './indent/indentUnitField';
 import { pasteIndentNormalization } from './indent/pasteIndent';
-import { Vim } from '@replit/codemirror-vim';
 
-import { vimMode, toggleTaskAtSelection } from './vim';
-import { createSyncSession, createShareSyncSession, undoRedoFacet, type SyncSession } from './sync';
+import { vimMode } from './vim';
+import { toggleTaskAtSelection } from './tasks';
+import { syncHistoryKeymap } from './undo-redo';
+import type { EditorKind } from './editor-settings';
+import { createSyncSession, createShareSyncSession, type SyncSession } from './sync';
 
-Vim.defineAction('undo', (cm: any, actionArgs: any) => {
-  const view = cm.cm6;
-  const provider = view.state.facet(undoRedoFacet);
-  for (let i = 0; i < (actionArgs.repeat || 1); i++) {
-    if (provider) {
-      provider.undo();
-    } else {
-      cmUndo(view);
-    }
-  }
-});
-
-Vim.defineAction('redo', (cm: any, actionArgs: any) => {
-  const view = cm.cm6;
-  const provider = view.state.facet(undoRedoFacet);
-  for (let i = 0; i < (actionArgs.repeat || 1); i++) {
-    if (provider) {
-      provider.redo();
-    } else {
-      cmRedo(view);
-    }
-  }
-});
+export type { EditorKind };
 
 function buildExtensions(
-  vimrcContent?: string,
-  useSync = false,
+  kind: EditorKind,
+  vimrcContent: string | undefined,
+  useSync: boolean,
   onWikiLinkClick?: (target: string) => void,
 ): Extension[] {
   return [
@@ -89,7 +75,7 @@ function buildExtensions(
       { key: 'Enter', run: insertNewlineInListCodeBlock },
     ])),
 
-    vimMode(vimrcContent),
+    ...(kind === 'live-preview-vim' ? [vimMode(vimrcContent)] : []),
 
     ...(useSync ? [] : [history()]),
     EditorView.lineWrapping,
@@ -98,12 +84,13 @@ function buildExtensions(
     highlightSelectionMatches(),
     bracketMatching(),
 
-    // defaultKeymap provides insert-mode basics (Backspace, Enter, arrow keys, etc.)
-    // that vim's insert mode falls through to. historyKeymap adds Cmd-z/Shift-Cmd-z
-    // on top of vim's u/Ctrl-r.
+    // defaultKeymap is the main map for the standard editor and provides the
+    // insert-mode basics (Backspace, Enter, arrow keys, etc.) that vim's
+    // insert mode falls through to. Undo/redo goes through the CRDT undo
+    // manager on synced docs, plain CM history otherwise.
     keymap.of([
       ...defaultKeymap,
-      ...(useSync ? [] : historyKeymap),
+      ...(useSync ? syncHistoryKeymap : historyKeymap),
       ...searchKeymap,
     ]),
 
@@ -175,6 +162,9 @@ function buildExtensions(
 }
 
 export interface EditorOptions {
+  /** Editor flavor; defaults to 'live-preview' (standard keybindings). */
+  kind?: EditorKind;
+  /** Only used when kind is 'live-preview-vim'. */
   vimrcContent?: string;
   syncVault?: string;
   syncFilePath?: string;
@@ -182,6 +172,10 @@ export interface EditorOptions {
   shareUuid?: string;
   shareDocPath?: string;
   readOnly?: boolean;
+  /** Header slug (or raw header text) to jump to once the doc has loaded. */
+  anchorHeader?: string;
+  /** When set, heading lines get a hover button that copies a share link to that section. */
+  getShareUrl?: GetShareUrl;
   onDocChange?: (content: string) => void;
   /** Called when a rendered [[wiki link]] is clicked, with the link target. */
   onWikiLinkClick?: (target: string) => void;
@@ -199,7 +193,7 @@ export interface EditorInstance {
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorInstance {
   const useSync = !!(options.syncServerUrl && (options.syncVault || options.shareUuid));
-  const extensions = buildExtensions(options.vimrcContent, useSync, options.onWikiLinkClick);
+  const extensions = buildExtensions(options.kind ?? 'live-preview', options.vimrcContent, useSync, options.onWikiLinkClick);
 
   let syncSession: SyncSession | null = null;
 
@@ -228,6 +222,14 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
   if (options.syncVault && options.syncFilePath) {
     extensions.push(foldPersistence({ vault: options.syncVault, filePath: options.syncFilePath }));
+  }
+
+  if (options.anchorHeader) {
+    extensions.push(headerAnchorJump(options.anchorHeader));
+  }
+
+  if (options.getShareUrl) {
+    extensions.push(headerLinkButtons(options.getShareUrl));
   }
 
   const state = EditorState.create({
