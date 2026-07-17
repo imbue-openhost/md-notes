@@ -647,74 +647,66 @@ function createCodeBlockField(
  * spans for selected ranges that overlap code-block content.  These spans
  * render INSIDE the .cm-line (above the opaque background), so selection
  * is always visible regardless of the browser engine (Chromium, WebKit, etc.).
+ * The marks are background-only (no layout impact), so they also rebuild
+ * during mouse drags for live feedback.
+ *
+ * (Inline code doesn't need marks: .cm-code's background is translucent, so
+ * the selection layer shows through it.)
  */
 const selMark = Decoration.mark({ class: 'cm-codeblock-sel' });
+
+/** Exported for tests. */
+export function buildCodeSelectionDecorations(state: EditorState): DecorationSet {
+  const sel = state.selection.main;
+  if (sel.empty) return Decoration.none;
+
+  const ranges: Range<Decoration>[] = [];
+
+  syntaxTree(state).iterate({
+    from: sel.from,
+    to: sel.to,
+    enter: (node) => {
+      if (node.name !== 'FencedCode') return;
+
+      // Skip special languages (math, mermaid, etc.)
+      const codeInfo = node.node.getChild('CodeInfo');
+      if (codeInfo) {
+        const lang = state.doc.sliceString(codeInfo.from, codeInfo.to).trim();
+        if (SKIP_LANGUAGES.has(lang)) return;
+      }
+
+      // Find content range between fences
+      const openFenceLine = state.doc.lineAt(node.from);
+      const lastLine = state.doc.lineAt(node.to);
+      const contentFrom = openFenceLine.to + 1;
+      const contentTo = lastLine.from > contentFrom ? lastLine.from - 1 : contentFrom;
+
+      if (contentFrom >= contentTo) return;
+
+      // Intersect with selection
+      const from = Math.max(sel.from, contentFrom);
+      const to = Math.min(sel.to, contentTo);
+      if (from < to) {
+        ranges.push(selMark.range(from, to));
+      }
+    },
+  });
+
+  return Decoration.set(ranges, true);
+}
 
 const codeBlockSelectionPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
 
     constructor(view: EditorView) {
-      this.decorations = this.build(view);
+      this.decorations = buildCodeSelectionDecorations(view.state);
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged) {
-        this.decorations = this.build(update.view);
-        return;
+      if (update.docChanged || update.viewportChanged || update.selectionSet) {
+        this.decorations = buildCodeSelectionDecorations(update.state);
       }
-      if (!update.selectionSet) return;
-      const isDragging = update.state.field(mouseSelectingField, false);
-      const wasDragging = update.startState.field(mouseSelectingField, false);
-      // Rebuild when drag ends so selection marks catch up
-      if (wasDragging && !isDragging) {
-        this.decorations = this.build(update.view);
-        return;
-      }
-      // Skip during drag – native/drawSelection handles transient feedback
-      if (isDragging) return;
-      this.decorations = this.build(update.view);
-    }
-
-    build(view: EditorView): DecorationSet {
-      const sel = view.state.selection.main;
-      if (sel.empty) return Decoration.none;
-
-      const ranges: Range<Decoration>[] = [];
-
-      syntaxTree(view.state).iterate({
-        from: sel.from,
-        to: sel.to,
-        enter: (node) => {
-          if (node.name !== 'FencedCode') return;
-
-          // Skip special languages (math, mermaid, etc.)
-          const codeInfo = node.node.getChild('CodeInfo');
-          if (codeInfo) {
-            const lang = view.state.doc
-              .sliceString(codeInfo.from, codeInfo.to)
-              .trim();
-            if (SKIP_LANGUAGES.has(lang)) return;
-          }
-
-          // Find content range between fences
-          const openFenceLine = view.state.doc.lineAt(node.from);
-          const lastLine = view.state.doc.lineAt(node.to);
-          const contentFrom = openFenceLine.to + 1;
-          const contentTo = lastLine.from > contentFrom ? lastLine.from - 1 : contentFrom;
-
-          if (contentFrom >= contentTo) return;
-
-          // Intersect with selection
-          const from = Math.max(sel.from, contentFrom);
-          const to = Math.min(sel.to, contentTo);
-          if (from < to) {
-            ranges.push(selMark.range(from, to));
-          }
-        },
-      });
-
-      return Decoration.set(ranges, true);
     }
   },
   { decorations: (v) => v.decorations },
