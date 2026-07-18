@@ -10,6 +10,8 @@ from litestar import post
 from litestar import websocket
 from litestar.exceptions import ClientException
 from litestar.exceptions import NotFoundException
+from litestar.params import FromPath
+from litestar.params import FromQuery
 from litestar.status_codes import HTTP_201_CREATED
 
 from server.core.db import create_link
@@ -39,17 +41,17 @@ class ShareController(Controller):
         return CreateShareResponse(uuid=link_uuid)
 
     @delete("/{link_uuid:str}", status_code=200)
-    async def revoke_share(self, link_uuid: str) -> OkResponse:
+    async def revoke_share(self, link_uuid: FromPath[str]) -> OkResponse:
         if not delete_link(link_uuid):
             raise NotFoundException(detail="not found")
         return OkResponse()
 
     @get("/")
-    async def list_shares(self, docPath: str | None = None) -> list[ShareLink]:
+    async def list_shares(self, docPath: FromQuery[str | None] = None) -> list[ShareLink]:
         return list_links(docPath)
 
     @get("/{link_uuid:str}", opt={"public": True})
-    async def get_share(self, link_uuid: str) -> ShareLink:
+    async def get_share(self, link_uuid: FromPath[str]) -> ShareLink:
         """Public lookup of share-link metadata. The UUID is the capability — no auth required."""
         link = get_link(link_uuid)
         if not link:
@@ -57,7 +59,9 @@ class ShareController(Controller):
         return link
 
     @websocket("/{link_uuid:str}/crdt_websocket/{_room:path}", opt={"public": True})
-    async def crdt_websocket(self, socket: WebSocket[Any, Any, Any], link_uuid: str, _room: str) -> None:
+    async def crdt_websocket(
+        self, socket: WebSocket[Any, Any, Any], link_uuid: FromPath[str], _room: FromPath[str]
+    ) -> None:
         """Yjs CRDT sync for shared documents.
 
         Read-only links: server drops Yjs update messages from the client; only the initial sync handshake

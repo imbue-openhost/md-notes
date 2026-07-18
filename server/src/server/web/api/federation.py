@@ -20,6 +20,8 @@ from litestar.exceptions import ClientException
 from litestar.exceptions import NotAuthorizedException
 from litestar.exceptions import NotFoundException
 from litestar.exceptions import PermissionDeniedException
+from litestar.params import FromPath
+from litestar.params import FromQuery
 from litestar.status_codes import HTTP_201_CREATED
 
 from server.core.config import Config
@@ -103,11 +105,11 @@ class FederationController(Controller):
         return _with_invite_url(config, share)
 
     @get("/shares")
-    async def list_shares(self, config: Config, vaultName: str | None = None) -> list[VaultShare]:
+    async def list_shares(self, config: Config, vaultName: FromQuery[str | None] = None) -> list[VaultShare]:
         return [_with_invite_url(config, s) for s in list_vault_shares(vaultName)]
 
     @delete("/shares/{secret:str}", status_code=200)
-    async def revoke_share(self, secret: str) -> OkResponse:
+    async def revoke_share(self, secret: FromPath[str]) -> OkResponse:
         if not delete_vault_share(secret):
             raise NotFoundException(detail="not found")
         return OkResponse()
@@ -131,7 +133,7 @@ class FederationController(Controller):
         return list_remote_vaults()
 
     @delete("/remotes/{vault_id:str}", status_code=200)
-    async def remove_remote(self, vault_id: str) -> OkResponse:
+    async def remove_remote(self, vault_id: FromPath[str]) -> OkResponse:
         if not delete_remote_vault(vault_id):
             raise NotFoundException(detail="not found")
         return OkResponse()
@@ -139,7 +141,7 @@ class FederationController(Controller):
     # ── Peer: secret-authenticated access to a shared vault ─────────────
 
     @get("/peer/vault", opt={"public": True})
-    async def peer_vault(self, secret: str) -> PeerVaultInfo:
+    async def peer_vault(self, secret: FromQuery[str]) -> PeerVaultInfo:
         share = _require_share(secret)
         return PeerVaultInfo(
             vault_name=share.vault_name,
@@ -149,17 +151,19 @@ class FederationController(Controller):
         )
 
     @get("/peer/docs", opt={"public": True})
-    async def peer_list_docs(self, secret: str, config: Config) -> list[FileEntry]:
+    async def peer_list_docs(self, secret: FromQuery[str], config: Config) -> list[FileEntry]:
         share = _require_share(secret)
         return list_files(vault_root(config.vault_path, share.vault_name))
 
     @get("/peer/docs/file", media_type=MediaType.TEXT, opt={"public": True})
-    async def peer_get_file(self, secret: str, path: str, config: Config) -> str:
+    async def peer_get_file(self, secret: FromQuery[str], path: FromQuery[str], config: Config) -> str:
         share = _require_share(secret)
         return read_file(vault_root(config.vault_path, share.vault_name), path)
 
     @post("/peer/docs/file", status_code=HTTP_201_CREATED, opt={"public": True})
-    async def peer_create_file(self, secret: str, path: str, data: CreateFileBody, config: Config) -> OkResponse:
+    async def peer_create_file(
+        self, secret: FromQuery[str], path: FromQuery[str], data: CreateFileBody, config: Config
+    ) -> OkResponse:
         share = _require_share(secret)
         _require_write(share)
         root = vault_root(config.vault_path, share.vault_name)
@@ -170,21 +174,25 @@ class FederationController(Controller):
         return OkResponse()
 
     @patch("/peer/docs/file", opt={"public": True})
-    async def peer_move_file(self, secret: str, path: str, data: RenameBody, config: Config) -> OkResponse:
+    async def peer_move_file(
+        self, secret: FromQuery[str], path: FromQuery[str], data: RenameBody, config: Config
+    ) -> OkResponse:
         share = _require_share(secret)
         _require_write(share)
         rename_file(vault_root(config.vault_path, share.vault_name), path, data.newPath)
         return OkResponse()
 
     @delete("/peer/docs/file", status_code=200, opt={"public": True})
-    async def peer_remove_file(self, secret: str, path: str, config: Config) -> OkResponse:
+    async def peer_remove_file(self, secret: FromQuery[str], path: FromQuery[str], config: Config) -> OkResponse:
         share = _require_share(secret)
         _require_write(share)
         delete_file(vault_root(config.vault_path, share.vault_name), path)
         return OkResponse()
 
     @websocket("/peer/crdt_websocket/{filepath:path}", opt={"public": True})
-    async def peer_crdt_websocket(self, socket: WebSocket[Any, Any, Any], filepath: str, secret: str) -> None:
+    async def peer_crdt_websocket(
+        self, socket: WebSocket[Any, Any, Any], filepath: FromPath[str], secret: FromQuery[str]
+    ) -> None:
         """Yjs CRDT sync for a doc in a shared vault; read-only shares get update-dropping channels."""
         await socket.accept()
         share = get_vault_share(secret)
@@ -203,7 +211,9 @@ class FederationController(Controller):
             await socket.close(code=1008, reason="Document does not exist")
 
     @websocket("/peer/search_websocket", opt={"public": True})
-    async def peer_search_websocket(self, socket: WebSocket[Any, Any, Any], secret: str, config: Config) -> None:
+    async def peer_search_websocket(
+        self, socket: WebSocket[Any, Any, Any], secret: FromQuery[str], config: Config
+    ) -> None:
         await socket.accept()
         share = get_vault_share(secret)
         if not share:
