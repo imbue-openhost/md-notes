@@ -923,6 +923,8 @@ li.open > .sidebar-children {
   top: 15vh;
   left: 50%;
   transform: translateX(-50%);
+  /* Above the mobile drawer (201) so it can be opened from the drawer rows. */
+  z-index: 300;
   width: min(560px, 90vw);
   background: hsl(var(--background));
   border: 1px solid hsl(var(--border));
@@ -1055,6 +1057,31 @@ mark.search-hl {
   padding: 0 1px;
 }
 
+/* ── Drawer search rows (mobile) ─────────────────────────── */
+.sidebar-search-rows {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 4px 0;
+}
+
+.sidebar-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 12px 14px;
+  font-size: 16px;
+  color: hsl(var(--foreground));
+}
+
+.sidebar-search-row:active {
+  background: hsl(var(--border));
+}
+
 /* ── Row action menu (touch) ─────────────────────────────── */
 .sidebar-item-name {
   flex: 1;
@@ -1086,39 +1113,35 @@ mark.search-hl {
   overscroll-behavior: none;
 }
 
-.mobile-topbar {
+/* Obsidian-style floating controls over the editor (no top bar). */
+.mobile-float-controls {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top));
+  left: 8px;
+  right: 8px;
   display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  padding-top: calc(4px + env(safe-area-inset-top));
-  border-bottom: 1px solid hsl(var(--border));
-  flex-shrink: 0;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 20;
 }
 
-.mobile-topbar-btn {
-  background: none;
-  border: none;
+.mobile-float-btn {
+  pointer-events: auto;
+  background: hsl(var(--background) / 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid hsl(var(--border));
+  border-radius: 22px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   cursor: pointer;
-  font-size: 20px;
+  font-size: 18px;
   color: hsl(var(--foreground));
   min-width: 44px;
   min-height: 44px;
-  border-radius: 8px;
 }
 
-.mobile-topbar-btn:active {
+.mobile-float-btn:active {
   background: hsl(var(--border));
-}
-
-.mobile-topbar-title {
-  flex: 1;
-  text-align: center;
-  font-weight: 600;
-  font-size: 16px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .mobile-editor {
@@ -1141,7 +1164,7 @@ mark.search-hl {
 .mobile-empty {
   position: absolute;
   inset: 0;
-  top: calc(44px + env(safe-area-inset-top));
+  top: calc(60px + env(safe-area-inset-top));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1157,16 +1180,34 @@ mark.search-hl {
   cursor: pointer;
 }
 
-/* ── Mobile toolbar (sits above the virtual keyboard) ────── */
+/* ── Mobile toolbar (floating pill above the keyboard) ───── */
+.mobile-toolbar-wrap {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  max-width: calc(100% - 20px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  z-index: 30;
+}
+
 .mobile-toolbar {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 2px 6px;
-  padding-bottom: max(2px, env(safe-area-inset-bottom));
-  border-top: 1px solid hsl(var(--border));
-  background: hsl(var(--muted));
-  flex-shrink: 0;
+  padding: 3px 6px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 24px;
+  background: hsl(var(--background) / 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.mobile-heading-picker {
+  flex-wrap: wrap;
 }
 
 .mobile-toolbar-btn {
@@ -1175,12 +1216,16 @@ mark.search-hl {
   cursor: pointer;
   font-size: 18px;
   color: hsl(var(--foreground));
-  min-width: 44px;
+  min-width: 42px;
   min-height: 40px;
-  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
 }
 
-.mobile-toolbar-btn:active {
+.mobile-toolbar-btn:active,
+.mobile-toolbar-btn.active {
   background: hsl(var(--border));
 }
 
@@ -1188,8 +1233,9 @@ mark.search-hl {
   font-weight: 700;
 }
 
-.mobile-toolbar-spacer {
-  flex: 1;
+.mobile-toolbar-none {
+  font-size: 14px;
+  padding: 0 10px;
 }
 
 /* ── Mobile drawer ───────────────────────────────────────── */

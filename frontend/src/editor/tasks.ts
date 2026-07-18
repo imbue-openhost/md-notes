@@ -14,15 +14,17 @@ export interface ActionLineRange {
  * Toggle bullet/task state across the current selection.
  *
  * Scans every line in the selection that starts with a bullet (`-`, `*`, `+`,
- * or numbered like `1.` / `1)`). Each matched line has one of three statuses,
- * ordered lowest → highest:
+ * or numbered like `1.` / `1)`). Each matched line has one of three statuses
+ * that cycle:
  *
- *   bullet (`- foo`)  <  unchecked (`- [ ] foo`)  <  checked (`- [x] foo`)
+ *   bullet (`- foo`) → unchecked (`- [ ] foo`) → checked (`- [x] foo`) → bullet
  *
- * If every matched line shares a status, each advances:
- *   bullet → unchecked, unchecked → checked, checked → unchecked.
- * If the selection mixes statuses, only the lines at the lowest present
- * status advance one step; the rest are left untouched.
+ * If every matched line shares a status, each advances one step. If the
+ * selection mixes statuses, only the lines at the lowest present status
+ * (bullet < unchecked < checked) advance; the rest are left untouched.
+ *
+ * Lines that aren't list items at all become `- [ ] ` tasks (indent
+ * preserved) when the selection contains no bullet lines.
  *
  * With no selection (cursor on a single line) this reduces to the
  * single-line toggle behaviour.
@@ -55,7 +57,8 @@ export function toggleTaskAtSelection(view: EditorView, range?: ActionLineRange)
 
   type Item = {
     prefixEnd: number;
-    marker?: { from: number; to: number; checked: boolean };
+    // markerEnd spans "[x]" plus its trailing whitespace, for clean removal.
+    marker?: { from: number; to: number; markerEnd: number; checked: boolean };
   };
   const items: Item[] = [];
   for (let n = startLineNum; n <= endLineNum; n++) {
@@ -72,13 +75,26 @@ export function toggleTaskAtSelection(view: EditorView, range?: ActionLineRange)
         marker: {
           from: prefixEnd,
           to: prefixEnd + 3,
+          markerEnd: prefixEnd + m[2].length,
           checked: m[3] !== ' ',
         },
       });
     }
   }
 
-  if (items.length === 0) return false;
+  const changes: { from: number; to: number; insert: string }[] = [];
+
+  if (items.length === 0) {
+    // No list items in range: turn every line into an unchecked task.
+    for (let n = startLineNum; n <= endLineNum; n++) {
+      const line = state.doc.line(n);
+      const text = state.doc.sliceString(line.from, line.to);
+      const indent = text.match(/^\s*/)![0].length;
+      changes.push({ from: line.from + indent, to: line.from + indent, insert: '- [ ] ' });
+    }
+    view.dispatch({ changes });
+    return true;
+  }
 
   // 0 = bullet, 1 = unchecked, 2 = checked
   const statusOf = (it: Item) => (!it.marker ? 0 : it.marker.checked ? 2 : 1);
@@ -86,7 +102,6 @@ export function toggleTaskAtSelection(view: EditorView, range?: ActionLineRange)
   const minStatus = Math.min(...statuses);
   const allSame = statuses.every((s) => s === minStatus);
 
-  const changes: { from: number; to: number; insert: string }[] = [];
   for (const it of items) {
     if (!allSame && statusOf(it) !== minStatus) continue;
     if (!it.marker) {
@@ -94,8 +109,8 @@ export function toggleTaskAtSelection(view: EditorView, range?: ActionLineRange)
     } else if (!it.marker.checked) {
       changes.push({ from: it.marker.from, to: it.marker.to, insert: '[x]' });
     } else {
-      // Only reached when every selected item is checked.
-      changes.push({ from: it.marker.from, to: it.marker.to, insert: '[ ]' });
+      // Checked wraps back around to a plain bullet.
+      changes.push({ from: it.marker.from, to: it.marker.markerEnd, insert: '' });
     }
   }
 
