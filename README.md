@@ -39,12 +39,22 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 ### default web editor (built for zack specifically :) )
 
 - **CodeMirror 6 editor** with markdown language support
-- **Markdown styling** via `markdownStylePlugin` — headings render at proper sizes, bold/italic/code/links get CSS styling. Formatting marks (`**`, `*`, `#`, etc.) remain visible but styled.
-- **Vim mode** via `@replit/codemirror-vim` with status bar showing current mode
+- **Markdown styling** via `markdownStylePlugin` — headings render at proper sizes, bold/italic/code/links get CSS styling.
+- **Live preview** via `livePreviewPlugin`/`linkPlugin` — formatting marks are hidden unless the cursor is nearby: `#`/`>` show while the cursor is on their line, `**`/`*`/`~~`/`` ` `` while the selection touches the styled span. Links render as just the link text; the URL shows when the cursor is inside. Cmd/Ctrl-click opens a link (plain click places the cursor to edit).
+- **Editor preference** (Settings) — "Live preview" (standard keybindings, the default) or "Live preview (vim keybindings)". Both share the same editor core; the long-term vision is that the whole editor is swappable and other frontends can target the same backend.
+- **Vim mode** (opt-in) via `@replit/codemirror-vim` with status bar showing current mode
 - **Vimrc parser** — supports `map`/`noremap` (with mode prefixes `nmap`, `imap`, `vmap`, etc.) and `set` commands (`number`, `relativenumber`, `tabstop`, `shiftwidth`, `expandtab`, `wrap`, `scrolloff`)
 - **Header-based folding** — click the fold gutter to collapse sections
 - **File tree sidebar** with create (+ button), rename/delete (right-click context menu)
 - **Pane collapse** — with split panes, the `«`/`»` button in a pane's tab bar collapses it to a thin strip so the other pane gets the full width; click the strip (or focus the pane) to restore. `Cmd/Ctrl+Shift+\` toggles the active pane.
+- **Header share links** — hover a heading to get a link button that copies a read-only or editable share link to that section (`/share/<uuid>#<slug>`, GitHub-style slugs). Opening such a link scrolls to the first matching header, cursor on it, unfolded; unknown slugs just load normally.
+
+### mobile
+
+- **Mobile shell** (phones, Obsidian-mobile-style): one document at a time, slide-in drawer for the file tree, top bar with quick-open, and a formatting toolbar (indent/outdent, checkbox, bold) that sits above the virtual keyboard via `visualViewport` tracking.
+- **Shell selection**: autodetected (coarse pointer + small screen → mobile; tablets currently get desktop), overridable via Settings → "App layout".
+- File rename/delete on touch via a per-row `⋯` menu (iOS has no long-press path to right-click menus).
+- **PWA**: `manifest.webmanifest` + icons, installable to the home screen (standalone display). No service worker on purpose — the app is online-only by design, so offline caching would only add staleness risk.
 
 ### federation
 
@@ -61,6 +71,18 @@ directly to the sharing instance, authenticated by the share secret.
 - unfinished and on hold for now, to focus on the web editor.
 - supporting a nice offline mode adds complexity vs web.
 
+
+## Development
+
+Running locally without a container (faster iteration than the openhost harness):
+
+- **Server**: config comes from two env vars and fails loudly without them. Vaults are plain directories of .md files under `$OPENHOST_APP_DATA_DIR/vault/<vault-name>/`.
+  ```bash
+  OPENHOST_APP_DATA_DIR=/tmp/mdnotes OPENHOST_SQLITE_MAIN=/tmp/mdnotes/main.db uv run python -m server
+  ```
+- **Frontend**: `cd frontend && npx vite` proxies `/api` (including websockets) to `localhost:8000`. Authed routes only check for an `x-openhost-is-owner: true` header (normally set by the OpenHost router), so to skip the login flow add `headers: { 'x-openhost-is-owner': 'true' }` to the proxy entry in a local copy of `vite.config.ts`. Share pages (`/share/<uuid>`) are public and need no header.
+- **Driving it headlessly**: `@playwright/test` is a frontend devDependency. Docs load empty and fill via CRDT sync, so after `.cm-editor` appears allow ~1s before asserting on content. The editor is vim-mode: click `.cm-content`, press Escape, then vim keys.
+- **Integration tests**: `just test-integration` builds the container and deploys it on a real local OpenHost router (needs podman). The same `OpenhostStack` harness can be held open to click around a real deployment — it snapshots the working tree (tracked + untracked files), so uncommitted changes are included.
 
 ## TODO
 

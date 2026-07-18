@@ -22,6 +22,9 @@ interface Props {
   onManageVaults?: () => void;
   onRefreshVaults?: () => void;
   onSettings?: () => void;
+  /** Show a per-row "⋯" menu for file actions — iOS Safari has no
+   * long-press path to the right-click context menus. */
+  touchMenus?: boolean;
   showSyncStatus?: boolean;
   /** null/undefined = no docs open, so there's no sync state to report. */
   syncStatus?: SyncStatus | null;
@@ -123,6 +126,29 @@ export const Sidebar: Component<Props> = (props) => {
     return <FileItem entry={entry} />;
   }
 
+  const RowMenu: Component<{ items: { label: string; action: () => void }[] }> = (p) => (
+    <Show when={props.touchMenus && !props.readOnly}>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger
+          class="sidebar-row-menu-btn"
+          title="Actions"
+          onClick={(e: MouseEvent) => e.stopPropagation()}
+        >⋯</DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content class="sidebar-context-menu">
+            <For each={p.items}>
+              {(item) => (
+                <DropdownMenu.Item class="sidebar-context-item" onSelect={item.action}>
+                  {item.label}
+                </DropdownMenu.Item>
+              )}
+            </For>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    </Show>
+  );
+
   const FolderItem: Component<{ entry: FileEntry }> = (p) => {
     const [open, setOpen] = createSignal(false);
     return (
@@ -130,7 +156,11 @@ export const Sidebar: Component<Props> = (props) => {
         <ContextMenu.Root>
           <ContextMenu.Trigger as="div" class="sidebar-item" data-path={p.entry.path} data-type="dir" onClick={() => setOpen(!open())}>
             <span class="sidebar-arrow">{open() ? '\u25BC' : '\u25B6'}</span>
-            <span>{p.entry.name}</span>
+            <span class="sidebar-item-name">{p.entry.name}</span>
+            <RowMenu items={[
+              { label: 'New file here...', action: () => handleNewFileInDir(p.entry.path) },
+              { label: 'Delete folder', action: () => handleDelete(p.entry.path, p.entry.name) },
+            ]} />
           </ContextMenu.Trigger>
           <Show when={!props.readOnly}>
             <ContextMenu.Portal>
@@ -167,7 +197,11 @@ export const Sidebar: Component<Props> = (props) => {
             onClick={() => props.onSelect(p.entry.path)}
           >
             <span class="sidebar-icon">{'\uD83D\uDCC4'}</span>
-            <span>{p.entry.name.replace(/\.md$/, '')}</span>
+            <span class="sidebar-item-name">{p.entry.name.replace(/\.md$/, '')}</span>
+            <RowMenu items={[
+              { label: 'Rename...', action: () => handleRename(p.entry.path, p.entry.name) },
+              { label: 'Delete', action: () => handleDelete(p.entry.path, p.entry.name) },
+            ]} />
           </ContextMenu.Trigger>
           <Show when={!props.readOnly}>
             <ContextMenu.Portal>

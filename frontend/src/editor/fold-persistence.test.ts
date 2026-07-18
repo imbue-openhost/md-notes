@@ -114,6 +114,16 @@ describe('fold persistence path serialization', () => {
     expect(hasStoredState(opts)).toBe(false);
   });
 
+  it('applies saved folds to headings beyond the initial parse window', () => {
+    // Only ~3000 chars are parsed when the state is created; `# B` sits far
+    // past that, so applyPaths must force the parse or the fold drops.
+    const filler = 'text\n'.repeat(2000);
+    const doc = `# A\nx\n${filler}# B\ny\n`;
+    const view = makeFakeView(makeState(doc));
+    applyPaths(view, [['# B']]);
+    expect(currentFoldedPaths(view.state)).toEqual([['# B']]);
+  });
+
   it('disambiguates duplicate heading text by parent path', () => {
     const doc = '# A\n## sub\nx\n# B\n## sub\ny\n';
     const view = makeFakeView(makeState(doc));

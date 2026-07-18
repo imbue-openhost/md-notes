@@ -1,19 +1,30 @@
-import { createSignal, type Component } from 'solid-js';
+import { createSignal, Show, type Component } from 'solid-js';
 import { Dialog } from '@kobalte/core';
 import { saveServerVimrc } from '../api/client';
 import {
   getCollapseHeadersDefault,
   setCollapseHeadersDefault,
+  getEditorKind,
+  setEditorKind,
+  type EditorKind,
 } from '../editor/editor-settings';
+import {
+  getShellPreference,
+  setShellPreference,
+  detectShellKind,
+  type ShellPreference,
+} from '../app-settings';
 
 interface WebSettingsProps {
   initialVimrc: string;
-  onSaved: (vimrc: string) => void;
+  onSaved: (vimrc: string, editorKind: EditorKind) => void;
   onClose: () => void;
 }
 
 export const WebSettingsModal: Component<WebSettingsProps> = (props) => {
   const [vimrc, setVimrc] = createSignal(props.initialVimrc);
+  const [editorKind, setEditorKindValue] = createSignal<EditorKind>(getEditorKind());
+  const [shellPref, setShellPref] = createSignal<ShellPreference>(getShellPreference());
   const [collapseHeaders, setCollapseHeaders] = createSignal(getCollapseHeadersDefault());
   const [saving, setSaving] = createSignal(false);
 
@@ -22,8 +33,10 @@ export const WebSettingsModal: Component<WebSettingsProps> = (props) => {
     setSaving(true);
     try {
       await saveServerVimrc(value);
+      setEditorKind(editorKind());
+      setShellPreference(shellPref());
       setCollapseHeadersDefault(collapseHeaders());
-      props.onSaved(value);
+      props.onSaved(value, editorKind());
     } catch (e) {
       alert(`Failed to save: ${e}`);
     } finally {
@@ -39,15 +52,41 @@ export const WebSettingsModal: Component<WebSettingsProps> = (props) => {
             <Dialog.Title class="settings-modal-title">Settings</Dialog.Title>
             <div class="settings-form">
               <div class="settings-field">
-                <label class="settings-label">Vimrc</label>
-                <textarea
-                  class="settings-input settings-vimrc"
-                  value={vimrc()}
-                  onInput={(e) => setVimrc(e.currentTarget.value)}
-                  spellcheck={false}
-                />
+                <label class="settings-label">App layout</label>
+                <select
+                  class="settings-input"
+                  value={shellPref()}
+                  onChange={(e) => setShellPref(e.currentTarget.value as ShellPreference)}
+                >
+                  <option value="auto">{`Auto (this device: ${detectShellKind()})`}</option>
+                  <option value="desktop">Desktop</option>
+                  <option value="mobile">Mobile</option>
+                </select>
+              </div>
+              <div class="settings-field">
+                <label class="settings-label">Editor preference</label>
+                <select
+                  class="settings-input"
+                  value={editorKind()}
+                  onChange={(e) => setEditorKindValue(e.currentTarget.value as EditorKind)}
+                >
+                  <option value="live-preview">Live preview</option>
+                  <option value="live-preview-vim">Live preview (vim keybindings)</option>
+                </select>
                 <span class="settings-hint">Reload the editor for changes to take effect.</span>
               </div>
+              <Show when={editorKind() === 'live-preview-vim'}>
+                <div class="settings-field">
+                  <label class="settings-label">Vimrc</label>
+                  <textarea
+                    class="settings-input settings-vimrc"
+                    value={vimrc()}
+                    onInput={(e) => setVimrc(e.currentTarget.value)}
+                    spellcheck={false}
+                  />
+                  <span class="settings-hint">Reload the editor for changes to take effect.</span>
+                </div>
+              </Show>
               <div class="settings-field">
                 <label class="settings-label">
                   <input

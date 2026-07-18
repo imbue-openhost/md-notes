@@ -55,6 +55,18 @@ export function getShareUuid(): string | null {
   return match ? match[1] : null;
 }
 
+/** Header anchor from the URL hash (e.g. #how-it-works), decoded, or null. */
+export function getUrlHeaderAnchor(): string | null {
+  if (typeof window === 'undefined') return null;
+  const raw = window.location.hash.replace(/^#/, '');
+  if (!raw) return null;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 /** Vault name extracted from /<vault-name> URLs, or null if at root. */
 export function getVaultNameFromUrl(): string | null {
   if (typeof window === 'undefined') return null;

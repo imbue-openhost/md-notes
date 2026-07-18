@@ -17,11 +17,9 @@ import {
   Decoration,
   DecorationSet,
   EditorView,
-  ViewPlugin,
-  ViewUpdate,
-  WidgetType,
 } from '@codemirror/view';
 import { shouldShowSource } from '../core/shouldShowSource';
+import { collapseOnSelectionFacet } from '../core/facets';
 import { mouseSelectingField } from '../core/mouseSelecting';
 import { getCodeBlockInListContext } from '../core/listContext';
 import { spaceWidth, setSpaceWidth } from '../core/spaceWidth';
@@ -120,135 +118,6 @@ const codeBlockSourceModeField = StateField.define<CodeBlockSourceRange[]>({
   },
 });
 
-// ─── Inline mode widgets ───────────────────────────────────────────────
-
-/**
- * Header widget replacing the opening fence line (```lang)
- * Shows language badge, copy button, and MD (source-toggle) button
- */
-class CodeBlockHeaderWidget extends WidgetType {
-  constructor(
-    readonly language: string,
-    readonly code: string,
-    readonly from: number,
-    readonly to: number,
-    readonly showCopyButton: boolean,
-    readonly indentPx: number = 0,
-  ) {
-    super();
-  }
-
-  eq(other: CodeBlockHeaderWidget): boolean {
-    return (
-      other.language === this.language &&
-      other.code === this.code &&
-      other.from === this.from &&
-      other.to === this.to &&
-      other.showCopyButton === this.showCopyButton &&
-      other.indentPx === this.indentPx
-    );
-  }
-
-  toDOM(view?: EditorView): HTMLElement {
-    const header = document.createElement('div');
-    header.className = 'cm-codeblock-header';
-    if (this.indentPx > 0) header.style.marginLeft = `${this.indentPx}px`;
-
-    // Language badge
-    if (this.language && this.language !== 'text') {
-      const badge = document.createElement('span');
-      badge.className = 'cm-codeblock-lang';
-      badge.textContent = this.language;
-      header.appendChild(badge);
-    }
-
-    // Spacer
-    const spacer = document.createElement('span');
-    spacer.style.flex = '1';
-    header.appendChild(spacer);
-
-    // Copy button
-    if (this.showCopyButton) {
-      const copyBtn = document.createElement('button');
-      copyBtn.type = 'button';
-      copyBtn.className = 'cm-codeblock-copy';
-      copyBtn.textContent = 'Copy';
-      copyBtn.tabIndex = -1;
-      copyBtn.setAttribute('aria-label', 'Copy code');
-      const code = this.code;
-      copyBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        try {
-          await navigator.clipboard.writeText(code);
-          copyBtn.textContent = 'Copied!';
-          copyBtn.classList.add('cm-codeblock-copy-success');
-          setTimeout(() => {
-            copyBtn.textContent = 'Copy';
-            copyBtn.classList.remove('cm-codeblock-copy-success');
-          }, 2000);
-        } catch {
-          copyBtn.textContent = 'Failed';
-          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
-        }
-      });
-      header.appendChild(copyBtn);
-    }
-
-    // MD button (switch to source mode)
-    const mdBtn = document.createElement('button');
-    mdBtn.type = 'button';
-    mdBtn.className = 'cm-codeblock-toggle';
-    mdBtn.textContent = 'MD';
-    mdBtn.tabIndex = -1;
-    mdBtn.setAttribute('aria-label', 'Show markdown source');
-    const from = this.from;
-    const to = this.to;
-    mdBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!view) return;
-      view.dispatch({
-        effects: setCodeBlockSourceMode.of({ from, to, showSource: true }),
-        scrollIntoView: true,
-      });
-      view.focus();
-    });
-    header.appendChild(mdBtn);
-
-    return header;
-  }
-
-  ignoreEvent(): boolean {
-    return true;
-  }
-}
-
-/**
- * Footer widget replacing the closing fence line (```)
- * Visual element: rounded bottom + background color
- */
-class CodeBlockFooterWidget extends WidgetType {
-  constructor(readonly indentPx: number = 0) {
-    super();
-  }
-
-  eq(other: CodeBlockFooterWidget): boolean {
-    return other.indentPx === this.indentPx;
-  }
-
-  toDOM(): HTMLElement {
-    const footer = document.createElement('div');
-    footer.className = 'cm-codeblock-footer';
-    if (this.indentPx > 0) footer.style.marginLeft = `${this.indentPx}px`;
-    return footer;
-  }
-
-  ignoreEvent(): boolean {
-    return true;
-  }
-}
-
 // ─── HAST → Mark decorations ──────────────────────────────────────────
 
 interface HastNode {
@@ -300,16 +169,39 @@ function hastToMarkDecorations(
 // ─── Build inline decorations ─────────────────────────────────────────
 
 /**
- * Build decorations for inline mode:
- * - Render mode: replace fences with header/footer widgets, add line + mark decorations
- * - Source mode: show full source with toggle button
+ * Whether a selection touches the block. Unlike shouldShowSource, this
+ * ignores the mouse-drag flag: a drag selection reaching a code block must
+ * reveal the fences immediately, because the fences are part of what a copy
+ * of that selection produces.
+ */
+function selectionTouchesBlock(
+  state: EditorState,
+  from: number,
+  to: number
+): boolean {
+  if (!state.facet(collapseOnSelectionFacet)) return false;
+  return state.selection.ranges.some(
+    (range) => range.from <= to && range.to >= from
+  );
+}
+
+/**
+ * Build decorations for inline mode (live preview). The block renders as a
+ * flat tinted panel of real lines; the only thing that changes with the
+ * selection is fence visibility:
+ * - Selection outside the block: fence text is invisible (visibility:hidden
+ *   keeps its layout space, so block height never changes).
+ * - Selection touching the block: fence text shows as muted styled text.
+ *
+ * An unclosed block extends to the end of the document (CommonMark), and we
+ * style it that way too, like Obsidian — the parser already treats the rest
+ * of the doc as code, so pretending otherwise just un-styles it confusingly.
  */
 function buildCodeBlockInlineDecorations(
   state: EditorState,
   options: Required<CodeBlockOptions>
 ): DecorationSet {
   const decorations: Range<Decoration>[] = [];
-  const sourceRanges = state.field(codeBlockSourceModeField);
 
   syntaxTree(state).iterate({
     enter: (node) => {
@@ -331,16 +223,9 @@ function buildCodeBlockInlineDecorations(
         ? state.doc.sliceString(codeText.from, codeText.to)
         : '';
 
-      const showSource = isCodeBlockInSourceMode(
-        sourceRanges,
-        node.from,
-        node.to
-      );
-
       // If this code block is nested inside a list item, compute the
       // visual indent so its widgets and lines align with the list's
-      // content column. Source-mode lines also get the same indent so
-      // toggling between modes doesn't shift the block sideways.
+      // content column.
       //
       // Visual prefix = (sourceIndent × 2 + markerLength) × spaceWidth.
       // contentColumn = sourceIndent + markerLength, so:
@@ -350,96 +235,69 @@ function buildCodeBlockInlineDecorations(
       const indentPx = inListCtx
         ? (inListCtx.list.listMarkerIndent + inListCtx.list.contentColumn) * sw
         : 0;
-      const indentStyle = indentPx > 0
-        ? `--cb-indent: ${indentPx}px;`
-        : '';
+      const lineAttrs = indentPx > 0
+        ? { style: `--cb-indent: ${indentPx}px;` }
+        : undefined;
 
-      if (showSource) {
-        // Source mode: show toggle button + source line styling
-        const sourceToggleWidget = createCodeBlockSourceToggleWidget(
-          node.from,
-          node.to
-        );
+      const openFenceLine = state.doc.lineAt(node.from);
+      const closeFenceLine = state.doc.lineAt(node.to);
+      // A block still being typed has no closing fence; its last line is
+      // real content, not a fence.
+      const closed =
+        closeFenceLine.number > openFenceLine.number &&
+        node.node.getChildren('CodeMark').length >= 2;
+
+      const reveal = selectionTouchesBlock(state, node.from, node.to);
+
+      const fenceLines = closed
+        ? [openFenceLine, closeFenceLine]
+        : [openFenceLine];
+      for (const line of fenceLines) {
         decorations.push(
-          Decoration.widget({ widget: sourceToggleWidget, block: true }).range(
-            node.from
-          )
+          Decoration.line({
+            class: 'cm-codeblock-content cm-codeblock-fence',
+            attributes: lineAttrs,
+          }).range(line.from)
         );
-
-        for (let pos = node.from; pos <= node.to; ) {
-          const line = state.doc.lineAt(pos);
+        if (!reveal && line.from < line.to) {
           decorations.push(
-            Decoration.line({
-              class: 'cm-codeblock-source',
-              attributes: indentStyle ? { style: indentStyle } : undefined,
-            }).range(line.from)
-          );
-          pos = line.to + 1;
-        }
-      } else {
-        // Render mode (inline): replace fences, keep code content editable
-
-        const openFenceLine = state.doc.lineAt(node.from);
-        const closeFenceLine = state.doc.lineAt(node.to);
-
-        // 1. Replace opening fence line with header widget.
-        //    Use inclusiveEnd so the cursor cannot land between
-        //    the header and the first content line.
-        const headerWidget = new CodeBlockHeaderWidget(
-          language,
-          code,
-          node.from,
-          node.to,
-          options.copyButton,
-          indentPx,
-        );
-        decorations.push(
-          Decoration.replace({
-            widget: headerWidget,
-            block: true,
-            inclusiveEnd: true,
-          }).range(openFenceLine.from, openFenceLine.to)
-        );
-
-        // 2. Line decorations for every content line between fences
-        for (
-          let lineNum = openFenceLine.number + 1;
-          lineNum < closeFenceLine.number;
-          lineNum++
-        ) {
-          const line = state.doc.line(lineNum);
-          decorations.push(
-            Decoration.line({
-              class: 'cm-codeblock-content',
-              attributes: indentStyle ? { style: indentStyle } : undefined,
-            }).range(line.from)
+            Decoration.mark({ class: 'cm-codeblock-fence-hidden' }).range(
+              line.from,
+              line.to
+            )
           );
         }
+      }
 
-        // 3. Mark decorations for syntax highlighting (from hast)
-        if (codeText && code) {
-          const hast = highlightCodeHast(code, language || undefined);
-          if (hast) {
-            const marks = hastToMarkDecorations(hast as HastNode, codeText.from);
-            for (const mark of marks) {
-              if (mark.from >= 0 && mark.to <= state.doc.length) {
-                decorations.push(mark);
-              }
+      // Line decorations for every content line between fences
+      const lastContentLine = closed
+        ? closeFenceLine.number - 1
+        : closeFenceLine.number;
+      for (
+        let lineNum = openFenceLine.number + 1;
+        lineNum <= lastContentLine;
+        lineNum++
+      ) {
+        const line = state.doc.line(lineNum);
+        decorations.push(
+          Decoration.line({
+            class: 'cm-codeblock-content',
+            attributes: lineAttrs,
+          }).range(line.from)
+        );
+      }
+
+      // Mark decorations for syntax highlighting (from hast)
+      if (codeText && code) {
+        const hast = highlightCodeHast(code, language || undefined);
+        if (hast) {
+          const marks = hastToMarkDecorations(hast as HastNode, codeText.from);
+          for (const mark of marks) {
+            if (mark.from >= 0 && mark.to <= state.doc.length) {
+              decorations.push(mark);
             }
           }
         }
-
-        // 4. Replace closing fence line with footer widget.
-        //    Use inclusiveStart so the cursor cannot land between
-        //    the last content line and the footer.
-        const footerWidget = new CodeBlockFooterWidget(indentPx);
-        decorations.push(
-          Decoration.replace({
-            widget: footerWidget,
-            block: true,
-            inclusiveStart: true,
-          }).range(closeFenceLine.from, closeFenceLine.to)
-        );
       }
     },
   });
@@ -548,6 +406,29 @@ function buildCodeBlockDecorations(
 }
 
 /**
+ * Key identifying which code blocks the selection currently touches.
+ * Cheap: only walks the tree around the selection ranges. Used to skip
+ * rebuilds on cursor moves that don't change any block's fence visibility.
+ */
+function revealedBlocksKey(state: EditorState): string {
+  const keys = new Set<string>();
+  const tree = syntaxTree(state);
+  for (const range of state.selection.ranges) {
+    tree.iterate({
+      from: Math.max(0, range.from - 1),
+      to: Math.min(state.doc.length, range.to + 1),
+      enter: (node) => {
+        if (node.name !== 'FencedCode') return;
+        if (range.from <= node.to && range.to >= node.from) {
+          keys.add(`${node.from}:${node.to}`);
+        }
+      },
+    });
+  }
+  return [...keys].sort().join(',');
+}
+
+/**
  * Create code block StateField
  */
 function createCodeBlockField(
@@ -575,12 +456,27 @@ function createCodeBlockField(
         return buildFn(tr.state, options);
       }
 
-      // Inline and toggle modes: don't rebuild on selection change
-      if (options.interaction !== 'auto') {
+      // Toggle mode: fence visibility is explicit, not selection-driven
+      if (options.interaction === 'toggle') {
         return deco;
       }
 
-      // Rebuild on drag state change
+      // Inline mode: fences follow the selection (live preview). Rebuild
+      // only when the set of selection-touched blocks changes — including
+      // mid-drag, so a drag selection reveals fences the moment it reaches
+      // a block.
+      if (options.interaction === 'inline') {
+        if (
+          tr.selection &&
+          tr.state.facet(collapseOnSelectionFacet) &&
+          revealedBlocksKey(tr.startState) !== revealedBlocksKey(tr.state)
+        ) {
+          return buildFn(tr.state, options);
+        }
+        return deco;
+      }
+
+      // Auto mode below: rebuild on drag state change
       const isDragging = tr.state.field(mouseSelectingField, false);
       const wasDragging = tr.startState.field(mouseSelectingField, false);
 
@@ -638,104 +534,12 @@ function createCodeBlockField(
  * })]
  * ```
  */
-/**
- * drawSelection() renders its selection layer behind .cm-content (z-index:-1).
- * Inline code-block lines have an opaque background that covers this layer,
- * and drawSelection also hides native ::selection via Prec.highest CSS.
- *
- * Instead of fighting CSS specificity, this ViewPlugin adds Decoration.mark
- * spans for selected ranges that overlap code-block content.  These spans
- * render INSIDE the .cm-line (above the opaque background), so selection
- * is always visible regardless of the browser engine (Chromium, WebKit, etc.).
- */
-const selMark = Decoration.mark({ class: 'cm-codeblock-sel' });
-
-const codeBlockSelectionPlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
-
-    constructor(view: EditorView) {
-      this.decorations = this.build(view);
-    }
-
-    update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged) {
-        this.decorations = this.build(update.view);
-        return;
-      }
-      if (!update.selectionSet) return;
-      const isDragging = update.state.field(mouseSelectingField, false);
-      const wasDragging = update.startState.field(mouseSelectingField, false);
-      // Rebuild when drag ends so selection marks catch up
-      if (wasDragging && !isDragging) {
-        this.decorations = this.build(update.view);
-        return;
-      }
-      // Skip during drag – native/drawSelection handles transient feedback
-      if (isDragging) return;
-      this.decorations = this.build(update.view);
-    }
-
-    build(view: EditorView): DecorationSet {
-      const sel = view.state.selection.main;
-      if (sel.empty) return Decoration.none;
-
-      const ranges: Range<Decoration>[] = [];
-
-      syntaxTree(view.state).iterate({
-        from: sel.from,
-        to: sel.to,
-        enter: (node) => {
-          if (node.name !== 'FencedCode') return;
-
-          // Skip special languages (math, mermaid, etc.)
-          const codeInfo = node.node.getChild('CodeInfo');
-          if (codeInfo) {
-            const lang = view.state.doc
-              .sliceString(codeInfo.from, codeInfo.to)
-              .trim();
-            if (SKIP_LANGUAGES.has(lang)) return;
-          }
-
-          // Find content range between fences
-          const openFenceLine = view.state.doc.lineAt(node.from);
-          const lastLine = view.state.doc.lineAt(node.to);
-          const contentFrom = openFenceLine.to + 1;
-          const contentTo = lastLine.from > contentFrom ? lastLine.from - 1 : contentFrom;
-
-          if (contentFrom >= contentTo) return;
-
-          // Intersect with selection
-          const from = Math.max(sel.from, contentFrom);
-          const to = Math.min(sel.to, contentTo);
-          if (from < to) {
-            ranges.push(selMark.range(from, to));
-          }
-        },
-      });
-
-      return Decoration.set(ranges, true);
-    }
-  },
-  { decorations: (v) => v.decorations },
-);
-
-const codeBlockSelectionTheme = EditorView.theme({
-  '.cm-codeblock-sel': {
-    backgroundColor: 'var(--cm-codeblock-selection, rgba(128, 188, 254, 0.4))',
-  },
-});
-
+// Selection over code-block content needs no special handling:
+// .cm-codeblock-content's background is translucent, so drawSelection's
+// layer (rendered behind .cm-content) shows through, same as inline code.
 export function codeBlockField(options?: CodeBlockOptions): Extension {
   const mergedOptions = { ...defaultOptions, ...options };
-
-  const field = createCodeBlockField(mergedOptions);
-
-  const extensions: Extension[] = [codeBlockSourceModeField, field];
-  if (mergedOptions.interaction === 'inline') {
-    extensions.push(codeBlockSelectionPlugin, codeBlockSelectionTheme);
-  }
-  return extensions;
+  return [codeBlockSourceModeField, createCodeBlockField(mergedOptions)];
 }
 
 export function codeBlockEditorPlugin(options?: CodeBlockEditorOptions) {

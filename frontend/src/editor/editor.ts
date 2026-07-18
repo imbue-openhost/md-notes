@@ -3,11 +3,14 @@
  *
  * Each call to createEditor() returns an independent EditorInstance
  * with its own view and cleanup. No global state.
+ *
+ * options.kind selects the editor flavor: 'live-preview' (default) uses
+ * standard keybindings; 'live-preview-vim' layers vim on the same core.
  */
 
 import { EditorState, Prec, type Extension } from '@codemirror/state';
-import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, undo as cmUndo, redo as cmRedo } from './commands/commands';
+import { EditorView, keymap, drawSelection, highlightActiveLine } from '@codemirror/view';
+import { defaultKeymap, history, historyKeymap } from './commands/commands';
 import { markdown, markdownLanguage, toggleBold, insertNewlineInListCodeBlock } from './lang-markdown/index';
 import { languages } from '@codemirror/language-data';
 import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle, bracketMatching, foldNodeProp } from '@codemirror/language';
@@ -25,51 +28,45 @@ import {
   collapseOnSelectionFacet,
   mouseSelectingField,
   setMouseSelecting,
+  livePreviewPlugin,
   markdownStylePlugin,
   taskListPlugin,
   listVisualIndentPlugin,
   spaceWidthField,
   spaceWidthMeasurer,
   codeBlockField,
+  linkPlugin,
   editorTheme,
 } from './live-preview/index';
 
 import { markdownFolding } from './folding';
 import { foldPersistence } from './fold-persistence';
+import { headerAnchorJump } from './header-anchor';
+import { headerLinkButtons, type GetShareUrl } from './header-link-button';
 import { indentDetection } from './indent/indentUnitField';
 import { pasteIndentNormalization } from './indent/pasteIndent';
-import { Vim } from '@replit/codemirror-vim';
 
-import { vimMode, toggleTaskAtSelection } from './vim';
-import { createSyncSession, createShareSyncSession, createPeerSyncSession, undoRedoFacet, type SyncSession } from './sync';
+import { vimMode } from './vim';
+import { toggleTaskAtSelection } from './tasks';
+import { syncHistoryKeymap } from './undo-redo';
+import type { EditorKind } from './editor-settings';
+import { createSyncSession, createShareSyncSession, createPeerSyncSession, type SyncSession } from './sync';
 import type { RemoteVaultRef } from '../api/types';
 
-Vim.defineAction('undo', (cm: any, actionArgs: any) => {
-  const view = cm.cm6;
-  const provider = view.state.facet(undoRedoFacet);
-  for (let i = 0; i < (actionArgs.repeat || 1); i++) {
-    if (provider) {
-      provider.undo();
-    } else {
-      cmUndo(view);
-    }
-  }
-});
+export type { EditorKind };
 
-Vim.defineAction('redo', (cm: any, actionArgs: any) => {
-  const view = cm.cm6;
-  const provider = view.state.facet(undoRedoFacet);
-  for (let i = 0; i < (actionArgs.repeat || 1); i++) {
-    if (provider) {
-      provider.redo();
-    } else {
-      cmRedo(view);
-    }
-  }
-});
-
-function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
+function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, useSync: boolean, touch: boolean): Extension[] {
   return [
+    // Virtual keyboards want the platform text services that physical-keyboard
+    // editing usually leaves off.
+    ...(touch
+      ? [EditorView.contentAttributes.of({
+          autocapitalize: 'sentences',
+          autocorrect: 'on',
+          spellcheck: 'true',
+        })]
+      : []),
+
     // Run before vim so Tab/Shift-Tab are always consumed by the editor
     // (regardless of vim mode), never bubbling to the browser. Mod-b also
     // wins over the browser default here.
@@ -84,7 +81,7 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
       { key: 'Enter', run: insertNewlineInListCodeBlock },
     ])),
 
-    vimMode(vimrcContent),
+    ...(kind === 'live-preview-vim' ? [vimMode(vimrcContent)] : []),
 
     ...(useSync ? [] : [history()]),
     EditorView.lineWrapping,
@@ -93,12 +90,13 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     highlightSelectionMatches(),
     bracketMatching(),
 
-    // defaultKeymap provides insert-mode basics (Backspace, Enter, arrow keys, etc.)
-    // that vim's insert mode falls through to. historyKeymap adds Cmd-z/Shift-Cmd-z
-    // on top of vim's u/Ctrl-r.
+    // defaultKeymap is the main map for the standard editor and provides the
+    // insert-mode basics (Backspace, Enter, arrow keys, etc.) that vim's
+    // insert mode falls through to. Undo/redo goes through the CRDT undo
+    // manager on synced docs, plain CM history otherwise.
     keymap.of([
       ...defaultKeymap,
-      ...(useSync ? [] : historyKeymap),
+      ...(useSync ? syncHistoryKeymap : historyKeymap),
       ...searchKeymap,
     ]),
 
@@ -126,6 +124,8 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
     spaceWidthField,
     spaceWidthMeasurer,
     markdownStylePlugin,
+    livePreviewPlugin,
+    linkPlugin(),
     taskListPlugin,
     listVisualIndentPlugin,
     codeBlockField({ interaction: 'inline' }),
@@ -168,7 +168,12 @@ function buildExtensions(vimrcContent?: string, useSync = false): Extension[] {
 }
 
 export interface EditorOptions {
+  /** Editor flavor; defaults to 'live-preview' (standard keybindings). */
+  kind?: EditorKind;
+  /** Only used when kind is 'live-preview-vim'. */
   vimrcContent?: string;
+  /** Touch-device editing: enables autocapitalize/autocorrect/spellcheck. */
+  touch?: boolean;
   syncVault?: string;
   syncFilePath?: string;
   syncServerUrl?: string;
@@ -177,6 +182,10 @@ export interface EditorOptions {
   /** Sync against a federated vault on another instance instead of a local vault. */
   remoteVault?: RemoteVaultRef;
   readOnly?: boolean;
+  /** Header slug (or raw header text) to jump to once the doc has loaded. */
+  anchorHeader?: string;
+  /** When set, heading lines get a hover button that copies a share link to that section. */
+  getShareUrl?: GetShareUrl;
   onDocChange?: (content: string) => void;
   /** Called when the initial server handshake fails (timeout or connection error). */
   onSyncFailed?: (error: Error) => void;
@@ -192,7 +201,7 @@ export interface EditorInstance {
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorInstance {
   const useSync = !!(options.remoteVault || (options.syncServerUrl && (options.syncVault || options.shareUuid)));
-  const extensions = buildExtensions(options.vimrcContent, useSync);
+  const extensions = buildExtensions(options.kind ?? 'live-preview', options.vimrcContent, useSync, options.touch ?? false);
 
   let syncSession: SyncSession | null = null;
 
@@ -227,6 +236,14 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     extensions.push(foldPersistence({ vault: `remote:${options.remoteVault.id}`, filePath: options.syncFilePath }));
   } else if (options.syncVault && options.syncFilePath) {
     extensions.push(foldPersistence({ vault: options.syncVault, filePath: options.syncFilePath }));
+  }
+
+  if (options.anchorHeader) {
+    extensions.push(headerAnchorJump(options.anchorHeader));
+  }
+
+  if (options.getShareUrl) {
+    extensions.push(headerLinkButtons(options.getShareUrl));
   }
 
   const state = EditorState.create({

@@ -21,8 +21,12 @@ def _setup_vault(stack: OpenhostStack) -> None:
     )
 
 
-def _open_file(stack: OpenhostStack, page: Page) -> None:
+def _open_file(stack: OpenhostStack, page: Page, vim: bool = False) -> None:
     stack.playwright_login(page)
+    if vim:
+        # Editor preference is a client-side setting; opt into vim keybindings
+        # the same way the settings modal does.
+        page.add_init_script("localStorage.setItem('mdnotes-editor-kind', 'live-preview-vim')")
     page.goto(stack.url)
     page.locator(".vault-picker-item-name", has_text=VAULT).click()
     page.locator(f'.sidebar-item[data-type="file"][data-path="{FILE}"]').click()
@@ -36,8 +40,19 @@ def test_editor_loads(stack: OpenhostStack, page: Page) -> None:
     expect(page.locator(".cm-content")).to_be_visible()
 
 
-def test_vim_insert_mode(stack: OpenhostStack, page: Page) -> None:
+def test_default_editor_types_directly(stack: OpenhostStack, page: Page) -> None:
     _open_file(stack, page)
+    # The default editor has no vim status bar and inserts keystrokes directly.
+    expect(page.locator(".cm-vim-panel")).to_have_count(0)
+    content = page.locator(".cm-content")
+    content.click()
+    page.keyboard.type("HARNESS_DIRECT")
+    expect(content).to_contain_text("HARNESS_DIRECT")
+
+
+def test_vim_insert_mode(stack: OpenhostStack, page: Page) -> None:
+    _open_file(stack, page, vim=True)
+    expect(page.locator(".cm-vim-panel")).to_be_visible()
     content = page.locator(".cm-content")
     content.click()
     page.keyboard.press("Escape")
@@ -70,11 +85,8 @@ def test_yjs_sync_between_tabs(stack: OpenhostStack, page: Page) -> None:
 
     c1 = p1.locator(".cm-content")
     c1.click()
-    p1.keyboard.press("Escape")
-    p1.keyboard.type("G")
-    p1.keyboard.type("o")
+    p1.keyboard.press("Enter")
     p1.keyboard.type("SYNCED_VIA_HARNESS")
-    p1.keyboard.press("Escape")
 
     # Collaboration cursor labels ("Anonymous") render inline in
     # .cm-content and can split the typed string. Use a prefix that
@@ -157,3 +169,64 @@ def test_search_palette(stack: OpenhostStack, page: Page) -> None:
     expect(page.locator(".search-modal input")).to_be_visible()
     page.keyboard.press("Escape")
     expect(page.locator(".search-modal input")).not_to_be_visible()
+
+
+def test_mobile_shell(stack: OpenhostStack, page: Page) -> None:
+    browser = page.context.browser
+    assert browser is not None
+    ctx = browser.new_context(
+        viewport={"width": 390, "height": 844},
+        device_scale_factor=3,
+        is_mobile=True,
+        has_touch=True,
+    )
+    p = ctx.new_page()
+    stack.playwright_login(p)
+    p.goto(stack.url)
+    p.locator(".vault-picker-item-name", has_text=VAULT).click()
+
+    # Coarse pointer + small screen autodetects the mobile shell; with no
+    # last-opened doc the drawer starts open.
+    expect(p.locator(".mobile-shell")).to_be_visible()
+    expect(p.locator(".mobile-drawer.open")).to_be_visible()
+
+    # Selecting a file opens it and closes the drawer.
+    p.locator(f'.sidebar-item[data-type="file"][data-path="{FILE}"]').click()
+    p.wait_for_selector(".cm-editor", timeout=10_000)
+    expect(p.locator(".mobile-drawer.open")).to_have_count(0)
+    expect(p.locator(".mobile-topbar-title")).to_contain_text("test")
+    p.wait_for_timeout(1000)
+
+    # Typing inserts directly; focus brings up the formatting toolbar.
+    content = p.locator(".cm-content")
+    content.click()
+    p.keyboard.type("MOBILE_TYPED")
+    expect(content).to_contain_text("MOBILE_TYPED")
+    expect(p.locator(".mobile-toolbar")).to_be_visible()
+
+    # The last-opened doc is restored on reload (drawer stays closed).
+    p.reload()
+    p.wait_for_selector(".cm-editor", timeout=10_000)
+    expect(p.locator(".mobile-drawer.open")).to_have_count(0)
+    expect(content).to_contain_text("MOBILE_TYPED", timeout=10_000)
+
+    # Hamburger reopens the drawer; quick-open button opens the file switcher.
+    p.locator(".mobile-topbar-btn").first.click()
+    expect(p.locator(".mobile-drawer.open")).to_be_visible()
+    p.locator(".mobile-drawer-backdrop").click()
+    expect(p.locator(".mobile-drawer.open")).to_have_count(0)
+    p.locator(".mobile-topbar-btn").last.click()
+    expect(p.locator(".quick-open-modal")).to_be_visible()
+
+    ctx.close()
+
+
+def test_pwa_manifest(stack: OpenhostStack) -> None:
+    s = stack.owner_session
+    r = s.get(f"{stack.url}/manifest.webmanifest")
+    assert r.status_code == 200
+    manifest = r.json()
+    assert manifest["display"] == "standalone"
+    for icon in manifest["icons"]:
+        ri = s.get(f"{stack.url}{icon['src']}")
+        assert ri.status_code == 200, f"missing icon {icon['src']}"

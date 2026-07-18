@@ -38,41 +38,11 @@ export const editorTheme = EditorView.theme({
     backgroundColor: 'rgba(59, 130, 246, 0.4) !important',
   },
 
-  // ========== Inline Mark Animation ==========
-  // Use visibility:hidden to hide marks — keeps them in layout so
-  // CM6's InlineCoordsScan doesn't overflow recalculating positions.
-  '.cm-formatting-inline': {
-    visibility: 'hidden',
-    fontSize: '0.01px',
-    letterSpacing: '0',
-    color: 'hsl(var(--muted-foreground, 220 9% 46%) / 0.6)',
-    fontFamily: "'JetBrains Mono', monospace",
-    pointerEvents: 'none',
-  },
-
-  '.cm-formatting-inline-visible': {
-    visibility: 'visible',
-    fontSize: '0.85em',
-    opacity: '0.6',
-    margin: '0 1px',
-    pointerEvents: 'auto',
-  },
-
-  // ========== Block Mark Animation ==========
-  '.cm-formatting-block': {
-    display: 'inline',
-    overflow: 'hidden',
-    fontSize: '0.01em',
-    lineHeight: 'inherit',
-    opacity: '0',
-    color: 'hsl(var(--muted-foreground, 220 9% 46%))',
-    fontFamily: "'JetBrains Mono', monospace",
-    transition: 'font-size 0.2s ease-out, opacity 0.2s ease-out',
-  },
-
-  '.cm-formatting-block-visible': {
-    fontSize: '1em',
-    opacity: '0.6',
+  // ========== Formatting Marks ==========
+  // Hidden marks are Decoration.replace ranges (no CSS involved); this
+  // styles marks while they're revealed on the active line/span.
+  '.cm-formatting-mark': {
+    color: 'hsl(var(--muted-foreground, 220 9% 46%) / 0.7)',
   },
 
   // ========== Heading Styles ==========
@@ -165,6 +135,15 @@ export const editorTheme = EditorView.theme({
     color: 'hsl(var(--muted-foreground, 220 9% 46%))',
   },
 
+  // ========== Blockquote ==========
+  // Border keeps the quote visually identifiable while the `>` marks are
+  // hidden. 13px + 3px border matches the 16px line padding.
+  '.cm-blockquote-line': {
+    borderLeft: '3px solid hsl(var(--border, 220 13% 91%))',
+    paddingLeft: '13px',
+    color: 'hsl(var(--muted-foreground, 220 9% 46%))',
+  },
+
   // ========== Task List Checkboxes ==========
   // A styled <span>, not a native <input> — see the task plugin.
   '.cm-task-checkbox': {
@@ -199,7 +178,10 @@ export const editorTheme = EditorView.theme({
     color: 'hsl(var(--muted-foreground, 220 9% 46%))',
   },
   '.cm-code': {
-    backgroundColor: 'hsl(var(--muted, 220 14% 96%))',
+    // Translucent (≈ --muted composited on white) so drawSelection's layer,
+    // which renders behind the text, stays visible when inline code is
+    // selected. An opaque background would hide the selection entirely.
+    backgroundColor: 'hsl(var(--foreground, 220 9% 9%) / 0.05)',
     padding: '2px 4px',
     borderRadius: '3px',
     fontFamily: 'monospace',
@@ -207,11 +189,6 @@ export const editorTheme = EditorView.theme({
   '.cm-link': {
     color: 'hsl(var(--md-link, var(--primary, 220 90% 56%)))',
     textDecoration: 'underline',
-  },
-  '.cm-wikilink': {
-    color: 'hsl(var(--primary, 220 90% 56%))',
-    textDecoration: 'underline',
-    cursor: 'pointer',
   },
   '.cm-highlight': {
     backgroundColor: 'hsl(50 100% 50% / 0.4)',
@@ -409,17 +386,8 @@ export const editorTheme = EditorView.theme({
   '.cm-link-widget:hover': {
     color: 'hsl(var(--primary, 220 90% 56%) / 0.8)',
   },
-  '.cm-wikilink-widget': {
-    color: 'hsl(var(--primary, 220 90% 56%))',
-    textDecoration: 'none',
-    borderBottom: '1px dashed currentColor',
-    cursor: 'pointer',
-  },
   '.cm-link-source': {
     backgroundColor: 'rgba(59, 130, 246, 0.1)',
-  },
-  '.cm-wikilink-source': {
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
   },
   '.cm-link-preview': {
     position: 'absolute',
@@ -520,44 +488,23 @@ export const editorTheme = EditorView.theme({
     fontSize: '0.9em',
   },
 
-  // ========== Inline-mode code block (header / footer / content lines) =====
-  // The codeBlockField plugin running with interaction:'inline' replaces the
-  // opening fence line with a header widget, the closing fence line with a
-  // footer widget, and adds the .cm-codeblock-content class to each content
-  // line in between. The styling below gives the block a single visual unit:
-  // a tinted, rounded panel with monospace text.
-  '.cm-codeblock-header': {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '6px 12px',
-    backgroundColor: 'hsl(var(--muted, 220 14% 96%))',
-    borderTopLeftRadius: '6px',
-    borderTopRightRadius: '6px',
-    borderBottom: '1px solid hsl(var(--border, 220 13% 91%) / 0.6)',
-    fontSize: '12px',
-    color: 'hsl(var(--muted-foreground, 220 9% 46%))',
-    fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-    userSelect: 'none',
-  },
-  '.cm-codeblock-lang': {
-    fontWeight: '600',
-    textTransform: 'lowercase',
-    letterSpacing: '0.02em',
-  },
-  '.cm-codeblock-footer': {
-    height: '8px',
-    backgroundColor: 'hsl(var(--muted, 220 14% 96%))',
-    borderBottomLeftRadius: '6px',
-    borderBottomRightRadius: '6px',
-    borderTop: '1px solid hsl(var(--border, 220 13% 91%) / 0.6)',
-    userSelect: 'none',
+  // ========== Inline-mode code block (fence / content lines) ==============
+  // The codeBlockField plugin running with interaction:'inline' renders a
+  // closed block as a flat tinted panel of real lines. Fence lines get
+  // .cm-codeblock-fence; when the selection doesn't touch the block their
+  // text is hidden (.cm-codeblock-fence-hidden keeps the layout space, so
+  // the block height never changes). Content lines get
+  // .cm-codeblock-content.
+  '.cm-codeblock-fence-hidden': {
+    visibility: 'hidden',
   },
   '.cm-codeblock-content': {
     // --cb-indent (inline-style on the line) shifts text and tint right
     // when nested in a list item; defaults to 0 for top-level blocks.
+    // Tint is translucent (≈ --muted composited on white) so drawSelection's
+    // layer behind the text stays visible when code is selected.
     background:
-      'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0px), hsl(var(--muted, 220 14% 96%)) var(--cb-indent, 0px))',
+      'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0px), hsl(var(--foreground, 220 9% 9%) / 0.05) var(--cb-indent, 0px))',
     paddingLeft: 'calc(16px + var(--cb-indent, 0px))',
     fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
     fontSize: '0.9em',

@@ -1,7 +1,9 @@
 import { createSignal, createResource, createEffect, onMount, onCleanup, Show, type Component } from 'solid-js';
 import { createEditor, type EditorInstance } from './editor/editor';
+import { getEditorKind } from './editor/editor-settings';
 import {
   listVaults, createVault, deleteVault, getServerVimrc, pingHealth,
+  createShareLink, listShareLinks,
   listRemoteVaults, addRemoteVault, removeRemoteVault,
 } from './api/client';
 import { parseInviteLink, fetchPeerVaultInfo, PeerAuthError } from './api/peer';
@@ -13,13 +15,15 @@ import {
 } from './editor/sync';
 import { connectionState, UnauthorizedError, startHeartbeat } from './api/connection';
 import {
-  serverUrl, getShareUuid, getVaultNameFromUrl, fetchShareInfo, getLoginUrl,
+  serverUrl, getShareUuid, getVaultNameFromUrl, getUrlHeaderAnchor, fetchShareInfo, getLoginUrl,
   getFederationInvite, type ShareInfo,
 } from './config';
 import type { VaultConfig } from './api/types';
 import { VaultPicker } from './components/VaultPicker';
 import { Sidebar } from './components/Sidebar';
 import { EditorLayout, type EditorLayoutHandle } from './components/EditorLayout';
+import { MobileShell } from './components/MobileShell';
+import { resolveShellKind } from './app-settings';
 import { ShareModal } from './components/ShareModal';
 import { VaultShareModal } from './components/VaultShareModal';
 import { FederationConnect } from './components/FederationConnect';
@@ -37,6 +41,14 @@ function fileLabel(path: string | null | undefined): string | null {
   return base.replace(/\.md$/i, '');
 }
 
+/** Share URL for a doc, reusing an existing link with the right permission or creating one. */
+async function shareUrlForDoc(serverPath: string, permission: 'read' | 'write'): Promise<string> {
+  const links = await listShareLinks(serverPath);
+  const existing = links.find((l) => l.permission === permission);
+  const uuid = existing?.uuid ?? await createShareLink(serverPath, permission);
+  return `${window.location.origin}/share/${uuid}`;
+}
+
 const ShareEditor: Component<{ uuid: string; info: ShareInfo }> = (props) => {
   let container!: HTMLDivElement;
   createEffect(() => {
@@ -44,12 +56,13 @@ const ShareEditor: Component<{ uuid: string; info: ShareInfo }> = (props) => {
     document.title = name ? `${name} — Shared · ${BASE_TITLE}` : `Shared · ${BASE_TITLE}`;
   });
   onMount(() => {
+    // Shares are viewed by arbitrary visitors, so always use the standard editor.
     createEditor(container, {
-      vimrcContent: DEFAULT_VIMRC,
       shareUuid: props.uuid,
       shareDocPath: props.info.doc_path,
       syncServerUrl: serverUrl,
       readOnly: props.info.permission === 'read',
+      anchorHeader: getUrlHeaderAnchor() ?? undefined,
     });
   });
   return <div ref={container} id="editor-container" />;
@@ -79,6 +92,8 @@ export const App: Component = () => {
   if (federationInvite) return <FederationConnect invite={federationInvite} />;
 
   const [activeVimrc, setActiveVimrc] = createSignal(DEFAULT_VIMRC);
+  const [editorKind, setEditorKind] = createSignal(getEditorKind());
+  const [shellKind, setShellKind] = createSignal(resolveShellKind());
   const [vault, setVault] = createSignal<VaultConfig | null>(null);
   const [vaultList, setVaultList] = createSignal<VaultConfig[]>([]);
   const [showVaultPicker, setShowVaultPicker] = createSignal(false);
@@ -271,12 +286,18 @@ export const App: Component = () => {
   ): EditorInstance {
     const v = vault();
     return createEditor(container, {
+      kind: editorKind(),
       vimrcContent: activeVimrc(),
+      touch: shellKind() === 'mobile',
       syncVault: v?.remote ? undefined : (v?.name || undefined),
       syncFilePath: path,
       syncServerUrl: serverUrl,
       remoteVault: v?.remote,
       readOnly: v?.remote?.permission === 'read',
+      // Per-file share links live on the local server, so they don't apply to remote vaults.
+      getShareUrl: v?.remote
+        ? undefined
+        : (permission) => shareUrlForDoc(v?.name ? `${v.name}/${path}` : path, permission),
       onSyncFailed,
     });
   }
@@ -391,35 +412,57 @@ export const App: Component = () => {
       </Show>
 
       <Show when={vault()}>
-        <Sidebar
-          vaultName={vault()!.name}
-          vaults={vaultList()}
-          isRemote={!!vault()!.remote}
-          readOnly={vault()!.remote?.permission === 'read'}
-          onSelect={handleFileSelect}
-          onSearch={() => setShowSearch(true)}
-          onShare={vault()!.remote ? undefined : setShareModalPath}
-          onShareVault={vault()!.remote ? undefined : () => setShareVaultName(vault()!.name)}
-          onSwitchToVault={switchToVault}
-          onManageVaults={switchVault}
-          onRefreshVaults={refreshVaultList}
-          onSettings={() => setShowWebSettings(true)}
-          showSyncStatus={true}
-          syncStatus={syncStatus()}
-          syncErrorMsg={syncErrorMsg() ?? undefined}
-          backendStatus={connectionState()}
-          lastSyncedAt={lastSyncedAtTs()}
-          idbError={idbError()}
-          currentPath={currentDocPath()}
-        />
-
-        <EditorLayout
-          ref={(h) => { layoutHandle = h; }}
-          createEditor={makeEditorForPath}
-          onActiveFileChange={setCurrentDocPath}
-          onSyncFailed={(path) => setSyncErrorPath(path)}
-          vaultName={vault()!.name}
-        />
+        {(() => {
+          const sidebar = (touchMenus: boolean) => (
+            <Sidebar
+              vaultName={vault()!.name}
+              vaults={vaultList()}
+              isRemote={!!vault()!.remote}
+              readOnly={vault()!.remote?.permission === 'read'}
+              onSelect={handleFileSelect}
+              onSearch={() => setShowSearch(true)}
+              onShare={vault()!.remote ? undefined : setShareModalPath}
+              onShareVault={vault()!.remote ? undefined : () => setShareVaultName(vault()!.name)}
+              onSwitchToVault={switchToVault}
+              onManageVaults={switchVault}
+              onRefreshVaults={refreshVaultList}
+              onSettings={() => setShowWebSettings(true)}
+              touchMenus={touchMenus}
+              showSyncStatus={true}
+              syncStatus={syncStatus()}
+              syncErrorMsg={syncErrorMsg() ?? undefined}
+              backendStatus={connectionState()}
+              lastSyncedAt={lastSyncedAtTs()}
+              idbError={idbError()}
+              currentPath={currentDocPath()}
+            />
+          );
+          return (
+            <Show
+              when={shellKind() === 'desktop'}
+              fallback={
+                <MobileShell
+                  ref={(h) => { layoutHandle = h; }}
+                  createEditor={makeEditorForPath}
+                  onActiveFileChange={setCurrentDocPath}
+                  onSyncFailed={(path) => setSyncErrorPath(path)}
+                  onQuickOpen={() => setShowQuickOpen(true)}
+                  vaultName={vault()!.name}
+                  drawerContent={sidebar(true)}
+                />
+              }
+            >
+              {sidebar(false)}
+              <EditorLayout
+                ref={(h) => { layoutHandle = h; }}
+                createEditor={makeEditorForPath}
+                onActiveFileChange={setCurrentDocPath}
+                onSyncFailed={(path) => setSyncErrorPath(path)}
+                vaultName={vault()!.name}
+              />
+            </Show>
+          );
+        })()}
       </Show>
 
       <Show when={shareModalPath()}>
@@ -456,7 +499,12 @@ export const App: Component = () => {
       <Show when={showWebSettings()}>
         <WebSettingsModal
           initialVimrc={activeVimrc()}
-          onSaved={(v) => { setActiveVimrc(v); setShowWebSettings(false); }}
+          onSaved={(v, kind) => {
+            setActiveVimrc(v);
+            setEditorKind(kind);
+            setShellKind(resolveShellKind());
+            setShowWebSettings(false);
+          }}
           onClose={() => setShowWebSettings(false)}
         />
       </Show>

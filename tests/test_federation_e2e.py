@@ -232,12 +232,14 @@ def test_readonly_remote_vault_ui(stack: OpenhostStack, stack_b: OpenhostStack, 
     expect(content).to_contain_text("Greetings from instance A.")
     # CodeMirror readOnly + editable(false) renders a non-editable content element.
     assert content.get_attribute("contenteditable") == "false"
-    before = content.inner_text()
     content.click()
     page.keyboard.type("SHOULD_NOT_APPEAR")
     page.wait_for_timeout(500)
+    # Typing must not change the doc locally (live-preview may toggle formatting marks with the
+    # cursor, so check content rather than exact rendering) nor ever reach instance A.
     assert "SHOULD_NOT_APPEAR" not in content.inner_text()
-    assert content.inner_text() == before
+    body = stack.owner_session.get(f"{stack.url}/api/docs/{VAULT}/file", params={"path": FILE}).text
+    assert "SHOULD_NOT_APPEAR" not in body
 
     stack_b.owner_session.delete(f"{stack_b.url}/api/federation/remotes/{ctx['remote']['id']}")
     stack.owner_session.delete(f"{stack.url}/api/federation/shares/{ctx['share']['secret']}")
