@@ -49,6 +49,8 @@ import { pasteIndentNormalization } from './indent/pasteIndent';
 import { vimMode } from './vim';
 import { toggleTaskAtSelection } from './tasks';
 import { syncHistoryKeymap } from './undo-redo';
+import { mobileFoldChevrons } from './mobile/foldChevrons';
+import { mobileTheme } from './mobile/theme';
 import type { EditorKind } from './editor-settings';
 import { createSyncSession, createShareSyncSession, type SyncSession } from './sync';
 
@@ -118,6 +120,7 @@ function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, use
     collapseOnSelectionFacet.of(true),
     mouseSelectingField,
     editorTheme,
+    ...(kind === 'live-preview-mobile' ? [mobileTheme, mobileFoldChevrons()] : []),
     indentDetection(),
     pasteIndentNormalization(),
     spaceWidthField,
@@ -162,7 +165,7 @@ function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, use
       },
     }),
 
-    markdownFolding(),
+    markdownFolding({ gutter: kind !== 'live-preview-mobile' }),
   ];
 }
 
@@ -197,8 +200,9 @@ export interface EditorInstance {
 }
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorInstance {
+  const kind = options.kind ?? 'live-preview';
   const useSync = !!(options.syncServerUrl && (options.syncVault || options.shareUuid));
-  const extensions = buildExtensions(options.kind ?? 'live-preview', options.vimrcContent, useSync, options.touch ?? false);
+  const extensions = buildExtensions(kind, options.vimrcContent, useSync, options.touch ?? false);
 
   let syncSession: SyncSession | null = null;
 
@@ -233,7 +237,9 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     extensions.push(headerAnchorJump(options.anchorHeader));
   }
 
-  if (options.getShareUrl) {
+  // Header link buttons are hover-revealed, which has no touch equivalent;
+  // mobile shares via the drawer's Share button instead.
+  if (options.getShareUrl && kind !== 'live-preview-mobile') {
     extensions.push(headerLinkButtons(options.getShareUrl));
   }
 

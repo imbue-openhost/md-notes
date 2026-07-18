@@ -241,10 +241,13 @@ export const App: Component = () => {
     onSyncFailed: (err: Error) => void,
   ): EditorInstance {
     const v = vault();
+    const mobile = shellKind() === 'mobile';
     return createEditor(container, {
-      kind: editorKind(),
+      // The mobile shell always uses the mobile editor variant; the editor
+      // preference setting only applies to the desktop shell.
+      kind: mobile ? 'live-preview-mobile' : editorKind(),
       vimrcContent: activeVimrc(),
-      touch: shellKind() === 'mobile',
+      touch: mobile,
       syncVault: v?.name || undefined,
       syncFilePath: path,
       syncServerUrl: serverUrl,
@@ -357,6 +360,7 @@ export const App: Component = () => {
               onManageVaults={switchVault}
               onRefreshVaults={refreshVaultList}
               onSettings={() => setShowWebSettings(true)}
+              onQuickOpen={touchMenus ? () => setShowQuickOpen(true) : undefined}
               touchMenus={touchMenus}
               showSyncStatus={true}
               syncStatus={syncStatus()}
@@ -376,7 +380,6 @@ export const App: Component = () => {
                   createEditor={makeEditorForPath}
                   onActiveFileChange={setCurrentDocPath}
                   onSyncFailed={(path) => setSyncErrorPath(path)}
-                  onQuickOpen={() => setShowQuickOpen(true)}
                   vaultName={vault()!.name}
                   drawerContent={sidebar(true)}
                 />

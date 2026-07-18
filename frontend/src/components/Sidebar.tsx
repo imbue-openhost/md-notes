@@ -17,6 +17,10 @@ interface Props {
   onManageVaults?: () => void;
   onRefreshVaults?: () => void;
   onSettings?: () => void;
+  /** Mobile: renders labeled "Open note" / "Search text" rows below the
+   * header instead of the header's search icon, keeping file search and
+   * full-text search clearly separate. */
+  onQuickOpen?: () => void;
   /** Show a per-row "⋯" menu for file actions — iOS Safari has no
    * long-press path to the right-click context menus. */
   touchMenus?: boolean;
@@ -253,7 +257,7 @@ export const Sidebar: Component<Props> = (props) => {
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
           <div class="sidebar-header-buttons">
-            <Show when={props.onSearch}>
+            <Show when={props.onSearch && !props.onQuickOpen}>
               <button class="sidebar-btn" title="Search vault (⌘⇧F)" onClick={props.onSearch}>{'🔍'}</button>
             </Show>
             <button class="sidebar-btn" title="New file" onClick={handleNewFile}>+</button>
@@ -272,6 +276,21 @@ export const Sidebar: Component<Props> = (props) => {
             </Show>
           </div>
         </div>
+
+        <Show when={props.onQuickOpen}>
+          <div class="sidebar-search-rows">
+            <button class="sidebar-search-row" onClick={props.onQuickOpen}>
+              <span class="sidebar-icon">{'📄'}</span>
+              <span>Open note…</span>
+            </button>
+            <Show when={props.onSearch}>
+              <button class="sidebar-search-row" onClick={props.onSearch}>
+                <span class="sidebar-icon">{'🔍'}</span>
+                <span>Search text…</span>
+              </button>
+            </Show>
+          </div>
+        </Show>
 
         <div class="sidebar-tree">
           <Show when={files()} fallback={<div class="sidebar-error">Loading...</div>}>

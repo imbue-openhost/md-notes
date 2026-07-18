@@ -321,15 +321,25 @@ export const deleteMarkupBackward: StateCommand = ({ state, dispatch }) => {
 /// wrapped with `**` on each side.
 ///
 /// For empty ranges (cursors), inserts `****` and places the cursor between
-/// the markers so the user can type the bold text.
+/// the markers so the user can type the bold text; a cursor already sitting
+/// inside an empty `**|**` removes the markers instead.
 export function toggleBold(view: EditorView): boolean {
   const { state } = view;
   const changes = state.changeByRange((range) => {
     if (range.empty) {
+      const pos = range.from;
+      const before = state.doc.sliceString(Math.max(0, pos - 2), pos);
+      const after = state.doc.sliceString(pos, Math.min(state.doc.length, pos + 2));
+      if (before === '**' && after === '**') {
+        return {
+          changes: { from: pos - 2, to: pos + 2, insert: '' },
+          range: EditorSelection.cursor(pos - 2),
+        };
+      }
       const insert = '****';
       return {
-        changes: { from: range.from, insert },
-        range: EditorSelection.cursor(range.from + 2),
+        changes: { from: pos, insert },
+        range: EditorSelection.cursor(pos + 2),
       };
     }
     const { from, to } = range;

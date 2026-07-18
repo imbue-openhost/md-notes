@@ -9,7 +9,7 @@
  */
 
 import { foldService } from '@codemirror/language';
-import { foldGutter } from '@codemirror/language';
+import { foldGutter, codeFolding } from '@codemirror/language';
 import { foldable } from '@codemirror/language';
 import { foldEffect } from '@codemirror/language';
 import { ensureSyntaxTree } from '@codemirror/language';
@@ -96,9 +96,17 @@ export const markdownFoldService = foldService.of((state, lineStart, lineEnd) =>
  * `headerIndent` fold service that `@codemirror/lang-markdown` installs by
  * default — that built-in service ends folds at the last non-blank line, which
  * leaves the inter-section whitespace visible and conflicts with our range.
+ *
+ * `gutter: false` omits the fold gutter column (the mobile editor renders
+ * inline chevrons on heading lines instead). codeFolding() — the fold state
+ * field that foldEffect dispatches land in — normally comes bundled with
+ * foldGutter(), so it must be added explicitly when the gutter is off.
  */
-export function markdownFolding(): Extension {
-  return [Prec.high(markdownFoldService), foldGutter()];
+export function markdownFolding(options: { gutter?: boolean } = {}): Extension {
+  return [
+    Prec.high(markdownFoldService),
+    options.gutter === false ? codeFolding() : foldGutter(),
+  ];
 }
 
 /**
