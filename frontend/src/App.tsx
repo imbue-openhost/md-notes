@@ -15,7 +15,8 @@ import { connectionState, UnauthorizedError, startHeartbeat } from './api/connec
 import { serverUrl, getShareUuid, getVaultNameFromUrl, getUrlHeaderAnchor, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
 import type { VaultConfig } from './api/types';
 import { VaultPicker } from './components/VaultPicker';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar } from './components/sidebar/Sidebar';
+import { MobileSidebar } from './components/sidebar/MobileSidebar';
 import { EditorLayout, type EditorLayoutHandle } from './components/EditorLayout';
 import { MobileShell } from './components/MobileShell';
 import { resolveShellKind } from './app-settings';
@@ -241,10 +242,13 @@ export const App: Component = () => {
     onSyncFailed: (err: Error) => void,
   ): EditorInstance {
     const v = vault();
+    const mobile = shellKind() === 'mobile';
     return createEditor(container, {
-      kind: editorKind(),
+      // The mobile shell always uses the mobile editor variant; the editor
+      // preference setting only applies to the desktop shell.
+      kind: mobile ? 'live-preview-mobile' : editorKind(),
       vimrcContent: activeVimrc(),
-      touch: shellKind() === 'mobile',
+      touch: mobile,
       syncVault: v?.name || undefined,
       syncFilePath: path,
       syncServerUrl: serverUrl,
@@ -345,54 +349,65 @@ export const App: Component = () => {
       </Show>
 
       <Show when={vault()}>
-        {(() => {
-          const sidebar = (touchMenus: boolean) => (
-            <Sidebar
+        <Show
+          when={shellKind() === 'desktop'}
+          fallback={
+            <MobileShell
+              ref={(h) => { layoutHandle = h; }}
+              createEditor={makeEditorForPath}
+              onActiveFileChange={setCurrentDocPath}
+              onSyncFailed={(path) => setSyncErrorPath(path)}
               vaultName={vault()!.name}
-              vaults={vaultList()}
-              onSelect={handleFileSelect}
-              onSearch={() => setShowSearch(true)}
-              onShare={setShareModalPath}
-              onSwitchToVault={switchToVault}
-              onManageVaults={switchVault}
-              onRefreshVaults={refreshVaultList}
-              onSettings={() => setShowWebSettings(true)}
-              touchMenus={touchMenus}
-              showSyncStatus={true}
-              syncStatus={syncStatus()}
-              syncErrorMsg={syncErrorMsg() ?? undefined}
-              backendStatus={connectionState()}
-              lastSyncedAt={lastSyncedAtTs()}
-              idbError={idbError()}
-              currentPath={currentDocPath()}
-            />
-          );
-          return (
-            <Show
-              when={shellKind() === 'desktop'}
-              fallback={
-                <MobileShell
-                  ref={(h) => { layoutHandle = h; }}
-                  createEditor={makeEditorForPath}
-                  onActiveFileChange={setCurrentDocPath}
-                  onSyncFailed={(path) => setSyncErrorPath(path)}
-                  onQuickOpen={() => setShowQuickOpen(true)}
+              drawerContent={
+                <MobileSidebar
                   vaultName={vault()!.name}
-                  drawerContent={sidebar(true)}
+                  vaults={vaultList()}
+                  onSelect={handleFileSelect}
+                  onQuickOpen={() => setShowQuickOpen(true)}
+                  onSearch={() => setShowSearch(true)}
+                  onShare={setShareModalPath}
+                  onSwitchToVault={switchToVault}
+                  onManageVaults={switchVault}
+                  onRefreshVaults={refreshVaultList}
+                  onSettings={() => setShowWebSettings(true)}
+                  showSyncStatus={true}
+                  syncStatus={syncStatus()}
+                  syncErrorMsg={syncErrorMsg() ?? undefined}
+                  backendStatus={connectionState()}
+                  lastSyncedAt={lastSyncedAtTs()}
+                  idbError={idbError()}
+                  currentPath={currentDocPath()}
                 />
               }
-            >
-              {sidebar(false)}
-              <EditorLayout
-                ref={(h) => { layoutHandle = h; }}
-                createEditor={makeEditorForPath}
-                onActiveFileChange={setCurrentDocPath}
-                onSyncFailed={(path) => setSyncErrorPath(path)}
-                vaultName={vault()!.name}
-              />
-            </Show>
-          );
-        })()}
+            />
+          }
+        >
+          <Sidebar
+            vaultName={vault()!.name}
+            vaults={vaultList()}
+            onSelect={handleFileSelect}
+            onSearch={() => setShowSearch(true)}
+            onShare={setShareModalPath}
+            onSwitchToVault={switchToVault}
+            onManageVaults={switchVault}
+            onRefreshVaults={refreshVaultList}
+            onSettings={() => setShowWebSettings(true)}
+            showSyncStatus={true}
+            syncStatus={syncStatus()}
+            syncErrorMsg={syncErrorMsg() ?? undefined}
+            backendStatus={connectionState()}
+            lastSyncedAt={lastSyncedAtTs()}
+            idbError={idbError()}
+            currentPath={currentDocPath()}
+          />
+          <EditorLayout
+            ref={(h) => { layoutHandle = h; }}
+            createEditor={makeEditorForPath}
+            onActiveFileChange={setCurrentDocPath}
+            onSyncFailed={(path) => setSyncErrorPath(path)}
+            vaultName={vault()!.name}
+          />
+        </Show>
       </Show>
 
       <Show when={shareModalPath()}>

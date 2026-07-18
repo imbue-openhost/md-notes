@@ -95,6 +95,13 @@ describe('toggleBold', () => {
     expect(main.from).toBe(5);
   });
 
+  it('removes the markers when the cursor sits inside an empty ****', () => {
+    const { doc, main } = runToggleBold('hi ****', { anchor: 5, head: 5 });
+    expect(doc).toBe('hi ');
+    expect(main.empty).toBe(true);
+    expect(main.from).toBe(3);
+  });
+
   it('wraps selections that contain spaces', () => {
     const { doc } = runToggleBold('foo bar baz', { anchor: 4, head: 7 });
     expect(doc).toBe('foo **bar** baz');

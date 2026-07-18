@@ -194,8 +194,10 @@ def test_mobile_shell(stack: OpenhostStack, page: Page) -> None:
     p.locator(f'.sidebar-item[data-type="file"][data-path="{FILE}"]').click()
     p.wait_for_selector(".cm-editor", timeout=10_000)
     expect(p.locator(".mobile-drawer.open")).to_have_count(0)
-    expect(p.locator(".mobile-topbar-title")).to_contain_text("test")
     p.wait_for_timeout(1000)
+
+    # The mobile editor has no fold gutter (inline chevrons instead).
+    expect(p.locator(".cm-foldGutter")).to_have_count(0)
 
     # Typing inserts directly; focus brings up the formatting toolbar.
     content = p.locator(".cm-content")
@@ -204,18 +206,24 @@ def test_mobile_shell(stack: OpenhostStack, page: Page) -> None:
     expect(content).to_contain_text("MOBILE_TYPED")
     expect(p.locator(".mobile-toolbar")).to_be_visible()
 
+    # The H button opens the heading-level picker; picking a level inserts #s.
+    p.locator('.mobile-toolbar-btn[title="Heading"]').click()
+    expect(p.locator(".mobile-heading-picker")).to_be_visible()
+    p.locator('.mobile-toolbar-btn[title="Heading 2"]').click()
+    expect(content).to_contain_text("## ")
+
     # The last-opened doc is restored on reload (drawer stays closed).
     p.reload()
     p.wait_for_selector(".cm-editor", timeout=10_000)
     expect(p.locator(".mobile-drawer.open")).to_have_count(0)
     expect(content).to_contain_text("MOBILE_TYPED", timeout=10_000)
 
-    # Hamburger reopens the drawer; quick-open button opens the file switcher.
-    p.locator(".mobile-topbar-btn").first.click()
+    # The files pill reopens the drawer; its labeled rows open file search
+    # (quick open) and full-text search as clearly separate entries.
+    p.locator('.mobile-float-btn[title="Files"]').click()
     expect(p.locator(".mobile-drawer.open")).to_be_visible()
-    p.locator(".mobile-drawer-backdrop").click()
-    expect(p.locator(".mobile-drawer.open")).to_have_count(0)
-    p.locator(".mobile-topbar-btn").last.click()
+    expect(p.locator(".sidebar-search-row")).to_have_count(2)
+    p.locator(".sidebar-search-row", has_text="Open note").click()
     expect(p.locator(".quick-open-modal")).to_be_visible()
 
     ctx.close()

@@ -11,8 +11,10 @@ const EDITOR_KIND_KEY = 'mdnotes-editor-kind';
 /**
  * Which editor component to use. 'live-preview' is the default;
  * 'live-preview-vim' is the same editor with vim keybindings.
+ * 'live-preview-mobile' is the touch variant used by the mobile shell —
+ * never stored as a preference, so it isn't offered in settings.
  */
-export type EditorKind = 'live-preview' | 'live-preview-vim';
+export type EditorKind = 'live-preview' | 'live-preview-vim' | 'live-preview-mobile';
 
 export function getEditorKind(): EditorKind {
   try {

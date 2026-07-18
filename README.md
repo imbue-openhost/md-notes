@@ -51,7 +51,8 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 
 ### mobile
 
-- **Mobile shell** (phones, Obsidian-mobile-style): one document at a time, slide-in drawer for the file tree, top bar with quick-open, and a formatting toolbar (indent/outdent, checkbox, bold) that sits above the virtual keyboard via `visualViewport` tracking.
+- **Mobile shell** (phones, Obsidian-mobile-style): one document at a time, a slide-in drawer for the file tree with separate "Open note" (file search) and "Search text" (full-text) entries, a floating drawer toggle over the text (no top bar), and a floating formatting-toolbar pill (heading-level picker incl. remove, bold, checkbox cycle, indent/outdent) that sits above the virtual keyboard via `visualViewport` tracking.
+- **Mobile editor variant** (`live-preview-mobile`): shares the live-preview core but drops the fold gutter — a fold chevron appears inline when the cursor is on a heading (and stays on folded headings) — and skips hover-only features like header share-link buttons.
 - **Shell selection**: autodetected (coarse pointer + small screen → mobile; tablets currently get desktop), overridable via Settings → "App layout".
 - File rename/delete on touch via a per-row `⋯` menu (iOS has no long-press path to right-click menus).
 - **PWA**: `manifest.webmanifest` + icons, installable to the home screen (standalone display). No service worker on purpose — the app is online-only by design, so offline caching would only add staleness risk.
@@ -71,8 +72,8 @@ Running locally without a container (faster iteration than the openhost harness)
   ```bash
   OPENHOST_APP_DATA_DIR=/tmp/mdnotes OPENHOST_SQLITE_MAIN=/tmp/mdnotes/main.db uv run python -m server
   ```
-- **Frontend**: `cd frontend && npx vite` proxies `/api` (including websockets) to `localhost:8000`. Authed routes only check for an `x-openhost-is-owner: true` header (normally set by the OpenHost router), so to skip the login flow add `headers: { 'x-openhost-is-owner': 'true' }` to the proxy entry in a local copy of `vite.config.ts`. Share pages (`/share/<uuid>`) are public and need no header.
-- **Driving it headlessly**: `@playwright/test` is a frontend devDependency. Docs load empty and fill via CRDT sync, so after `.cm-editor` appears allow ~1s before asserting on content. The editor is vim-mode: click `.cm-content`, press Escape, then vim keys.
+- **Frontend**: `cd frontend && npx vite` proxies `/api` (including websockets) to `localhost:8000`. Authed routes only check for an `x-openhost-is-owner: true` header (normally set by the OpenHost router). `npx vite --config vite.config.lan.mts` injects that header at the proxy (skipping the login flow) and listens on all interfaces — use it to test from a phone on the same network (`http://<laptop-ip>:5173`). Local testing only; don't expose beyond a trusted network. Share pages (`/share/<uuid>`) are public and need no header.
+- **Driving it headlessly**: `@playwright/test` is a frontend devDependency. Docs load empty and fill via CRDT sync, so after `.cm-editor` appears allow ~1s before asserting on content. The default editor is non-vim (typing inserts directly); set `localStorage['mdnotes-editor-kind'] = 'live-preview-vim'` before load for vim keys, or emulate a phone viewport for the mobile shell.
 - **Integration tests**: `just test-integration` builds the container and deploys it on a real local OpenHost router (needs podman). The same `OpenhostStack` harness can be held open to click around a real deployment — it snapshots the working tree (tracked + untracked files), so uncommitted changes are included.
 
 ## TODO
