@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 requires-python = "==3.12.*"
 dependencies = [
-    "litestar>=2.12",
+    "litestar>=2.22.0",
     "hypercorn>=0.17",
     "attrs>=24.0",
     "pycrdt>=0.12",
