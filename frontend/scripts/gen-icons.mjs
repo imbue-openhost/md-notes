@@ -22,11 +22,13 @@ function iconHtml(scale) {
 </svg></body></html>`;
 }
 
+// 1.3 runs the mark near the edges; the maskable variant stays inside the
+// central safe zone (~80% circle) that launchers may crop to.
 const targets = [
-  { file: 'icon-192.png', size: 192, scale: 1 },
-  { file: 'icon-512.png', size: 512, scale: 1 },
-  { file: 'icon-maskable-512.png', size: 512, scale: 0.72 },
-  { file: 'apple-touch-icon.png', size: 180, scale: 1 },
+  { file: 'icon-192.png', size: 192, scale: 1.3 },
+  { file: 'icon-512.png', size: 512, scale: 1.3 },
+  { file: 'icon-maskable-512.png', size: 512, scale: 0.94 },
+  { file: 'apple-touch-icon.png', size: 180, scale: 1.3 },
 ];
 
 const browser = await chromium.launch();
