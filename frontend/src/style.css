@@ -583,6 +583,51 @@ li.open > .sidebar-children {
   background: hsl(0 84% 95%);
 }
 
+.share-modal-hint {
+  color: hsl(var(--muted-foreground));
+  margin: 0 0 12px;
+}
+
+.share-link-name {
+  font-weight: 600;
+}
+
+.share-modal-error {
+  color: hsl(0 84% 40%);
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.sidebar-vault-remote-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary));
+  white-space: nowrap;
+}
+
+.vault-picker-item-remote {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
+}
+
+.federation-connect {
+  display: flex;
+  justify-content: center;
+  padding-top: 10vh;
+}
+
+.federation-connect .vault-picker-card {
+  max-width: 480px;
+}
+
+.federation-connect .settings-input {
+  margin: 10px 0;
+}
+
 .share-new-section {
   margin-top: 16px;
   padding-top: 12px;

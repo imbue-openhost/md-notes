@@ -204,13 +204,18 @@ export async function ensureFreshIdbCache(idbKey: string): Promise<boolean> {
   return true;
 }
 
-function buildSession(wsUrl: string, roomName: string, idbKey: string): SyncSession {
+function buildSession(
+  wsUrl: string,
+  roomName: string,
+  idbKey: string,
+  wsParams?: Record<string, string>,
+): SyncSession {
   let consecutiveFailures = 0;
   let destroyed = false;
 
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText('content');
-  const provider = new WebsocketProvider(wsUrl, roomName, ydoc);
+  const provider = new WebsocketProvider(wsUrl, roomName, ydoc, { params: wsParams ?? {} });
   const undoManager = new Y.UndoManager(ytext);
 
   const sessionId = nextSessionId++;
@@ -363,6 +368,10 @@ function shareIdbKey(uuid: string, docPath: string): string {
   return `mdnotes:share:${uuid}:${docPath}`;
 }
 
+function remoteIdbKey(remoteId: string, filePath: string): string {
+  return `mdnotes:remote:${remoteId}:${filePath}`;
+}
+
 /** Authenticated doc sync: WS /api/docs/{vault}/crdt_websocket/{filepath} */
 export function createSyncSession(
   vaultName: string,
@@ -383,6 +392,17 @@ export function createShareSyncSession(
   return buildSession(wsUrl, docPath, shareIdbKey(uuid, docPath));
 }
 
+/** Federated vault sync: WS <source>/api/federation/peer/crdt_websocket/{filepath}?secret=... */
+export function createPeerSyncSession(
+  sourceUrl: string,
+  secret: string,
+  remoteId: string,
+  filePath: string,
+): SyncSession {
+  const wsUrl = getWsUrl(sourceUrl) + '/api/federation/peer/crdt_websocket';
+  return buildSession(wsUrl, filePath, remoteIdbKey(remoteId, filePath), { secret });
+}
+
 /** Drop the IDB store for a single vault doc (call after server-side delete). */
 export async function clearVaultDocCache(vaultName: string, filePath: string): Promise<void> {
   await deleteIDBDatabase(vaultIdbKey(vaultName, filePath));
@@ -391,6 +411,20 @@ export async function clearVaultDocCache(vaultName: string, filePath: string): P
 /** Drop IDB stores for every cached doc in a vault. */
 export async function clearVaultCache(vaultName: string): Promise<void> {
   const prefix = `mdnotes:vault:${vaultName}:`;
+  const all = await listIDBDatabases();
+  await Promise.all(
+    all.filter((n) => n.startsWith(prefix)).map(deleteIDBDatabase),
+  );
+}
+
+/** Drop the IDB store for a single remote-vault doc. */
+export async function clearRemoteVaultDocCache(remoteId: string, filePath: string): Promise<void> {
+  await deleteIDBDatabase(remoteIdbKey(remoteId, filePath));
+}
+
+/** Drop IDB stores for every cached doc of a remote vault (call after disconnecting it). */
+export async function clearRemoteVaultCache(remoteId: string): Promise<void> {
+  const prefix = `mdnotes:remote:${remoteId}:`;
   const all = await listIDBDatabases();
   await Promise.all(
     all.filter((n) => n.startsWith(prefix)).map(deleteIDBDatabase),

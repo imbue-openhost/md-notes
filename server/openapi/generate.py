@@ -11,6 +11,8 @@ from pathlib import Path
 os.environ.setdefault("OPENHOST_APP_DATA_DIR", "/tmp/mdnotes-openapi")
 os.environ.setdefault("OPENHOST_SQLITE_MAIN", "/tmp/mdnotes-openapi/main.db")
 os.environ.setdefault("MDNOTES_FRONTEND_DIST", "/tmp")
+os.environ.setdefault("OPENHOST_APP_NAME", "md-notes")
+os.environ.setdefault("OPENHOST_ZONE_DOMAIN", "example.invalid")
 
 from server.core.config import load_config  # noqa: E402
 from server.web.app import create_app  # noqa: E402

@@ -5,16 +5,35 @@ interface Props {
   vaults: VaultConfig[];
   onSelect: (vault: VaultConfig) => void;
   onAdd: (name: string, path: string, sync: boolean) => void;
-  onRemove: (name: string) => void;
+  onRemove: (vault: VaultConfig) => void;
+  /** Connect a shared vault from a pasted invite link; rejects with a user-facing message. */
+  onConnectRemote: (link: string) => Promise<void>;
 }
 
 export const VaultPicker: Component<Props> = (props) => {
   const [name, setName] = createSignal('');
+  const [inviteLink, setInviteLink] = createSignal('');
+  const [connectBusy, setConnectBusy] = createSignal(false);
+  const [connectError, setConnectError] = createSignal<string | null>(null);
 
   function handleAdd() {
     const n = name().trim();
     if (!n) return;
     props.onAdd(n, '', true);
+  }
+
+  async function handleConnect() {
+    const link = inviteLink().trim();
+    if (!link || connectBusy()) return;
+    setConnectBusy(true);
+    setConnectError(null);
+    try {
+      await props.onConnectRemote(link);
+    } catch (e) {
+      setConnectError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setConnectBusy(false);
+    }
   }
 
   return (
@@ -27,16 +46,30 @@ export const VaultPicker: Component<Props> = (props) => {
             <For each={props.vaults}>{(vault) => (
               <div class="vault-picker-item">
                 <div class="vault-picker-item-info" onClick={() => props.onSelect(vault)}>
-                  <div class="vault-picker-item-name">{vault.name}</div>
+                  <div class="vault-picker-item-name">
+                    {vault.name}
+                    <Show when={vault.remote}>
+                      {(remote) => (
+                        <span
+                          class="vault-picker-item-remote"
+                          title={`Shared from ${remote().source_url} (${remote().permission === 'write' ? 'can edit' : 'view only'})`}
+                        >
+                          {' ⇄ '}{new URL(remote().source_url).host}
+                        </span>
+                      )}
+                    </Show>
+                  </div>
                 </div>
                 <div class="vault-picker-item-badges">
                   <button
                     class="vault-picker-remove"
-                    title="Remove vault"
+                    title={vault.remote ? 'Disconnect shared vault' : 'Remove vault'}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm(`Delete vault "${vault.name}"? All files will be permanently deleted.`))
-                        props.onRemove(vault.name);
+                      const message = vault.remote
+                        ? `Disconnect shared vault "${vault.name}"? The files stay on the other instance.`
+                        : `Delete vault "${vault.name}"? All files will be permanently deleted.`;
+                      if (confirm(message)) props.onRemove(vault);
                     }}
                   >
                     &times;
@@ -63,6 +96,27 @@ export const VaultPicker: Component<Props> = (props) => {
           <button class="share-modal-btn share-modal-btn-primary" onClick={handleAdd}>
             Add vault
           </button>
+        </div>
+
+        <div class="vault-picker-add">
+          <div class="vault-picker-add-title">Connect a shared vault</div>
+
+          <input
+            class="settings-input"
+            type="text"
+            placeholder="Paste an invite link (https://…/federation/connect?…)"
+            value={inviteLink()}
+            onInput={(e) => setInviteLink(e.currentTarget.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleConnect(); }}
+          />
+
+          <button class="share-modal-btn" disabled={connectBusy()} onClick={handleConnect}>
+            {connectBusy() ? 'Connecting…' : 'Connect'}
+          </button>
+
+          <Show when={connectError()}>
+            <div class="share-modal-error">{connectError()}</div>
+          </Show>
         </div>
       </div>
     </div>

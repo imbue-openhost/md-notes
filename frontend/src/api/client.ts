@@ -2,7 +2,7 @@
  * REST API client for file operations.
  */
 
-import type { FileEntry } from './types';
+import type { FileEntry, RemoteVaultRef } from './types';
 import {
   markConnected, markDisconnected, markUnauthorized, UnauthorizedError,
 } from './connection';
@@ -158,6 +158,65 @@ export async function listShareLinks(docPath?: string): Promise<ShareLink[]> {
   const params = docPath ? `?docPath=${encodeURIComponent(docPath)}` : '';
   const res = await apiFetch(`/api/share${params}`);
   return res.json();
+}
+
+// ── Federation: outgoing vault shares ─────────────────────────────────────
+
+export interface VaultShare {
+  secret: string;
+  vault_name: string;
+  share_name: string;
+  permission: 'read' | 'write';
+  created_at: string;
+  invite_url: string;
+}
+
+export async function createVaultShare(
+  vaultName: string,
+  name: string,
+  permission: 'read' | 'write',
+): Promise<VaultShare> {
+  const res = await apiFetch('/api/federation/shares', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vaultName, name, permission }),
+  });
+  return res.json();
+}
+
+export async function listVaultShares(vaultName?: string): Promise<VaultShare[]> {
+  const params = vaultName ? `?vaultName=${encodeURIComponent(vaultName)}` : '';
+  const res = await apiFetch(`/api/federation/shares${params}`);
+  return res.json();
+}
+
+export async function revokeVaultShare(secret: string): Promise<void> {
+  await apiFetch(`/api/federation/shares/${encodeURIComponent(secret)}`, { method: 'DELETE' });
+}
+
+// ── Federation: remote vaults stored on our server ────────────────────────
+
+export async function listRemoteVaults(): Promise<RemoteVaultRef[]> {
+  const res = await apiFetch('/api/federation/remotes');
+  return res.json();
+}
+
+export async function addRemoteVault(
+  sourceUrl: string,
+  vaultName: string,
+  secret: string,
+  name = '',
+): Promise<RemoteVaultRef> {
+  const res = await apiFetch('/api/federation/remotes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sourceUrl, vaultName, secret, name }),
+  });
+  return res.json();
+}
+
+export async function removeRemoteVault(id: string): Promise<void> {
+  await apiFetch(`/api/federation/remotes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────

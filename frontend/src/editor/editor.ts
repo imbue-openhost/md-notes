@@ -41,7 +41,8 @@ import { pasteIndentNormalization } from './indent/pasteIndent';
 import { Vim } from '@replit/codemirror-vim';
 
 import { vimMode, toggleTaskAtSelection } from './vim';
-import { createSyncSession, createShareSyncSession, undoRedoFacet, type SyncSession } from './sync';
+import { createSyncSession, createShareSyncSession, createPeerSyncSession, undoRedoFacet, type SyncSession } from './sync';
+import type { RemoteVaultRef } from '../api/types';
 
 Vim.defineAction('undo', (cm: any, actionArgs: any) => {
   const view = cm.cm6;
@@ -173,6 +174,8 @@ export interface EditorOptions {
   syncServerUrl?: string;
   shareUuid?: string;
   shareDocPath?: string;
+  /** Sync against a federated vault on another instance instead of a local vault. */
+  remoteVault?: RemoteVaultRef;
   readOnly?: boolean;
   onDocChange?: (content: string) => void;
   /** Called when the initial server handshake fails (timeout or connection error). */
@@ -188,12 +191,15 @@ export interface EditorInstance {
 }
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorInstance {
-  const useSync = !!(options.syncServerUrl && (options.syncVault || options.shareUuid));
+  const useSync = !!(options.remoteVault || (options.syncServerUrl && (options.syncVault || options.shareUuid)));
   const extensions = buildExtensions(options.vimrcContent, useSync);
 
   let syncSession: SyncSession | null = null;
 
-  if (options.syncServerUrl && options.syncVault && options.syncFilePath) {
+  if (options.remoteVault && options.syncFilePath) {
+    const remote = options.remoteVault;
+    syncSession = createPeerSyncSession(remote.source_url, remote.secret, remote.id, options.syncFilePath);
+  } else if (options.syncServerUrl && options.syncVault && options.syncFilePath) {
     syncSession = createSyncSession(options.syncVault, options.syncFilePath, options.syncServerUrl);
   } else if (options.syncServerUrl && options.shareUuid && options.shareDocPath) {
     syncSession = createShareSyncSession(options.shareUuid, options.shareDocPath, options.syncServerUrl);
@@ -214,9 +220,12 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
   if (options.readOnly) {
     extensions.push(EditorState.readOnly.of(true));
+    extensions.push(EditorView.editable.of(false));
   }
 
-  if (options.syncVault && options.syncFilePath) {
+  if (options.remoteVault && options.syncFilePath) {
+    extensions.push(foldPersistence({ vault: `remote:${options.remoteVault.id}`, filePath: options.syncFilePath }));
+  } else if (options.syncVault && options.syncFilePath) {
     extensions.push(foldPersistence({ vault: options.syncVault, filePath: options.syncFilePath }));
   }
 

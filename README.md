@@ -46,6 +46,15 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 - **File tree sidebar** with create (+ button), rename/delete (right-click context menu)
 - **Pane collapse** — with split panes, the `«`/`»` button in a pane's tab bar collapses it to a thin strip so the other pane gets the full width; click the strip (or focus the pane) to restore. `Cmd/Ctrl+Shift+\` toggles the active pane.
 
+### federation
+
+Whole vaults can be shared with other md-notes instances (read-only or read-write): see
+`docs/federation.md` for the protocol. Sharing is per-vault ("Share this vault..." in the
+sidebar's vault menu), named per recipient, and revocable. The share produces an invite link to
+this instance; the recipient pastes it into their own md-notes ("Manage vaults… → Connect a
+shared vault"). Connected remote vaults appear in the recipient's vault list; their client talks
+directly to the sharing instance, authenticated by the share secret.
+
 ### tauri native editor
 
 - intended to share most code with the web editor, just packaged as a native app

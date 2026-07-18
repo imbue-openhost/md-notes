@@ -1,12 +1,13 @@
 import { createSignal, createEffect, onMount, onCleanup, For, Show, type Component } from 'solid-js';
 import { Dialog } from '@kobalte/core';
-import type { SearchHit } from '../api/types';
+import type { RemoteVaultRef, SearchHit } from '../api/types';
 import { createSearchSession, type SearchSession } from '../api/search-session';
 import { serverUrl } from '../config';
 import { splitByRanges } from './search-highlight';
 
 interface Props {
   vaultName: string;
+  remote?: RemoteVaultRef;
   onSelect: (path: string, line: number) => void;
   onClose: () => void;
 }
@@ -40,6 +41,7 @@ export const SearchModal: Component<Props> = (props) => {
       setSessionError(true);
       setLoading(false);
     },
+    props.remote,
   );
   onCleanup(() => session.close());
 

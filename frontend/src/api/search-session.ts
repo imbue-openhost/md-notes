@@ -7,7 +7,7 @@
  * response, which is why results are matched back by id.
  */
 
-import type { SearchHit } from './types';
+import type { RemoteVaultRef, SearchHit } from './types';
 import { getWsUrl } from '../editor/sync';
 
 export interface SearchSession {
@@ -21,8 +21,11 @@ export function createSearchSession(
   serverUrl: string,
   onResults: (id: number, hits: SearchHit[]) => void,
   onError: () => void,
+  remote?: RemoteVaultRef,
 ): SearchSession {
-  const url = `${getWsUrl(serverUrl)}/api/docs/${encodeURIComponent(vaultName)}/search_websocket`;
+  const url = remote
+    ? `${getWsUrl(remote.source_url)}/api/federation/peer/search_websocket?secret=${encodeURIComponent(remote.secret)}`
+    : `${getWsUrl(serverUrl)}/api/docs/${encodeURIComponent(vaultName)}/search_websocket`;
   let socket: WebSocket | null = null;
   let pending: string | null = null; // latest message queued while the socket connects
   let closed = false;

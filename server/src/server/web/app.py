@@ -15,6 +15,7 @@ from litestar.di import Provide
 from server.core.config import Config
 from server.core.db import close_db
 from server.core.db import init_db
+from server.core.federation import RemoteVaultError
 from server.core.files import PathTraversalError
 from server.core.history import HistoryManager
 from server.core.sync import SyncManager
@@ -22,6 +23,7 @@ from server.core.vaults import InvalidVaultName
 from server.core.vaults import VaultAlreadyExists
 from server.core.vaults import VaultNotFound
 from server.web.api.docs import DocsController
+from server.web.api.federation import FederationController
 from server.web.api.settings import SettingsController
 from server.web.api.share import ShareController
 from server.web.api.vaults import VaultsController
@@ -56,6 +58,10 @@ def _vault_not_found_handler(request: Request[Any, Any, Any], exc: VaultNotFound
     return Response({"error": "not found"}, status_code=404)
 
 
+def _remote_vault_error_handler(request: Request[Any, Any, Any], exc: RemoteVaultError) -> Response[dict[str, str]]:
+    return Response({"error": str(exc)}, status_code=502)
+
+
 def _vault_already_exists_handler(
     request: Request[Any, Any, Any], exc: VaultAlreadyExists
 ) -> Response[dict[str, str]]:
@@ -86,6 +92,7 @@ def create_app(config: Config) -> Litestar:
             DocsController,
             VaultsController,
             ShareController,
+            FederationController,
             SettingsController,
             health,
             api_health,
@@ -102,6 +109,7 @@ def create_app(config: Config) -> Litestar:
             InvalidVaultName: _invalid_vault_name_handler,
             VaultNotFound: _vault_not_found_handler,
             VaultAlreadyExists: _vault_already_exists_handler,
+            RemoteVaultError: _remote_vault_error_handler,
         },
     )
     app.state.config = config

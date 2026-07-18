@@ -10,9 +10,14 @@ export type BackendStatus = 'connected' | 'disconnected' | 'unauthorized';
 interface Props {
   vaultName?: string;
   vaults?: VaultConfig[];
+  /** True when the active vault is a remote share (files live on another instance). */
+  isRemote?: boolean;
+  /** True when the active vault cannot be edited (read-only remote share). */
+  readOnly?: boolean;
   onSelect: (path: string) => void;
   onSearch?: () => void;
   onShare?: (path: string) => void;
+  onShareVault?: () => void;
   onSwitchToVault?: (v: VaultConfig) => void;
   onManageVaults?: () => void;
   onRefreshVaults?: () => void;
@@ -127,16 +132,18 @@ export const Sidebar: Component<Props> = (props) => {
             <span class="sidebar-arrow">{open() ? '\u25BC' : '\u25B6'}</span>
             <span>{p.entry.name}</span>
           </ContextMenu.Trigger>
-          <ContextMenu.Portal>
-            <ContextMenu.Content class="sidebar-context-menu">
-              <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleNewFileInDir(p.entry.path)}>
-                New file here...
-              </ContextMenu.Item>
-              <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleDelete(p.entry.path, p.entry.name)}>
-                Delete folder
-              </ContextMenu.Item>
-            </ContextMenu.Content>
-          </ContextMenu.Portal>
+          <Show when={!props.readOnly}>
+            <ContextMenu.Portal>
+              <ContextMenu.Content class="sidebar-context-menu">
+                <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleNewFileInDir(p.entry.path)}>
+                  New file here...
+                </ContextMenu.Item>
+                <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleDelete(p.entry.path, p.entry.name)}>
+                  Delete folder
+                </ContextMenu.Item>
+              </ContextMenu.Content>
+            </ContextMenu.Portal>
+          </Show>
         </ContextMenu.Root>
         <Show when={p.entry.children && p.entry.children.length > 0}>
           <ul class="sidebar-children">
@@ -162,16 +169,18 @@ export const Sidebar: Component<Props> = (props) => {
             <span class="sidebar-icon">{'\uD83D\uDCC4'}</span>
             <span>{p.entry.name.replace(/\.md$/, '')}</span>
           </ContextMenu.Trigger>
-          <ContextMenu.Portal>
-            <ContextMenu.Content class="sidebar-context-menu">
-              <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleRename(p.entry.path, p.entry.name)}>
-                Rename...
-              </ContextMenu.Item>
-              <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleDelete(p.entry.path, p.entry.name)}>
-                Delete
-              </ContextMenu.Item>
-            </ContextMenu.Content>
-          </ContextMenu.Portal>
+          <Show when={!props.readOnly}>
+            <ContextMenu.Portal>
+              <ContextMenu.Content class="sidebar-context-menu">
+                <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleRename(p.entry.path, p.entry.name)}>
+                  Rename...
+                </ContextMenu.Item>
+                <ContextMenu.Item class="sidebar-context-item" onSelect={() => handleDelete(p.entry.path, p.entry.name)}>
+                  Delete
+                </ContextMenu.Item>
+              </ContextMenu.Content>
+            </ContextMenu.Portal>
+          </Show>
         </ContextMenu.Root>
       </li>
     );
@@ -186,6 +195,11 @@ export const Sidebar: Component<Props> = (props) => {
           >
             <DropdownMenu.Trigger class="sidebar-vault-trigger" title="Switch vault">
               <span class="sidebar-vault-name">{props.vaultName || 'No vault'}</span>
+              <Show when={props.isRemote}>
+                <span class="sidebar-vault-remote-badge" title={props.readOnly ? 'Shared from another instance (read-only)' : 'Shared from another instance'}>
+                  {props.readOnly ? '⇄ read-only' : '⇄'}
+                </span>
+              </Show>
               <span class="sidebar-vault-chevron" aria-hidden>{'⌄'}</span>
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
@@ -202,11 +216,23 @@ export const Sidebar: Component<Props> = (props) => {
                         {v.name === props.vaultName ? '✓' : ''}
                       </span>
                       <span>{v.name}</span>
+                      <Show when={v.remote}>
+                        <span class="sidebar-vault-remote-badge" title="Shared from another instance">⇄</span>
+                      </Show>
                     </DropdownMenu.Item>
                   )}
                 </For>
                 <Show when={(props.vaults?.length ?? 0) > 0}>
                   <DropdownMenu.Separator class="sidebar-vault-sep" />
+                </Show>
+                <Show when={props.onShareVault}>
+                  <DropdownMenu.Item
+                    class="sidebar-vault-item sidebar-vault-manage"
+                    onSelect={() => props.onShareVault?.()}
+                  >
+                    <span class="sidebar-vault-check" />
+                    <span>Share this vault with another md-notes user...</span>
+                  </DropdownMenu.Item>
                 </Show>
                 <DropdownMenu.Item
                   class="sidebar-vault-item sidebar-vault-manage"
@@ -222,7 +248,9 @@ export const Sidebar: Component<Props> = (props) => {
             <Show when={props.onSearch}>
               <button class="sidebar-btn" title="Search vault (⌘⇧F)" onClick={props.onSearch}>{'🔍'}</button>
             </Show>
-            <button class="sidebar-btn" title="New file" onClick={handleNewFile}>+</button>
+            <Show when={!props.readOnly}>
+              <button class="sidebar-btn" title="New file" onClick={handleNewFile}>+</button>
+            </Show>
             <Show when={props.onSettings}>
               <button class="sidebar-btn" title="Settings" onClick={props.onSettings}>{'⚙️'}</button>
             </Show>

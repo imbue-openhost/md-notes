@@ -1,22 +1,28 @@
 import { createSignal, createResource, createEffect, onMount, onCleanup, Show, type Component } from 'solid-js';
 import { createEditor, type EditorInstance } from './editor/editor';
 import {
-  createShareLink, listShareLinks, deleteShareLink,
   listVaults, createVault, deleteVault, getServerVimrc, pingHealth,
+  listRemoteVaults, addRemoteVault, removeRemoteVault,
 } from './api/client';
-import { setActiveVault, getActiveVault } from './api/vault-ops';
+import { parseInviteLink, fetchPeerVaultInfo, PeerAuthError } from './api/peer';
+import { setActiveVault } from './api/vault-ops';
 import {
-  clearVaultCache,
+  clearVaultCache, clearRemoteVaultCache,
   onConnectionStatus, onConnectionError, onLastSyncedAt, onIdbError,
   type AggregateConnectionStatus,
 } from './editor/sync';
 import { connectionState, UnauthorizedError, startHeartbeat } from './api/connection';
-import { serverUrl, getShareUuid, getVaultNameFromUrl, fetchShareInfo, getLoginUrl, type ShareInfo } from './config';
+import {
+  serverUrl, getShareUuid, getVaultNameFromUrl, fetchShareInfo, getLoginUrl,
+  getFederationInvite, type ShareInfo,
+} from './config';
 import type { VaultConfig } from './api/types';
 import { VaultPicker } from './components/VaultPicker';
 import { Sidebar } from './components/Sidebar';
 import { EditorLayout, type EditorLayoutHandle } from './components/EditorLayout';
 import { ShareModal } from './components/ShareModal';
+import { VaultShareModal } from './components/VaultShareModal';
+import { FederationConnect } from './components/FederationConnect';
 import { WebSettingsModal } from './components/SettingsModal';
 import { QuickOpen } from './components/QuickOpen';
 import { SearchModal } from './components/SearchModal';
@@ -69,6 +75,9 @@ export const App: Component = () => {
   const shareUuid = getShareUuid();
   if (shareUuid) return <ShareView uuid={shareUuid} />;
 
+  const federationInvite = getFederationInvite();
+  if (federationInvite) return <FederationConnect invite={federationInvite} />;
+
   const [activeVimrc, setActiveVimrc] = createSignal(DEFAULT_VIMRC);
   const [vault, setVault] = createSignal<VaultConfig | null>(null);
   const [vaultList, setVaultList] = createSignal<VaultConfig[]>([]);
@@ -76,10 +85,12 @@ export const App: Component = () => {
   const [booting, setBooting] = createSignal(true);
   const [currentDocPath, setCurrentDocPath] = createSignal<string | null>(null);
   const [shareModalPath, setShareModalPath] = createSignal<string | null>(null);
+  const [shareVaultName, setShareVaultName] = createSignal<string | null>(null);
   const [showWebSettings, setShowWebSettings] = createSignal(false);
   const [showQuickOpen, setShowQuickOpen] = createSignal(false);
   const [showSearch, setShowSearch] = createSignal(false);
   const [syncErrorPath, setSyncErrorPath] = createSignal<string | null>(null);
+  const [remoteVaultError, setRemoteVaultError] = createSignal<string | null>(null);
   const [syncStatus, setSyncStatus] = createSignal<AggregateConnectionStatus>(null);
   const [syncErrorMsg, setSyncErrorMsg] = createSignal<string | null>(null);
   const [lastSyncedAtTs, setLastSyncedAtTs] = createSignal<number | null>(null);
@@ -116,8 +127,18 @@ export const App: Component = () => {
   }
 
   async function fetchVaultList(): Promise<VaultConfig[]> {
-    const remote = await listVaults();
-    return remote.map((v) => ({ name: v.name, path: '', sync: true }));
+    const local = await listVaults();
+    const vaults: VaultConfig[] = local.map((v) => ({ name: v.name, path: '', sync: true }));
+    // Remote (federated) vaults live on another instance; sync=false so we never try to create
+    // them locally.
+    try {
+      const remotes = await listRemoteVaults();
+      vaults.push(...remotes.map((r) => ({ name: r.name, path: '', sync: false, remote: r })));
+    } catch (e) {
+      if (e instanceof UnauthorizedError) throw e;
+      console.warn('Failed to load remote vaults:', e);
+    }
+    return vaults;
   }
 
   async function fetchVaultListWithRetry(): Promise<VaultConfig[]> {
@@ -193,6 +214,7 @@ export const App: Component = () => {
     setActiveVault(v);
     setVault(v);
     setShowVaultPicker(false);
+    if (v.remote) checkRemoteVault(v);
     if (v.name) {
       try {
         sessionStorage.setItem('mdnotes-last-vault', v.name);
@@ -203,6 +225,27 @@ export const App: Component = () => {
     if (v.sync && v.name) {
       createVault(v.name).catch(() => {});
     }
+  }
+
+  // The source instance can change under us between sessions (upgraded API, revoked share), so
+  // re-verify the handshake every time a remote vault is opened. Non-blocking: the vault opens
+  // optimistically and a failure surfaces as a modal.
+  function checkRemoteVault(v: VaultConfig) {
+    const remote = v.remote!;
+    setRemoteVaultError(null);
+    fetchPeerVaultInfo(remote.source_url, remote.secret).catch((e) => {
+      if (vault()?.remote?.id !== remote.id) return;
+      const host = (() => {
+        try { return new URL(remote.source_url).host; } catch { return remote.source_url; }
+      })();
+      if (e instanceof PeerAuthError) {
+        setRemoteVaultError(`${host} rejected this vault's share — it may have been revoked.`);
+      } else if (e instanceof TypeError) {
+        // fetch network failure — the instance is unreachable; sync status already shows offline.
+      } else {
+        setRemoteVaultError(`Can't use this shared vault: ${e instanceof Error ? e.message : e}`);
+      }
+    });
   }
 
   function switchVault() {
@@ -229,9 +272,11 @@ export const App: Component = () => {
     const v = vault();
     return createEditor(container, {
       vimrcContent: activeVimrc(),
-      syncVault: v?.name || undefined,
+      syncVault: v?.remote ? undefined : (v?.name || undefined),
       syncFilePath: path,
       syncServerUrl: serverUrl,
+      remoteVault: v?.remote,
+      readOnly: v?.remote?.permission === 'read',
       onSyncFailed,
     });
   }
@@ -245,9 +290,27 @@ export const App: Component = () => {
     openVault({ name: created.name, path: '', sync: true });
   }
 
-  async function handleVaultRemove(name: string) {
-    await deleteVault(name);
-    await clearVaultCache(name);
+  async function handleConnectRemote(link: string) {
+    const invite = parseInviteLink(link);
+    if (!invite) {
+      throw new Error('That doesn\'t look like an invite link — expected https://…/federation/connect?…');
+    }
+    // Our server validates against the source instance (secret + API version) before storing.
+    const remote = await addRemoteVault(invite.sourceUrl, invite.vault, invite.secret);
+    const vaults = await fetchVaultList();
+    setVaultList(vaults);
+    const match = vaults.find((v) => v.remote?.id === remote.id);
+    if (match) openVault(match);
+  }
+
+  async function handleVaultRemove(v: VaultConfig) {
+    if (v.remote) {
+      await removeRemoteVault(v.remote.id);
+      await clearRemoteVaultCache(v.remote.id);
+    } else {
+      await deleteVault(v.name);
+      await clearVaultCache(v.name);
+    }
     await loadWebVaults();
   }
 
@@ -323,6 +386,7 @@ export const App: Component = () => {
           onSelect={handleVaultSelect}
           onAdd={handleVaultAdd}
           onRemove={handleVaultRemove}
+          onConnectRemote={handleConnectRemote}
         />
       </Show>
 
@@ -330,9 +394,12 @@ export const App: Component = () => {
         <Sidebar
           vaultName={vault()!.name}
           vaults={vaultList()}
+          isRemote={!!vault()!.remote}
+          readOnly={vault()!.remote?.permission === 'read'}
           onSelect={handleFileSelect}
           onSearch={() => setShowSearch(true)}
-          onShare={setShareModalPath}
+          onShare={vault()!.remote ? undefined : setShareModalPath}
+          onShareVault={vault()!.remote ? undefined : () => setShareVaultName(vault()!.name)}
           onSwitchToVault={switchToVault}
           onManageVaults={switchVault}
           onRefreshVaults={refreshVaultList}
@@ -363,6 +430,13 @@ export const App: Component = () => {
         />
       </Show>
 
+      <Show when={shareVaultName()}>
+        <VaultShareModal
+          vaultName={shareVaultName()!}
+          onClose={() => setShareVaultName(null)}
+        />
+      </Show>
+
       <Show when={vault() && showQuickOpen()}>
         <QuickOpen
           onSelect={(path) => layoutHandle?.openFile(path)}
@@ -372,7 +446,8 @@ export const App: Component = () => {
 
       <Show when={vault() && showSearch()}>
         <SearchModal
-          vaultName={vault()!.name}
+          vaultName={vault()!.remote ? vault()!.remote!.vault_name : vault()!.name}
+          remote={vault()!.remote}
           onSelect={(path, line) => layoutHandle?.openFileAt(path, line)}
           onClose={() => setShowSearch(false)}
         />
@@ -384,6 +459,18 @@ export const App: Component = () => {
           onSaved={(v) => { setActiveVimrc(v); setShowWebSettings(false); }}
           onClose={() => setShowWebSettings(false)}
         />
+      </Show>
+
+      <Show when={remoteVaultError()}>
+        <div class="modal-backdrop" onClick={() => setRemoteVaultError(null)}>
+          <div class="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Shared vault problem</h3>
+            <p>{remoteVaultError()}</p>
+            <div class="modal-actions">
+              <button onClick={() => setRemoteVaultError(null)}>OK</button>
+            </div>
+          </div>
+        </div>
       </Show>
 
       <Show when={syncErrorPath()}>
