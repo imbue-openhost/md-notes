@@ -48,6 +48,10 @@ def _file_not_found_handler(request: Request[Any, Any, Any], exc: FileNotFoundEr
     return Response({"error": str(exc)}, status_code=404)
 
 
+def _file_exists_handler(request: Request[Any, Any, Any], exc: FileExistsError) -> Response[dict[str, str]]:
+    return Response({"error": str(exc)}, status_code=409)
+
+
 def _invalid_vault_name_handler(request: Request[Any, Any, Any], exc: InvalidVaultName) -> Response[dict[str, str]]:
     return Response({"error": "name is required"}, status_code=400)
 
@@ -99,6 +103,7 @@ def create_app(config: Config) -> Litestar:
         exception_handlers={
             PathTraversalError: _path_traversal_handler,
             FileNotFoundError: _file_not_found_handler,
+            FileExistsError: _file_exists_handler,
             InvalidVaultName: _invalid_vault_name_handler,
             VaultNotFound: _vault_not_found_handler,
             VaultAlreadyExists: _vault_already_exists_handler,
