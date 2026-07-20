@@ -32,7 +32,7 @@ import {
   WidgetType,
 } from '@codemirror/view';
 import { SyntaxNode } from '@lezer/common';
-import { listLineLayout } from '../core/listLineLayout';
+import { listLineLayout, CM_LINE_PAD } from '../core/listLineLayout';
 import { spaceWidth, spaceWidthField } from '../core/spaceWidth';
 import { indentUnitField, indentUnitOf } from '../../indent/indentUnitField';
 import { indentVisualMultiplier } from '../../indent/detectIndent';
@@ -224,15 +224,13 @@ export function buildListIndentDecorations(
         decorations.push(wsDeco);
         atomicDecorations.push(wsDeco);
       }
-      // Match the marker line's hanging-indent math: text-indent pulls
-      // first-line content back to the natural cm-line margin, padding
-      // pads it out to align under the bullet's text column. Adding the
-      // 16px keeps non-list and list lines vertically aligned at their
-      // left edges (same constant as listLineLayout).
+      // Match the marker line's hanging-indent math: pad out to align under
+      // the bullet's text column. The cm-line-pad term keeps non-list and
+      // list lines aligned at their left edges (same var as listLineLayout).
       decorations.push(
         Decoration.line({
           attributes: {
-            style: `padding-inline-start: ${16 + prefixPx}px;`,
+            style: `padding-inline-start: calc(${CM_LINE_PAD} + ${prefixPx}px);`,
           },
         }).range(line.from),
       );
