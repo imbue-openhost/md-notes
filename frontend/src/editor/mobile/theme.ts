@@ -24,22 +24,11 @@ export const mobileTheme = [
       padding: '0 12px 0 26px',
     },
 
-    // Full-height flex box so the glyph centers on the (possibly heading-
-    // sized) line; fixed font size so it doesn't scale with the heading.
-    '&.cm-mobile .cm-mobile-fold-chevron': {
-      position: 'absolute',
-      left: '0',
-      top: '0',
-      height: '100%',
+    // Narrower chevron column than desktop. Always visible (no hover on
+    // touch) — the plugin only adds the widget when it should show.
+    '&.cm-mobile .cm-fold-chevron': {
       width: '26px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: 'hsl(var(--muted-foreground, 220 9% 46%))',
-      cursor: 'pointer',
-      userSelect: 'none',
-      '-webkit-user-select': 'none',
-      fontSize: '17px',
+      opacity: '1',
     },
   }),
 ];

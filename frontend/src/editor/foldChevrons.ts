@@ -1,10 +1,14 @@
 /**
- * Inline fold chevrons for the mobile editor (Obsidian-mobile-style).
+ * Inline fold chevrons on heading lines (Obsidian-style) — no gutter column;
+ * the chevron renders in the line's left content margin. Clicking it toggles
+ * the fold.
  *
- * Instead of a persistent fold gutter column, a chevron appears in the left
- * content margin of a heading line only when the cursor is on that line, or
- * when the section is folded (so it can always be unfolded). Tapping it
- * toggles the fold.
+ * Two reveal modes:
+ * - 'hover' (desktop): every foldable heading gets a chevron widget; CSS
+ *   keeps it invisible until the line is hovered or the section is folded.
+ * - 'cursor' (mobile, where hover doesn't exist): a chevron is only added
+ *   when the cursor is on the heading line, or when the section is folded
+ *   (so it can always be unfolded).
  */
 
 import {
@@ -18,6 +22,8 @@ import {
 import type { Range } from '@codemirror/state';
 import { foldable, foldedRanges, foldEffect, unfoldEffect } from '@codemirror/language';
 import type { EditorState } from '@codemirror/state';
+
+export type ChevronReveal = 'hover' | 'cursor';
 
 function foldedRangeAt(state: EditorState, lineTo: number): { from: number; to: number } | null {
   let found: { from: number; to: number } | null = null;
@@ -38,6 +44,11 @@ function toggleFoldAtLine(view: EditorView, lineFrom: number) {
   }
 }
 
+// Right-pointing chevron; CSS rotates it 90° when the section is unfolded.
+const CHEVRON_SVG =
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<polyline points="9 6 15 12 9 18"/></svg>';
+
 class FoldChevronWidget extends WidgetType {
   constructor(readonly folded: boolean, readonly lineFrom: number) {
     super();
@@ -49,12 +60,12 @@ class FoldChevronWidget extends WidgetType {
 
   override toDOM(view: EditorView): HTMLElement {
     const span = document.createElement('span');
-    span.className = 'cm-mobile-fold-chevron';
+    span.className = 'cm-fold-chevron';
     span.dataset.folded = this.folded ? 'true' : 'false';
-    span.textContent = this.folded ? '▸' : '▾';
+    span.innerHTML = CHEVRON_SVG;
     span.setAttribute('aria-hidden', 'true');
-    // preventDefault on pointerdown so the tap neither moves the cursor nor
-    // dismisses the virtual keyboard.
+    // preventDefault on pointerdown so the tap/click neither moves the cursor
+    // nor dismisses the virtual keyboard.
     span.addEventListener('pointerdown', (e) => e.preventDefault());
     span.addEventListener('mousedown', (e) => e.preventDefault());
     span.addEventListener('click', (e) => {
@@ -69,7 +80,7 @@ class FoldChevronWidget extends WidgetType {
   }
 }
 
-function buildDecorations(view: EditorView): DecorationSet {
+function buildDecorations(view: EditorView, reveal: ChevronReveal): DecorationSet {
   const { state } = view;
   const cursorLine = state.doc.lineAt(state.selection.main.head).number;
   const decos: Range<Decoration>[] = [];
@@ -82,7 +93,11 @@ function buildDecorations(view: EditorView): DecorationSet {
         const folded = !!foldedRangeAt(state, line.to);
         // The foldable() check confirms this is a real heading (not e.g. a
         // "# comment" inside a code fence) with content to fold.
-        if (folded || (line.number === cursorLine && foldable(state, line.from, line.to))) {
+        const wanted =
+          folded ||
+          ((reveal === 'hover' || line.number === cursorLine) &&
+            foldable(state, line.from, line.to));
+        if (wanted) {
           decos.push(
             Decoration.widget({
               widget: new FoldChevronWidget(folded, line.from),
@@ -98,26 +113,25 @@ function buildDecorations(view: EditorView): DecorationSet {
   return Decoration.set(decos);
 }
 
-const foldChevronPlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
+export function foldChevrons(reveal: ChevronReveal) {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
 
-    constructor(view: EditorView) {
-      this.decorations = buildDecorations(view);
-    }
-
-    update(update: ViewUpdate) {
-      const foldChanged = update.transactions.some((tr) =>
-        tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)),
-      );
-      if (update.docChanged || update.selectionSet || update.viewportChanged || foldChanged) {
-        this.decorations = buildDecorations(update.view);
+      constructor(view: EditorView) {
+        this.decorations = buildDecorations(view, reveal);
       }
-    }
-  },
-  { decorations: (v) => v.decorations },
-);
 
-export function mobileFoldChevrons() {
-  return foldChevronPlugin;
+      update(update: ViewUpdate) {
+        const foldChanged = update.transactions.some((tr) =>
+          tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)),
+        );
+        const cursorMoved = reveal === 'cursor' && update.selectionSet;
+        if (update.docChanged || cursorMoved || update.viewportChanged || foldChanged) {
+          this.decorations = buildDecorations(update.view, reveal);
+        }
+      }
+    },
+    { decorations: (v) => v.decorations },
+  );
 }

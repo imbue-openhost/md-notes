@@ -49,7 +49,7 @@ import { pasteIndentNormalization } from './indent/pasteIndent';
 import { vimMode } from './vim';
 import { toggleTaskAtSelection } from './tasks';
 import { syncHistoryKeymap } from './undo-redo';
-import { mobileFoldChevrons } from './mobile/foldChevrons';
+import { foldChevrons } from './foldChevrons';
 import { mobileTheme } from './mobile/theme';
 import type { EditorKind } from './editor-settings';
 import { createSyncSession, createShareSyncSession, type SyncSession } from './sync';
@@ -120,7 +120,8 @@ function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, use
     collapseOnSelectionFacet.of(true),
     mouseSelectingField,
     editorTheme,
-    ...(kind === 'live-preview-mobile' ? [mobileTheme, mobileFoldChevrons()] : []),
+    ...(kind === 'live-preview-mobile' ? [mobileTheme] : []),
+    foldChevrons(kind === 'live-preview-mobile' ? 'cursor' : 'hover'),
     indentDetection(),
     pasteIndentNormalization(),
     spaceWidthField,
@@ -157,7 +158,14 @@ function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, use
       mousedown: (_event, view) => {
         view.dispatch({ effects: setMouseSelecting.of(true) });
         const onUp = () => {
-          view.dispatch({ effects: setMouseSelecting.of(false) });
+          // Re-assert the (unchanged) selection: the drag-end rebuild reveals
+          // formatting marks and shifts the line's text, and without a
+          // selection in this transaction the cursor layer may keep a stale
+          // caret position/paint until some later event.
+          view.dispatch({
+            effects: setMouseSelecting.of(false),
+            selection: view.state.selection,
+          });
           document.removeEventListener('mouseup', onUp);
         };
         document.addEventListener('mouseup', onUp);
@@ -165,7 +173,7 @@ function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, use
       },
     }),
 
-    markdownFolding({ gutter: kind !== 'live-preview-mobile' }),
+    markdownFolding(),
   ];
 }
 

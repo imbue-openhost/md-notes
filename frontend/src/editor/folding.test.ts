@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { EditorState, Prec } from '@codemirror/state';
-import { codeFolding, foldable, foldedRanges, foldNodeProp, syntaxTree } from '@codemirror/language';
+import { codeFolding, foldable, foldEffect, foldedRanges, foldNodeProp, syntaxTree } from '@codemirror/language';
 import type { EditorView } from '@codemirror/view';
 import { markdown, markdownLanguage } from './lang-markdown/index';
-import { markdownFoldService, foldAllRecursive } from './folding';
+import { markdownFoldService, foldAllRecursive, foldedCaretClamp } from './folding';
 
 function makeState(doc: string): EditorState {
   return EditorState.create({
@@ -23,6 +23,7 @@ function makeState(doc: string): EditorState {
       }),
       Prec.high(markdownFoldService),
       codeFolding(),
+      foldedCaretClamp,
     ],
   });
 }
@@ -100,6 +101,71 @@ describe('markdown header folding', () => {
     // (those belong to B's section, not A's). What matters is that the lines
     // BETWEEN the placeholder and `## B` are identical.
     expect(foldHeading(loose, '## A')).toBe(expectedALoose);
+  });
+});
+
+describe('foldedCaretClamp', () => {
+  // '## A\ncontent\n## B\nmore\n' folded at A gives range [4, 12]
+  // (end of '## A' line → end of 'content' line).
+  function foldedState(doc: string, heading: string, cursor: number): EditorState {
+    let state = makeState(doc);
+    const line = state.doc.lineAt(state.doc.toString().indexOf(heading));
+    const range = foldable(state, line.from, line.to)!;
+    state = state.update({ effects: foldEffect.of(range) }).state;
+    return state.update({ selection: { anchor: cursor } }).state;
+  }
+
+  const doc = '## A\ncontent\n## B\nmore\n';
+  const foldFrom = 4; // end of '## A'
+  const foldTo = 12; // end of 'content'
+
+  it('moves a cursor landing at a folded range end to the fold start', () => {
+    // e.g. End on the folded heading, or vertical motion with a long goal
+    // column. (Positions strictly inside a fold need no clamp: codeFolding
+    // auto-unfolds ranges that cover the selection head — only the boundary
+    // position survives folded.)
+    const state = foldedState(doc, '## A', 2);
+    const next = state.update({ selection: { anchor: foldTo }, userEvent: 'select' }).state;
+    expect(next.selection.main.head).toBe(foldFrom);
+  });
+
+  it('clamps pointer clicks past the placeholder to the fold start', () => {
+    const state = foldedState(doc, '## A', foldFrom);
+    const next = state.update({ selection: { anchor: foldTo }, userEvent: 'select.pointer' }).state;
+    expect(next.selection.main.head).toBe(foldFrom);
+  });
+
+  it('skips past the fold when moving forward from its boundary', () => {
+    // ArrowRight at the visible end of a folded heading: the default motion
+    // stops at the fold end; the clamp forwards it to the next visible line.
+    const state = foldedState(doc, '## A', foldFrom);
+    const next = state.update({ selection: { anchor: foldTo }, userEvent: 'select' }).state;
+    expect(next.selection.main.head).toBe(foldTo + 1);
+  });
+
+  it('clamps backward motion from after the fold to the fold start', () => {
+    const state = foldedState(doc, '## A', foldTo + 1);
+    const next = state.update({ selection: { anchor: foldTo }, userEvent: 'select' }).state;
+    expect(next.selection.main.head).toBe(foldFrom);
+  });
+
+  it('clamps to the fold start when the fold reaches the end of the document', () => {
+    const tail = '## A\nfirst\n## B\nlast\n';
+    const state = foldedState(tail, '## B', tail.indexOf('## B') + 4);
+    const next = state.update({ selection: { anchor: tail.length }, userEvent: 'select' }).state;
+    expect(next.selection.main.head).toBe(tail.indexOf('## B') + 4);
+  });
+
+  it('leaves range selections alone', () => {
+    const state = foldedState(doc, '## A', 0);
+    const next = state.update({ selection: { anchor: 0, head: foldTo }, userEvent: 'select' }).state;
+    expect(next.selection.main.head).toBe(foldTo);
+  });
+
+  it('leaves cursors elsewhere alone', () => {
+    const state = foldedState(doc, '## A', 0);
+    const next = state.update({ selection: { anchor: foldTo + 3 }, userEvent: 'select' }).state;
+    expect(next.selection.main.head).toBe(foldTo + 3);
   });
 });
 
