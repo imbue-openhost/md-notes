@@ -4,7 +4,7 @@
 
 import type { FileEntry, VaultConfig } from './types';
 import * as api from './client';
-import { clearVaultDocCache } from '../editor/sync';
+import { clearVaultDocCacheUnder } from '../editor/sync';
 
 let activeVault: VaultConfig | null = null;
 
@@ -34,13 +34,17 @@ export async function createFile(path: string, content = '', type: 'file' | 'dir
 }
 
 export async function renameFile(oldPath: string, newPath: string): Promise<void> {
-  await api.renameFile(requireVaultName(), oldPath, newPath);
+  const vault = requireVaultName();
+  await api.renameFile(vault, oldPath, newPath);
+  // Drop cached CRDT state under the old path so a future file created there
+  // doesn't open pre-populated with the moved doc's content.
+  await clearVaultDocCacheUnder(vault, oldPath);
 }
 
 export async function deleteFile(path: string): Promise<void> {
   const vault = requireVaultName();
   await api.deleteFile(vault, path);
-  // Drop any cached CRDT state so a future file at this path doesn't open
-  // pre-populated with the deleted doc's content.
-  await clearVaultDocCache(vault, path);
+  // Drop any cached CRDT state (including under a deleted folder) so a future
+  // file at these paths doesn't open pre-populated with deleted content.
+  await clearVaultDocCacheUnder(vault, path);
 }
