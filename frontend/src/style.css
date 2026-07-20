@@ -449,12 +449,19 @@ li.open > .sidebar-item .sidebar-arrow svg {
 }
 
 /* ── Header link button ───────────────────────────────────── */
+/* Absolutely positioned so it takes no inline space (the end-of-line caret
+   stays flush with the text). left stays auto → the box sits at its static
+   inline position, right after the header text; top/bottom span the line so
+   the icon centers vertically whatever the heading size. */
 .header-link-btn {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* inline-flex (not flex): the static position that `left: auto` falls back
+     to is only the inline one when the box is inline-level. */
   display: inline-flex;
   align-items: center;
-  vertical-align: middle;
-  margin-left: 8px;
-  padding: 0 2px;
+  padding: 0 0 0 10px;
   border: none;
   background: none;
   cursor: pointer;
@@ -465,6 +472,12 @@ li.open > .sidebar-item .sidebar-arrow svg {
 
 .cm-line:hover .header-link-btn {
   opacity: 0.6;
+}
+
+/* On a folded heading the button would sit on top of the "..." placeholder
+   and steal its unfold click. */
+.cm-line:has(.cm-foldPlaceholder) .header-link-btn {
+  display: none;
 }
 
 .header-link-btn:hover {
@@ -1381,10 +1394,6 @@ mark.search-hl {
 .mobile-drawer .sidebar-row-menu-btn {
   font-size: 18px;
   padding: 4px 10px;
-}
-
-.mobile-shell .cm-foldGutter span {
-  padding: 0 6px;
 }
 
 /* Bigger tap targets for context/dropdown menu items on coarse pointers. */
