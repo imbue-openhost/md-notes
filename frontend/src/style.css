@@ -352,18 +352,26 @@ li.open > .sidebar-children {
 }
 
 /* ── Header link button ───────────────────────────────────── */
+/* Zero inline width so the end-of-line cursor isn't pushed past the widget;
+   the icon overflows to the right of the header text. */
 .header-link-btn {
   display: inline-flex;
   align-items: center;
   vertical-align: middle;
-  margin-left: 8px;
-  padding: 0 2px;
+  width: 0;
+  padding: 0;
+  overflow: visible;
   border: none;
   background: none;
   cursor: pointer;
   color: hsl(var(--muted-foreground));
   opacity: 0;
   transition: opacity 0.1s;
+}
+
+.header-link-btn svg {
+  flex: none;
+  margin-left: 10px;
 }
 
 .cm-line:hover .header-link-btn {
