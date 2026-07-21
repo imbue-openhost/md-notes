@@ -242,7 +242,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   }
 
   if (options.anchorHeader) {
-    extensions.push(headerAnchorJump(options.anchorHeader));
+    extensions.push(headerAnchorJump(options.anchorHeader, syncSession?.ready));
   }
 
   // Header link buttons are hover-revealed, which has no touch equivalent;

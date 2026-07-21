@@ -9,7 +9,8 @@
 
 import { ViewPlugin, EditorView, type ViewUpdate } from '@codemirror/view';
 import { type Extension, type EditorState, type StateEffect } from '@codemirror/state';
-import { syntaxTree, syntaxTreeAvailable, foldedRanges, unfoldEffect } from '@codemirror/language';
+import { syntaxTree, ensureSyntaxTree, foldedRanges, unfoldEffect } from '@codemirror/language';
+import { UNBOUNDED_PARSE_MS } from './folding';
 
 export interface HeadingTarget {
   lineFrom: number;
@@ -30,8 +31,12 @@ export function slugifyHeader(text: string): string {
 export function findHeadingBySlug(state: EditorState, anchor: string): HeadingTarget | null {
   const target = slugifyHeader(anchor);
   if (!target) return null;
+  // Docs parse incrementally and the background parser stops ~100k chars past
+  // the viewport, so a partial tree can simply be missing a far-down heading.
+  // Force the parse to completion (no-op once parsed; see folding.ts).
+  const tree = ensureSyntaxTree(state, state.doc.length, UNBOUNDED_PARSE_MS) ?? syntaxTree(state);
   let found: HeadingTarget | null = null;
-  syntaxTree(state).iterate({
+  tree.iterate({
     enter: (node) => {
       if (found) return false;
       if (!/^ATXHeading\d$/.test(node.name)) return;
@@ -64,34 +69,54 @@ export function jumpToHeading(view: EditorView, heading: HeadingTarget): void {
 }
 
 /**
- * Docs start empty and fill in on first sync, then parse incrementally, so
- * this retries on every update until the heading appears or the whole doc has
- * parsed without a match.
+ * Docs start empty and fill in on first sync — possibly first from a stale
+ * IndexedDB copy that predates the linked heading — so this searches on each
+ * doc change until the heading appears. Once `synced` resolves the content is
+ * authoritative (the handshake's content transaction lands before the promise
+ * callbacks run), so a miss then means the heading was renamed or removed:
+ * one final search and give up.
  */
 class HeaderAnchorPlugin {
   private done = false;
+  private pending = false;
+  private giveUpOnMiss = false;
 
-  constructor(private view: EditorView, private anchor: string) {}
+  constructor(private view: EditorView, private anchor: string, synced: Promise<void>) {
+    synced.catch(() => {}).then(() => {
+      this.giveUpOnMiss = true;
+      this.search();
+    });
+  }
 
   update(u: ViewUpdate) {
-    if (this.done || u.state.doc.length === 0) return;
-    if (findHeadingBySlug(u.state, this.anchor)) {
-      this.done = true;
-      // Can't dispatch from inside update(); re-resolve in the microtask in
-      // case positions shifted.
-      queueMicrotask(() => {
-        const h = findHeadingBySlug(this.view.state, this.anchor);
-        if (h) {
-          jumpToHeading(this.view, h);
-          this.view.focus();
-        }
-      });
-    } else if (syntaxTreeAvailable(u.state, u.state.doc.length)) {
-      this.done = true;
-    }
+    if (!this.done && u.docChanged) this.search();
+  }
+
+  destroy() {
+    this.done = true;
+  }
+
+  private search() {
+    if (this.done || this.pending) return;
+    this.pending = true;
+    // Can't dispatch from inside update(); defer.
+    queueMicrotask(() => {
+      this.pending = false;
+      if (this.done) return;
+      const state = this.view.state;
+      const h = state.doc.length ? findHeadingBySlug(state, this.anchor) : null;
+      if (h) {
+        this.done = true;
+        jumpToHeading(this.view, h);
+        this.view.focus();
+      } else if (this.giveUpOnMiss) {
+        this.done = true;
+      }
+    });
   }
 }
 
-export function headerAnchorJump(anchor: string): Extension {
-  return ViewPlugin.define((view) => new HeaderAnchorPlugin(view, anchor));
+/** `synced` should resolve once doc content is authoritative; omitted means it already is. */
+export function headerAnchorJump(anchor: string, synced?: Promise<void>): Extension {
+  return ViewPlugin.define((view) => new HeaderAnchorPlugin(view, anchor, synced ?? Promise.resolve()));
 }
