@@ -5,15 +5,62 @@ server stores the remote-vault reference, and B's "browser" (requests + Playwrig
 to instance A, exactly as in production.
 """
 
+import tempfile
 import time
+from pathlib import Path
 
 import pytest
 import requests
 from openhost_test_harness import OpenhostStack
+from openhost_test_harness.stack import _snapshot_working_tree
 from playwright.sync_api import Page
 from playwright.sync_api import expect
 
 pytestmark = pytest.mark.containers
+
+# Appended to server/core/federation.py in instance B's deploy snapshot. The harness serves zones
+# on *.localhost domains that don't resolve inside app containers, so B's server-side validation
+# of A's share can't reach A directly; this harness-only override routes it via the router's host
+# (from OPENHOST_ROUTER_URL) with the real zone Host header. Production code stays free of this.
+HARNESS_LOCALHOST_FETCH_PATCH = """
+
+# --- appended by tests/test_federation_e2e.py: local-harness *.localhost routing ---
+import os as _os
+from urllib.parse import urlparse as _urlparse
+
+_fetch_peer_vault_info_direct = fetch_peer_vault_info
+
+
+async def fetch_peer_vault_info(source_url: str, secret: str) -> PeerVaultInfo:  # type: ignore[no-redef]
+    parsed = _urlparse(source_url)
+    hostname = parsed.hostname or ""
+    router_url = _os.environ.get("OPENHOST_ROUTER_URL", "")
+    if not router_url or not (hostname == "localhost" or hostname.endswith(".localhost")):
+        return await _fetch_peer_vault_info_direct(source_url, secret)
+    router_host = _urlparse(router_url).hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    url = f"{parsed.scheme}://{router_host}:{port}/api/federation/peer/vault"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, params={"secret": secret}, headers={"Host": parsed.netloc})
+    except httpx.HTTPError as e:
+        raise RemoteVaultError(f"Could not reach {source_url}: {e}") from e
+    if response.status_code == 401:
+        raise RemoteVaultError("The share secret was rejected — the share may have been revoked")
+    if response.status_code != 200:
+        raise RemoteVaultError(f"{source_url} returned HTTP {response.status_code}")
+    return parse_peer_vault_info(response.json(), source_url)
+"""
+
+
+def _patched_app_copy() -> Path:
+    """Snapshot of this repo with the harness-only fetch override appended for instance B."""
+    dest = Path(tempfile.mkdtemp(prefix="md-notes-b-")) / "app"
+    _snapshot_working_tree(Path(__file__).resolve().parent.parent, dest)
+    federation_py = dest / "server" / "src" / "server" / "core" / "federation.py"
+    federation_py.write_text(federation_py.read_text() + HARNESS_LOCALHOST_FETCH_PATCH)
+    return dest
+
 
 VAULT = "fedvault"
 FILE = "shared.md"
@@ -34,10 +81,11 @@ def _wait_healthy(stack: OpenhostStack, timeout: float = 60) -> None:
 
 
 # Instance A is the shared session-scoped `stack` fixture from conftest (app name "md-notes").
-# Instance B needs a distinct app name because podman container names are global.
+# Instance B needs a distinct app name because podman container names are global, and deploys
+# from a patched snapshot (see HARNESS_LOCALHOST_FETCH_PATCH).
 @pytest.fixture(scope="module")
 def stack_b():
-    with OpenhostStack(app_name="md-notes-b", zone_name="zoneb") as s:
+    with OpenhostStack(app_dir=_patched_app_copy(), app_name="md-notes-b", zone_name="zoneb") as s:
         _wait_healthy(s)
         yield s
 

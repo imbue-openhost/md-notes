@@ -119,7 +119,7 @@ class FederationController(Controller):
     @post("/remotes", status_code=HTTP_201_CREATED)
     async def add_remote(self, data: AddRemoteVaultBody, config: Config) -> RemoteVault:
         source_url = normalize_source_url(data.sourceUrl)
-        info = await fetch_peer_vault_info(source_url, data.secret, config.router_url)
+        info = await fetch_peer_vault_info(source_url, data.secret)
         if data.vaultName and info.vault_name != data.vaultName:
             raise ClientException(detail=f"Share is for vault '{info.vault_name}', not '{data.vaultName}'")
         for existing in list_remote_vaults():

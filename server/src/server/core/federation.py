@@ -1,7 +1,6 @@
 """Vault federation: invite links and validation of remote md-notes instances."""
 
 from urllib.parse import urlencode
-from urllib.parse import urlparse
 
 import httpx
 
@@ -36,22 +35,6 @@ def normalize_source_url(source: str) -> str:
     return source
 
 
-def _connect_target(source_url: str, router_url: str) -> tuple[str, dict[str, str]]:
-    """Return (base URL to connect to, extra headers) for a federation source.
-
-    In the local test harness, zones live on *.localhost domains that don't resolve inside the app
-    container; connect to the router's host instead (from OPENHOST_ROUTER_URL) with the zone's port,
-    and pass the real zone Host explicitly. Real deployments use public DNS and are untouched.
-    """
-    parsed = urlparse(source_url)
-    hostname = parsed.hostname or ""
-    if router_url and (hostname == "localhost" or hostname.endswith(".localhost")):
-        router_host = urlparse(router_url).hostname
-        port = parsed.port or (443 if parsed.scheme == "https" else 80)
-        return f"{parsed.scheme}://{router_host}:{port}", {"Host": parsed.netloc}
-    return source_url, {}
-
-
 def parse_peer_vault_info(data: object, source_url: str) -> PeerVaultInfo:
     """Validate a peer /vault response, including the app identity / API version handshake."""
     if not isinstance(data, dict):
@@ -70,13 +53,12 @@ def parse_peer_vault_info(data: object, source_url: str) -> PeerVaultInfo:
     return PeerVaultInfo(vault_name=vault_name, permission=permission)
 
 
-async def fetch_peer_vault_info(source_url: str, secret: str, router_url: str = "") -> PeerVaultInfo:
+async def fetch_peer_vault_info(source_url: str, secret: str) -> PeerVaultInfo:
     """Validate a share against the source instance and return its metadata."""
-    base, headers = _connect_target(source_url, router_url)
-    url = f"{base}/api/federation/peer/vault"
+    url = f"{source_url}/api/federation/peer/vault"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, params={"secret": secret}, headers=headers)
+            response = await client.get(url, params={"secret": secret})
     except httpx.HTTPError as e:
         raise RemoteVaultError(f"Could not reach {source_url}: {e}") from e
     if response.status_code == 401:

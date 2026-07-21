@@ -17,9 +17,6 @@ class Config:
     # Public origin of this app instance (e.g. "https://md-notes.alice.selfhost.imbue.com"); federation
     # invite links point here. Empty only in unit tests that construct Config directly.
     app_origin: str = ""
-    # This zone's router URL (OPENHOST_ROUTER_URL); used to reach *.localhost federation sources
-    # from inside the container in the local test harness.
-    router_url: str = ""
 
 
 def _require_env(name: str) -> str:
@@ -41,5 +38,4 @@ def load_config() -> Config:
         vault_path=Path(app_data_dir) / "vault",
         db_path=Path(sqlite_main),
         app_origin=f"{scheme}://{app_name}.{zone_domain}",
-        router_url=os.environ.get("OPENHOST_ROUTER_URL", ""),
     )
