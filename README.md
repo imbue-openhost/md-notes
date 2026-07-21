@@ -44,7 +44,7 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 - **Editor preference** (Settings) — "Live preview" (standard keybindings, the default) or "Live preview (vim keybindings)". Both share the same editor core; the long-term vision is that the whole editor is swappable and other frontends can target the same backend.
 - **Vim mode** (opt-in) via `@replit/codemirror-vim` with status bar showing current mode
 - **Vimrc parser** — supports `map`/`noremap` (with mode prefixes `nmap`, `imap`, `vmap`, etc.) and `set` commands (`number`, `relativenumber`, `tabstop`, `shiftwidth`, `expandtab`, `wrap`, `scrolloff`)
-- **Header-based folding** — click the fold gutter to collapse sections
+- **Header-based folding** — Obsidian-style inline chevrons (no gutter column): hover a heading to reveal the chevron, click to collapse; folded headings keep the chevron and show a muted `...` that unfolds on click
 - **File tree sidebar** with create (+ button), rename/delete (right-click context menu)
 - **Pane collapse** — with split panes, the `«`/`»` button in a pane's tab bar collapses it to a thin strip so the other pane gets the full width; click the strip (or focus the pane) to restore. `Cmd/Ctrl+Shift+\` toggles the active pane.
 - **Header share links** — hover a heading to get a link button that copies a read-only or editable share link to that section (`/share/<uuid>#<slug>`, GitHub-style slugs). Opening such a link scrolls to the first matching header, cursor on it, unfolded; unknown slugs just load normally.
@@ -52,7 +52,7 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 ### mobile
 
 - **Mobile shell** (phones, Obsidian-mobile-style): one document at a time, a slide-in drawer for the file tree with separate "Open note" (file search) and "Search text" (full-text) entries, a floating drawer toggle over the text (no top bar), and a floating formatting-toolbar pill (heading-level picker incl. remove, bold, checkbox cycle, indent/outdent) that sits above the virtual keyboard via `visualViewport` tracking.
-- **Mobile editor variant** (`live-preview-mobile`): shares the live-preview core but drops the fold gutter — a fold chevron appears inline when the cursor is on a heading (and stays on folded headings) — and skips hover-only features like header share-link buttons.
+- **Mobile editor variant** (`live-preview-mobile`): shares the live-preview core, but fold chevrons reveal on the cursor line instead of hover (and stay on folded headings), and hover-only features like header share-link buttons are skipped.
 - **Shell selection**: autodetected (coarse pointer + small screen → mobile; tablets currently get desktop), overridable via Settings → "App layout".
 - File rename/delete on touch via a per-row `⋯` menu (iOS has no long-press path to right-click menus).
 - **PWA**: `manifest.webmanifest` + icons, installable to the home screen (standalone display). No service worker on purpose — the app is online-only by design, so offline caching would only add staleness risk.

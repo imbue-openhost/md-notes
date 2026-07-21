@@ -8,7 +8,7 @@
 import type { FileEntry, VaultConfig } from './types';
 import * as api from './client';
 import * as peer from './peer';
-import { clearVaultDocCache, clearRemoteVaultDocCache } from '../editor/sync';
+import { clearVaultDocCacheUnder, clearRemoteVaultDocCacheUnder } from '../editor/sync';
 
 let activeVault: VaultConfig | null = null;
 
@@ -48,19 +48,26 @@ export async function createFile(path: string, content = '', type: 'file' | 'dir
 
 export async function renameFile(oldPath: string, newPath: string): Promise<void> {
   const vault = requireVault();
-  if (vault.remote) await peer.renameFile(vault.remote, oldPath, newPath);
-  else await api.renameFile(vault.name, oldPath, newPath);
+  // Drop cached CRDT state under the old path so a future file created there
+  // doesn't open pre-populated with the moved doc's content.
+  if (vault.remote) {
+    await peer.renameFile(vault.remote, oldPath, newPath);
+    await clearRemoteVaultDocCacheUnder(vault.remote.id, oldPath);
+  } else {
+    await api.renameFile(vault.name, oldPath, newPath);
+    await clearVaultDocCacheUnder(vault.name, oldPath);
+  }
 }
 
 export async function deleteFile(path: string): Promise<void> {
   const vault = requireVault();
-  // Drop any cached CRDT state so a future file at this path doesn't open
-  // pre-populated with the deleted doc's content.
+  // Drop any cached CRDT state (including under a deleted folder) so a future
+  // file at these paths doesn't open pre-populated with deleted content.
   if (vault.remote) {
     await peer.deleteFile(vault.remote, path);
-    await clearRemoteVaultDocCache(vault.remote.id, path);
+    await clearRemoteVaultDocCacheUnder(vault.remote.id, path);
   } else {
     await api.deleteFile(vault.name, path);
-    await clearVaultDocCache(vault.name, path);
+    await clearVaultDocCacheUnder(vault.name, path);
   }
 }

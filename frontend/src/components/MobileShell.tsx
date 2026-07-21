@@ -93,6 +93,13 @@ export const MobileShell: Component<Props> = (props) => {
   props.ref?.({
     openFile: (path) => openDoc(path),
     openFileAt: (path, line) => openDoc(path, line),
+    closeFilesUnder: (path) => {
+      const open = openPath();
+      if (open && (open === path || open.startsWith(`${path}/`))) {
+        closeDoc();
+        try { localStorage.removeItem(lastDocKey(props.vaultName)); } catch {}
+      }
+    },
     splitPane: () => {},
     toggleCollapseActivePane: () => {},
     focusGroupLeft: () => {},

@@ -12,6 +12,8 @@ export interface SidebarCommonProps {
   /** True when the active vault cannot be edited (read-only remote share). */
   readOnly?: boolean;
   onSelect: (path: string) => void;
+  /** A file or folder was deleted; close any editors on paths under it. */
+  onDeleted?: (path: string) => void;
   onShare?: (path: string) => void;
   onShareVault?: () => void;
   onSwitchToVault?: (v: VaultConfig) => void;

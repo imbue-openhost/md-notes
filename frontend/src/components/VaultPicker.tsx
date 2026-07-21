@@ -15,6 +15,8 @@ export const VaultPicker: Component<Props> = (props) => {
   const [inviteLink, setInviteLink] = createSignal('');
   const [connectBusy, setConnectBusy] = createSignal(false);
   const [connectError, setConnectError] = createSignal<string | null>(null);
+  let nameInputRef!: HTMLInputElement;
+  let inviteInputRef!: HTMLInputElement;
 
   function handleAdd() {
     const n = name().trim();
@@ -85,12 +87,16 @@ export const VaultPicker: Component<Props> = (props) => {
             {props.vaults.length > 0 ? 'Add another vault' : 'Add a vault to get started'}
           </div>
 
+          {/* See QuickOpen: keep password-manager extensions from
+              anchoring their autofill dropdown to this field. */}
           <input
+            ref={nameInputRef}
             class="settings-input"
             type="text"
+            autocomplete="off"
             placeholder="Vault name (e.g., Personal)"
             value={name()}
-            onInput={(e) => setName(e.currentTarget.value)}
+            on:input={(e) => { e.stopPropagation(); setName(nameInputRef.value); }}
           />
 
           <button class="share-modal-btn share-modal-btn-primary" onClick={handleAdd}>
@@ -101,13 +107,17 @@ export const VaultPicker: Component<Props> = (props) => {
         <div class="vault-picker-add">
           <div class="vault-picker-add-title">Connect a shared vault</div>
 
+          {/* See QuickOpen: keep password-manager extensions from
+              anchoring their autofill dropdown to this field. */}
           <input
+            ref={inviteInputRef}
             class="settings-input"
             type="text"
+            autocomplete="off"
             placeholder="Paste an invite link (https://…/federation/connect?…)"
             value={inviteLink()}
-            onInput={(e) => setInviteLink(e.currentTarget.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleConnect(); }}
+            on:input={(e) => { e.stopPropagation(); setInviteLink(inviteInputRef.value); }}
+            on:keydown={(e) => { e.stopPropagation(); if (e.key === 'Enter') handleConnect(); }}
           />
 
           <button class="share-modal-btn" disabled={connectBusy()} onClick={handleConnect}>

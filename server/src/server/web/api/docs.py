@@ -16,11 +16,11 @@ from litestar.status_codes import HTTP_201_CREATED
 
 from server.core.config import Config
 from server.core.files import create_directory
+from server.core.files import create_file
 from server.core.files import delete_file
 from server.core.files import list_files
 from server.core.files import read_file
 from server.core.files import rename_file
-from server.core.files import write_file
 from server.core.sync import SyncManager
 from server.core.sync import SyncNotRunning
 from server.core.vaults import VaultNotFound
@@ -57,14 +57,14 @@ class DocsController(Controller):
         await serve_search_socket(socket, root)
 
     @post("/file", status_code=HTTP_201_CREATED)
-    async def create_file(
+    async def create_new_file(
         self, vault_name: FromPath[str], path: FromQuery[str], data: CreateFileBody, config: Config
     ) -> OkResponse:
         root = vault_root(config.vault_path, vault_name)
         if data.type == "dir":
             create_directory(root, path)
         else:
-            write_file(root, path, data.content)
+            create_file(root, path, data.content)
         return OkResponse()
 
     @patch("/file")

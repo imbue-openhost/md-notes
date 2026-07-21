@@ -432,6 +432,7 @@ export const App: Component = () => {
                   isRemote={!!vault()!.remote}
                   readOnly={vault()!.remote?.permission === 'read'}
                   onSelect={handleFileSelect}
+                  onDeleted={(path) => layoutHandle?.closeFilesUnder(path)}
                   onQuickOpen={() => setShowQuickOpen(true)}
                   onSearch={() => setShowSearch(true)}
                   onShare={vault()!.remote ? undefined : setShareModalPath}
@@ -458,6 +459,7 @@ export const App: Component = () => {
             isRemote={!!vault()!.remote}
             readOnly={vault()!.remote?.permission === 'read'}
             onSelect={handleFileSelect}
+            onDeleted={(path) => layoutHandle?.closeFilesUnder(path)}
             onSearch={() => setShowSearch(true)}
             onShare={vault()!.remote ? undefined : setShareModalPath}
             onShareVault={vault()!.remote ? undefined : () => setShareVaultName(vault()!.name)}

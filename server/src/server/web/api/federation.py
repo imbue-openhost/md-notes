@@ -38,11 +38,11 @@ from server.core.federation import build_invite_url
 from server.core.federation import fetch_peer_vault_info
 from server.core.federation import normalize_source_url
 from server.core.files import create_directory
+from server.core.files import create_file
 from server.core.files import delete_file
 from server.core.files import list_files
 from server.core.files import read_file
 from server.core.files import rename_file
-from server.core.files import write_file
 from server.core.sync import ReadOnlyChannel
 from server.core.sync import SyncManager
 from server.core.sync import SyncNotRunning
@@ -170,7 +170,7 @@ class FederationController(Controller):
         if data.type == "dir":
             create_directory(root, path)
         else:
-            write_file(root, path, data.content)
+            create_file(root, path, data.content)
         return OkResponse()
 
     @patch("/peer/docs/file", opt={"public": True})

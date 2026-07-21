@@ -87,6 +87,7 @@ export const SearchModal: Component<Props> = (props) => {
   }
 
   function onKeyDown(e: KeyboardEvent) {
+    e.stopPropagation();
     if (e.key === 'Escape') {
       e.preventDefault();
       props.onClose();
@@ -116,14 +117,17 @@ export const SearchModal: Component<Props> = (props) => {
         <div class="settings-modal-overlay">
           <Dialog.Content class="quick-open-modal search-modal" onInteractOutside={() => props.onClose()}>
             <div class="search-input-row">
+              {/* See QuickOpen: keep password-manager extensions from
+                  anchoring their autofill dropdown to this field. */}
               <input
                 ref={inputRef}
                 class="quick-open-input"
                 type="text"
+                autocomplete="off"
                 placeholder="Search vault..."
                 value={query()}
-                onInput={(e) => setQuery(e.currentTarget.value)}
-                onKeyDown={onKeyDown}
+                on:input={(e) => { e.stopPropagation(); setQuery(inputRef.value); }}
+                on:keydown={onKeyDown}
               />
               <button
                 class="search-toggle-btn"

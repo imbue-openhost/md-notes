@@ -80,6 +80,14 @@ describe('findHeadingBySlug', () => {
     expect(findHeadingBySlug(state, 'does-not-exist')).toBeNull();
     expect(findHeadingBySlug(state, '')).toBeNull();
   });
+
+  it('finds a heading beyond the initial incremental-parse frontier', () => {
+    const filler = 'lorem ipsum dolor sit amet consectetur adipiscing elit\n\n'.repeat(5000);
+    const state = makeState(`# Top\n\n${filler}## Way down here\ntail\n`);
+    const h = findHeadingBySlug(state, 'way-down-here');
+    expect(h).not.toBeNull();
+    expect(state.doc.sliceString(h!.lineFrom, h!.lineTo)).toBe('## Way down here');
+  });
 });
 
 describe('jumpToHeading', () => {

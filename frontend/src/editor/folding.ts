@@ -1,19 +1,19 @@
 /**
  * Header-based folding for markdown documents.
  *
- * Clicking the fold gutter on a heading collapses everything from the end of
- * the heading line up to (but not including) the next heading of equal or
- * higher level. Any blank lines preceding that next heading are absorbed into
- * the fold so collapsed sections stack with consistent spacing regardless of
- * how the source document is whitespaced. Nested headings fold independently.
+ * Folding a heading collapses everything from the end of the heading line up
+ * to (but not including) the next heading of equal or higher level. Any blank
+ * lines preceding that next heading are absorbed into the fold so collapsed
+ * sections stack with consistent spacing regardless of how the source
+ * document is whitespaced. Nested headings fold independently.
  */
 
 import { foldService } from '@codemirror/language';
-import { foldGutter, codeFolding } from '@codemirror/language';
+import { codeFolding } from '@codemirror/language';
 import { foldable } from '@codemirror/language';
-import { foldEffect } from '@codemirror/language';
+import { foldEffect, unfoldEffect, foldedRanges } from '@codemirror/language';
 import { ensureSyntaxTree } from '@codemirror/language';
-import { Prec, type Extension } from '@codemirror/state';
+import { EditorSelection, EditorState, Prec, type Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 
 /**
@@ -90,6 +90,43 @@ export const markdownFoldService = foldService.of((state, lineStart, lineEnd) =>
 });
 
 /**
+ * The end of a folded range is a real cursor position (End, ArrowRight, and
+ * vertical motion all land there), but it renders as a caret floating after
+ * the "..." placeholder. Exported for tests.
+ *
+ * A cursor arriving there is moved to the fold's start — the visible end of
+ * the heading. The exception is forward motion from that very boundary
+ * (ArrowRight at the heading's end): that skips to the first position after
+ * the fold, so folds stay passable with the keyboard.
+ */
+export const foldedCaretClamp = EditorState.transactionFilter.of((tr) => {
+  if (tr.docChanged || !tr.selection || !tr.selection.main.empty) return tr;
+  // Fold state may change in this very transaction; startState would be stale.
+  if (tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect))) return tr;
+
+  const head = tr.selection.main.head;
+  // With nested folds ending at the same position, clamp to the outermost
+  // start — inner fold starts are themselves hidden.
+  let foldFrom = -1;
+  foldedRanges(tr.startState).between(head, head, (from, to) => {
+    if (to === head && from < head && (foldFrom < 0 || from < foldFrom)) foldFrom = from;
+  });
+  if (foldFrom < 0) return tr;
+
+  const prev = tr.startState.selection.main.head;
+  const forwardFromBoundary =
+    prev === foldFrom && !tr.isUserEvent('select.pointer') && head < tr.startState.doc.length;
+  // Association matters for rendering: at the fold start the forward side is
+  // hidden (coordsAtPos would return null and no caret would be drawn), so
+  // associate backward there; after the fold it's the reverse.
+  const target = forwardFromBoundary
+    ? EditorSelection.cursor(head + 1, 1)
+    : EditorSelection.cursor(foldFrom, -1);
+  if (target.head === head) return tr;
+  return [tr, { selection: EditorSelection.create([target]) }];
+});
+
+/**
  * Returns the extensions needed for header-based markdown folding.
  *
  * Our fold service is registered with `Prec.high` so it runs before the
@@ -97,15 +134,15 @@ export const markdownFoldService = foldService.of((state, lineStart, lineEnd) =>
  * default — that built-in service ends folds at the last non-blank line, which
  * leaves the inter-section whitespace visible and conflicts with our range.
  *
- * `gutter: false` omits the fold gutter column (the mobile editor renders
- * inline chevrons on heading lines instead). codeFolding() — the fold state
- * field that foldEffect dispatches land in — normally comes bundled with
- * foldGutter(), so it must be added explicitly when the gutter is off.
+ * No fold gutter — heading lines render inline chevrons instead (see
+ * foldChevrons.ts). codeFolding() is the fold state field that foldEffect
+ * dispatches land in; it also renders the "..." placeholder on folded lines.
  */
-export function markdownFolding(options: { gutter?: boolean } = {}): Extension {
+export function markdownFolding(): Extension {
   return [
     Prec.high(markdownFoldService),
-    options.gutter === false ? codeFolding() : foldGutter(),
+    codeFolding({ placeholderText: '...' }),
+    foldedCaretClamp,
   ];
 }
 

@@ -12,10 +12,16 @@ import { EditorView } from '@codemirror/view';
  */
 export const editorTheme = EditorView.theme({
   // ========== Base Styles ==========
+  // --cm-line-pad-left is the line's left padding; it also doubles as the
+  // column where heading fold chevrons render (absolutely positioned, see
+  // .cm-fold-chevron). List layout references this var so bullets align with
+  // the left edge of non-list text (see listLineLayout.ts). The mobile theme
+  // overrides it.
   '&': {
     backgroundColor: 'transparent',
     fontSize: '16px',
     height: '100%',
+    '--cm-line-pad-left': '30px',
   },
 
   '.cm-content': {
@@ -25,9 +31,62 @@ export const editorTheme = EditorView.theme({
   },
 
   '.cm-line': {
-    padding: '0 16px',
+    padding: '0 16px 0 var(--cm-line-pad-left)',
     lineHeight: '1.75',
     position: 'relative',
+  },
+
+  // ========== Fold chevrons & placeholder ==========
+  // Full-height flex box so the icon centers on the (possibly heading-
+  // sized) line; fixed icon size so it doesn't scale with the heading.
+  // Hidden until the heading line is hovered or its section is folded.
+  '.cm-fold-chevron': {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    height: '100%',
+    width: 'var(--cm-line-pad-left)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'hsl(var(--muted-foreground, 220 9% 46%))',
+    cursor: 'pointer',
+    userSelect: 'none',
+    '-webkit-user-select': 'none',
+    opacity: '0',
+    transition: 'opacity 0.1s',
+  },
+  '.cm-line:hover .cm-fold-chevron, .cm-fold-chevron[data-folded="true"]': {
+    opacity: '1',
+  },
+  '.cm-fold-chevron svg': {
+    transition: 'transform 0.1s',
+  },
+  '.cm-fold-chevron[data-folded="false"] svg': {
+    transform: 'rotate(90deg)',
+  },
+
+  // Breathing room between stacked collapsed sections. Bottom-only so the
+  // heading doesn't shift when toggling the fold. A transparent border plus
+  // background-clip, not padding: the active-line highlight then stops at
+  // the border, and the chevron's absolute box spans only the padding box,
+  // so both stay sized to the text.
+  '.cm-line:has(.cm-foldPlaceholder)': {
+    borderBottom: '10px solid transparent',
+    backgroundClip: 'padding-box',
+  },
+
+  // Plain muted "..." after a folded heading (Obsidian-style), replacing the
+  // boxed placeholder from CodeMirror's base theme. Click unfolds.
+  '.cm-foldPlaceholder': {
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: 'hsl(var(--muted-foreground, 220 9% 46%))',
+    fontWeight: '700',
+    letterSpacing: '1px',
+    margin: '0 0 0 8px',
+    padding: '0',
+    cursor: 'pointer',
   },
 
   // ========== Selection Styles ==========
@@ -137,10 +196,11 @@ export const editorTheme = EditorView.theme({
 
   // ========== Blockquote ==========
   // Border keeps the quote visually identifiable while the `>` marks are
-  // hidden. 13px + 3px border matches the 16px line padding.
+  // hidden. Border + paddingLeft add up to the line padding so quoted text
+  // aligns with normal text.
   '.cm-blockquote-line': {
     borderLeft: '3px solid hsl(var(--border, 220 13% 91%))',
-    paddingLeft: '13px',
+    paddingLeft: 'calc(var(--cm-line-pad-left) - 3px)',
     color: 'hsl(var(--muted-foreground, 220 9% 46%))',
   },
 
@@ -439,7 +499,7 @@ export const editorTheme = EditorView.theme({
   },
   '.cm-codeblock-line': {
     display: 'block',
-    padding: '0 16px',
+    padding: '0 16px 0 var(--cm-line-pad-left)',
     fontSize: '16px',
     lineHeight: '1.75',
     minHeight: '28px',
@@ -483,7 +543,7 @@ export const editorTheme = EditorView.theme({
   '.cm-codeblock-source': {
     background:
       'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0px), rgba(139, 92, 246, 0.1) var(--cb-indent, 0px))',
-    paddingLeft: 'calc(16px + var(--cb-indent, 0px))',
+    paddingLeft: 'calc(var(--cm-line-pad-left) + var(--cb-indent, 0px))',
     fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
     fontSize: '0.9em',
   },
@@ -505,7 +565,7 @@ export const editorTheme = EditorView.theme({
     // layer behind the text stays visible when code is selected.
     background:
       'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0px), hsl(var(--foreground, 220 9% 9%) / 0.05) var(--cb-indent, 0px))',
-    paddingLeft: 'calc(16px + var(--cb-indent, 0px))',
+    paddingLeft: 'calc(var(--cm-line-pad-left) + var(--cb-indent, 0px))',
     fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
     fontSize: '0.9em',
     lineHeight: '1.55',

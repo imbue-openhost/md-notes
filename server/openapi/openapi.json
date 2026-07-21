@@ -90,8 +90,8 @@
         "deprecated": false
       },
       "post": {
-        "summary": "CreateFile",
-        "operationId": "ApiDocsVaultNameFileCreateFile",
+        "summary": "CreateNewFile",
+        "operationId": "ApiDocsVaultNameFileCreateNewFile",
         "parameters": [
           {
             "name": "vault_name",
