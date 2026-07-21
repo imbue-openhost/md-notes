@@ -15,7 +15,7 @@ declare global {
 export interface ShareInfo {
   uuid: string;
   doc_path: string;
-  permission: 'read' | 'write';
+  permission: 'read' | 'comment' | 'write';
 }
 
 /** The server URL for API and WebSocket connections. */

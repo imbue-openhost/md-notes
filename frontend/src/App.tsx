@@ -4,7 +4,9 @@ import { getEditorKind } from './editor/editor-settings';
 import {
   createShareLink, listShareLinks, deleteShareLink,
   listVaults, createVault, deleteVault, getServerVimrc, pingHealth,
+  getOwnerInfo, ownerCommentsApi, shareCommentsApi,
 } from './api/client';
+import { ownerIdentity, shareIdentity } from './editor/comments/identity';
 import { setActiveVault, getActiveVault } from './api/vault-ops';
 import {
   clearVaultCache,
@@ -55,8 +57,14 @@ const ShareEditor: Component<{ uuid: string; info: ShareInfo }> = (props) => {
       shareUuid: props.uuid,
       shareDocPath: props.info.doc_path,
       syncServerUrl: serverUrl,
-      readOnly: props.info.permission === 'read',
+      readOnly: props.info.permission !== 'write',
       anchorHeader: getUrlHeaderAnchor() ?? undefined,
+      comments: {
+        api: shareCommentsApi(props.uuid),
+        identity: shareIdentity(),
+        canComment: props.info.permission !== 'read',
+        ui: 'panel',
+      },
     });
   });
   return <div ref={container} id="editor-container" />;
@@ -83,6 +91,7 @@ export const App: Component = () => {
   if (shareUuid) return <ShareView uuid={shareUuid} />;
 
   const [activeVimrc, setActiveVimrc] = createSignal(DEFAULT_VIMRC);
+  const [ownerName, setOwnerName] = createSignal('owner');
   const [editorKind, setEditorKind] = createSignal(getEditorKind());
   const [shellKind, setShellKind] = createSignal(resolveShellKind());
   const [vault, setVault] = createSignal<VaultConfig | null>(null);
@@ -118,6 +127,9 @@ export const App: Component = () => {
     try {
       const saved = await getServerVimrc();
       if (saved) setActiveVimrc(saved);
+    } catch {}
+    try {
+      setOwnerName((await getOwnerInfo()).displayName);
     } catch {}
     await loadWebVaults();
     setBooting(false);
@@ -254,6 +266,14 @@ export const App: Component = () => {
       syncServerUrl: serverUrl,
       getShareUrl: (permission) =>
         shareUrlForDoc(v?.name ? `${v.name}/${path}` : path, permission),
+      comments: v?.name
+        ? {
+            api: ownerCommentsApi(v.name, path),
+            identity: ownerIdentity(ownerName()),
+            canComment: true,
+            ui: mobile ? 'highlights' : 'panel',
+          }
+        : undefined,
       onSyncFailed,
     });
   }
