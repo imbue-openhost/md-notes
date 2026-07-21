@@ -40,18 +40,23 @@ const NameInput: Component<{
     claim();
   });
 
+  // Native (non-delegated) key/input listeners so the stopPropagation runs
+  // before document-level password-manager extension listeners, keeping them
+  // from anchoring autofill UI to this field.
   return (
     <input
       ref={ref}
       class="sidebar-name-input"
       value={props.initial}
       spellcheck={false}
+      autocomplete="off"
       aria-label="Name"
-      onKeyDown={(e) => {
+      on:keydown={(e) => {
         e.stopPropagation();
         if (e.key === 'Enter') commit();
         if (e.key === 'Escape') cancel();
       }}
+      on:input={(e) => e.stopPropagation()}
       onBlur={commit}
       onClick={(e) => e.stopPropagation()}
     />

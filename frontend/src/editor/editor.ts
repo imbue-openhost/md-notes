@@ -261,6 +261,22 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     parent: container,
   });
 
+  // Password-manager extensions (e.g. iCloud Passwords) listen for these keys
+  // on document and forward them to their autofill dropdown when they think
+  // one is open — a stale dropdown request turns Enter into "Open Passwords
+  // app". The editor fully handles these keys, so hide them from page-level
+  // listeners. (A raw bubble listener on view.dom, because CM's keymaps stop
+  // running domEventHandlers once a key is handled.)
+  view.dom.addEventListener('keydown', (event) => {
+    switch (event.key) {
+      case 'Enter':
+      case 'Escape':
+      case 'ArrowUp':
+      case 'ArrowDown':
+        event.stopPropagation();
+    }
+  });
+
   // Block input until the sync session reports a successful first handshake
   // with the server. Until then we don't know whether what we're showing
   // matches the doc's authoritative state, and IDB alone isn't sufficient
