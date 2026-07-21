@@ -30,17 +30,22 @@ export const MobileSidebar: Component<Props> = (props) => {
           <VaultSwitcher
             vaultName={props.vaultName}
             vaults={props.vaults}
+            isRemote={props.isRemote}
+            permission={props.permission}
+            onShareVault={props.onShareVault}
             onSwitchToVault={props.onSwitchToVault}
             onManageVaults={props.onManageVaults}
             onRefreshVaults={props.onRefreshVaults}
           />
           <div class="sidebar-header-buttons">
-            <button class="sidebar-btn" title="New file" onClick={() => ops.startCreate('file')}>
-              <Icon name="file-plus" />
-            </button>
-            <button class="sidebar-btn" title="New folder" onClick={() => ops.startCreate('dir')}>
-              <Icon name="folder-plus" />
-            </button>
+            <Show when={props.permission === 'write'}>
+              <button class="sidebar-btn" title="New file" onClick={() => ops.startCreate('file')}>
+                <Icon name="file-plus" />
+              </button>
+              <button class="sidebar-btn" title="New folder" onClick={() => ops.startCreate('dir')}>
+                <Icon name="folder-plus" />
+              </button>
+            </Show>
             <Show when={props.onShare}>
               <button
                 class="sidebar-btn"
@@ -74,7 +79,7 @@ export const MobileSidebar: Component<Props> = (props) => {
           </Show>
         </div>
 
-        <FileTree ops={ops} currentPath={props.currentPath} onSelect={props.onSelect} rowMenus />
+        <FileTree ops={ops} currentPath={props.currentPath} onSelect={props.onSelect} rowMenus readOnly={props.permission !== 'write'} />
 
         <SyncFooter
           showSyncStatus={props.showSyncStatus}

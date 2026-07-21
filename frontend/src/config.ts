@@ -28,6 +28,26 @@ export function getLoginUrl(): string | null {
   return typeof window !== 'undefined' ? window.__CONFIG__?.loginUrl ?? null : null;
 }
 
+export interface FederationInvite {
+  vault: string;
+  secret: string;
+}
+
+export function parseFederationInvite(pathname: string, search: string): FederationInvite | null {
+  if (pathname.replace(/\/$/, '') !== '/federation/connect') return null;
+  const params = new URLSearchParams(search);
+  return {
+    vault: params.get('vault') ?? '',
+    secret: params.get('secret') ?? '',
+  };
+}
+
+/** Invite params extracted from /federation/connect URLs, or null for the regular app. */
+export function getFederationInvite(): FederationInvite | null {
+  if (typeof window === 'undefined') return null;
+  return parseFederationInvite(window.location.pathname, window.location.search);
+}
+
 /** UUID extracted from /share/<uuid> URLs, or null for the regular app. */
 export function getShareUuid(): string | null {
   if (typeof window === 'undefined') return null;

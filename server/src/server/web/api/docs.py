@@ -1,11 +1,13 @@
-"""Document endpoints: file CRUD, search, and CRDT WebSocket, scoped per vault."""
+"""Document endpoints: file CRUD, search, and CRDT WebSocket, scoped per vault.
 
-import threading
-from functools import partial
+Accessible to the owner and to vault-share secrets (see ``requires_vault_access``); each handler's
+``permission`` opt declares the minimum tier. Only write-tier callers get a CRDT channel that
+accepts document updates — read/comment tiers sync but their updates are dropped (comments go
+through the REST comment routes instead).
+"""
+
 from typing import Any
 
-import anyio
-import attr
 from litestar import Controller
 from litestar import MediaType
 from litestar import WebSocket
@@ -14,11 +16,9 @@ from litestar import get
 from litestar import patch
 from litestar import post
 from litestar import websocket
-from litestar.exceptions import WebSocketDisconnect
 from litestar.params import FromPath
 from litestar.params import FromQuery
 from litestar.status_codes import HTTP_201_CREATED
-from loguru import logger
 
 from server.core.config import Config
 from server.core.files import create_directory
@@ -27,8 +27,7 @@ from server.core.files import delete_file
 from server.core.files import list_files
 from server.core.files import read_file
 from server.core.files import rename_file
-from server.core.search import SearchCancelled
-from server.core.search import search_vault
+from server.core.sync import ReadOnlyChannel
 from server.core.sync import SyncManager
 from server.core.sync import SyncNotRunning
 from server.core.vaults import VaultNotFound
@@ -38,81 +37,37 @@ from server.models.files import CreateFileBody
 from server.models.files import FileEntry
 from server.models.files import RenameBody
 from server.web.api.channel import LitestarWebsocketChannel
+from server.web.api.search_ws import serve_search_socket
+from server.web.auth import requires_vault_access
+from server.web.auth import vault_permission
 
 
 class DocsController(Controller):
     path = "/api/docs/{vault_name:str}"
+    guards = [requires_vault_access]
+    opt = {"public": True}  # opts out of the app-wide owner guard; requires_vault_access takes over
 
-    @get("/")
+    @get("/", opt={"permission": "read"})
     async def list_all(self, vault_name: FromPath[str], config: Config) -> list[FileEntry]:
         return list_files(vault_root(config.vault_path, vault_name))
 
-    @get("/file", media_type=MediaType.TEXT)
+    @get("/file", media_type=MediaType.TEXT, opt={"permission": "read"})
     async def get_file(self, vault_name: FromPath[str], path: FromQuery[str], config: Config) -> str:
         return read_file(vault_root(config.vault_path, vault_name), path)
 
-    @websocket("/search_websocket")
+    @websocket("/search_websocket", opt={"permission": "read"})
     async def search_websocket(
         self, socket: WebSocket[Any, Any, Any], vault_name: FromPath[str], config: Config
     ) -> None:
-        """Interactive search session: one socket per palette, one query message per keystroke.
-
-        Client sends {"id", "q", "normalize", "limit"}; server replies {"id", "hits"}. Each incoming
-        query cancels the running scan at its next file/chunk boundary and starts a new one, so only
-        the latest query does full work — this latest-wins coalescing replaces client-side debouncing.
-        Superseded scans send no reply.
-        """
         await socket.accept()
         try:
             root = vault_root(config.vault_path, vault_name)
         except VaultNotFound:
             await socket.close(code=1008, reason="Vault does not exist")
             return
+        await serve_search_socket(socket, root)
 
-        current_cancel: threading.Event | None = None
-
-        def cancel_current() -> None:
-            if current_cancel is not None:
-                current_cancel.set()
-
-        async def run_scan(query_id: int, q: str, limit: int, normalize: bool, cancel: threading.Event) -> None:
-            try:
-                hits = await anyio.to_thread.run_sync(partial(search_vault, root, q, limit, normalize, cancel))
-                await socket.send_json({"id": query_id, "hits": [attr.asdict(hit) for hit in hits]})
-            except SearchCancelled:
-                logger.debug("search superseded (q={!r})", q)
-
-        try:
-            # The task group joins running scans on exit; cancel_current() first so that's near-instant.
-            async with anyio.create_task_group() as task_group:
-                while True:
-                    try:
-                        message = await socket.receive_json()
-                    except WebSocketDisconnect:
-                        cancel_current()
-                        return
-                    if (
-                        not isinstance(message, dict)
-                        or not isinstance(message.get("id"), int)
-                        or not isinstance(message.get("q"), str)
-                    ):
-                        cancel_current()
-                        await socket.close(code=1003, reason="Malformed search request")
-                        return
-                    cancel_current()
-                    current_cancel = threading.Event()
-                    task_group.start_soon(
-                        run_scan,
-                        message["id"],
-                        message["q"],
-                        int(message.get("limit", 50)),
-                        bool(message.get("normalize", True)),
-                        current_cancel,
-                    )
-        finally:
-            cancel_current()
-
-    @post("/file", status_code=HTTP_201_CREATED)
+    @post("/file", status_code=HTTP_201_CREATED, opt={"permission": "write"})
     async def create_new_file(
         self, vault_name: FromPath[str], path: FromQuery[str], data: CreateFileBody, config: Config
     ) -> OkResponse:
@@ -123,19 +78,19 @@ class DocsController(Controller):
             create_file(root, path, data.content)
         return OkResponse()
 
-    @patch("/file")
+    @patch("/file", opt={"permission": "write"})
     async def move_file(
         self, vault_name: FromPath[str], path: FromQuery[str], data: RenameBody, config: Config
     ) -> OkResponse:
         rename_file(vault_root(config.vault_path, vault_name), path, data.newPath)
         return OkResponse()
 
-    @delete("/file", status_code=200)
+    @delete("/file", status_code=200, opt={"permission": "write"})
     async def remove_file(self, vault_name: FromPath[str], path: FromQuery[str], config: Config) -> OkResponse:
         delete_file(vault_root(config.vault_path, vault_name), path)
         return OkResponse()
 
-    @websocket("/crdt_websocket/{filepath:path}")
+    @websocket("/crdt_websocket/{filepath:path}", opt={"permission": "read"})
     async def crdt_websocket(
         self, socket: WebSocket[Any, Any, Any], vault_name: FromPath[str], filepath: FromPath[str]
     ) -> None:
@@ -143,7 +98,8 @@ class DocsController(Controller):
         await socket.accept()
         manager: SyncManager = socket.app.state.sync_manager
         doc_path = f"{vault_name}/{filepath.lstrip('/')}"
-        channel = LitestarWebsocketChannel(socket, doc_path)
+        raw = LitestarWebsocketChannel(socket, doc_path)
+        channel = raw if vault_permission(socket, vault_name) == "write" else ReadOnlyChannel(raw)
         try:
             await manager.serve(channel)
         except SyncNotRunning:

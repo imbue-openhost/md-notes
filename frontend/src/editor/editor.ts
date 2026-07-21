@@ -53,6 +53,7 @@ import { foldChevrons } from './foldChevrons';
 import { mobileTheme } from './mobile/theme';
 import type { EditorKind } from './editor-settings';
 import { createSyncSession, createShareSyncSession, type SyncSession } from './sync';
+import type { Vault } from '../api/types';
 
 import { render } from 'solid-js/web';
 import { CommentsController } from './comments/controller';
@@ -199,7 +200,8 @@ export interface EditorOptions {
   vimrcContent?: string;
   /** Touch-device editing: enables autocapitalize/autocorrect/spellcheck. */
   touch?: boolean;
-  syncVault?: string;
+  /** Vault (owned or connected) to sync against; requires syncFilePath + syncServerUrl. */
+  vault?: Vault;
   syncFilePath?: string;
   syncServerUrl?: string;
   shareUuid?: string;
@@ -226,13 +228,13 @@ export interface EditorInstance {
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorInstance {
   const kind = options.kind ?? 'live-preview';
-  const useSync = !!(options.syncServerUrl && (options.syncVault || options.shareUuid));
+  const useSync = !!(options.syncServerUrl && (options.vault || options.shareUuid));
   const extensions = buildExtensions(kind, options.vimrcContent, useSync, options.touch ?? false);
 
   let syncSession: SyncSession | null = null;
 
-  if (options.syncServerUrl && options.syncVault && options.syncFilePath) {
-    syncSession = createSyncSession(options.syncVault, options.syncFilePath, options.syncServerUrl);
+  if (options.syncServerUrl && options.vault && options.syncFilePath) {
+    syncSession = createSyncSession(options.vault, options.syncFilePath, options.syncServerUrl);
   } else if (options.syncServerUrl && options.shareUuid && options.shareDocPath) {
     syncSession = createShareSyncSession(options.shareUuid, options.shareDocPath, options.syncServerUrl);
   }
@@ -269,10 +271,11 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
   if (options.readOnly) {
     extensions.push(EditorState.readOnly.of(true));
+    extensions.push(EditorView.editable.of(false));
   }
 
-  if (options.syncVault && options.syncFilePath) {
-    extensions.push(foldPersistence({ vault: options.syncVault, filePath: options.syncFilePath }));
+  if (options.vault && options.syncFilePath) {
+    extensions.push(foldPersistence({ vault: options.vault.id, filePath: options.syncFilePath }));
   }
 
   if (options.anchorHeader) {

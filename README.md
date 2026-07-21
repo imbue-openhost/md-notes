@@ -58,6 +58,16 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 - File rename/delete on touch via a per-row `⋯` menu (iOS has no long-press path to right-click menus).
 - **PWA**: `manifest.webmanifest` + icons, installable to the home screen (standalone display). No service worker on purpose — the app is online-only by design, so offline caching would only add staleness risk.
 
+### federation
+
+Whole vaults can be shared with other md-notes instances (view-only, comment-only, or full
+access): see `docs/federation.md`. There's a single vault model — host URL + optional secret +
+permission — so owned and connected vaults go through the same client code path, talking
+directly from the browser to the vault's host. Sharing is per-vault ("Share this vault with
+another md-notes user..." in the sidebar's vault menu), named per recipient, and revocable. The
+share produces an invite link to this instance; the recipient pastes it into their own md-notes
+("Manage vaults… → Connect a shared vault"), whose server merely records the connection.
+
 ### tauri native editor
 
 - intended to share most code with the web editor, just packaged as a native app

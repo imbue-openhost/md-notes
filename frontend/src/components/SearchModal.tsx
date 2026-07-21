@@ -1,12 +1,12 @@
 import { createSignal, createEffect, onMount, onCleanup, For, Show, type Component } from 'solid-js';
 import { Dialog } from '@kobalte/core';
-import type { SearchHit } from '../api/types';
+import type { SearchHit, Vault } from '../api/types';
 import { createSearchSession, type SearchSession } from '../api/search-session';
 import { serverUrl } from '../config';
 import { splitByRanges } from './search-highlight';
 
 interface Props {
-  vaultName: string;
+  vault: Vault;
   onSelect: (path: string, line: number) => void;
   onClose: () => void;
 }
@@ -28,7 +28,7 @@ export const SearchModal: Component<Props> = (props) => {
   // superseded queries never reply.
   let latestId = 0;
   const session: SearchSession = createSearchSession(
-    props.vaultName,
+    props.vault,
     serverUrl,
     (id, hits) => {
       if (id !== latestId) return;

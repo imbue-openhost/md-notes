@@ -1,12 +1,15 @@
 import { For, Show, type Component } from 'solid-js';
 import { DropdownMenu } from '@kobalte/core';
-import type { VaultConfig } from '../../api/types';
+import type { Permission, Vault } from '../../api/types';
 import { Icon } from './icons';
 
 interface Props {
   vaultName?: string;
-  vaults?: VaultConfig[];
-  onSwitchToVault?: (v: VaultConfig) => void;
+  vaults?: Vault[];
+  isRemote?: boolean;
+  permission?: Permission;
+  onShareVault?: () => void;
+  onSwitchToVault?: (v: Vault) => void;
   onManageVaults?: () => void;
   onRefreshVaults?: () => void;
 }
@@ -17,6 +20,11 @@ export const VaultSwitcher: Component<Props> = (props) => (
   >
     <DropdownMenu.Trigger class="sidebar-vault-trigger" title="Switch vault">
       <span class="sidebar-vault-name">{props.vaultName || 'No vault'}</span>
+      <Show when={props.isRemote}>
+        <span class="sidebar-vault-remote-badge" title="Shared from another instance">
+          {props.permission === 'read' ? '⇄ read-only' : props.permission === 'comment' ? '⇄ comment-only' : '⇄'}
+        </span>
+      </Show>
       <span class="sidebar-vault-chevron" aria-hidden>
         <Icon name="chevrons-up-down" size={13} />
       </span>
@@ -39,11 +47,25 @@ export const VaultSwitcher: Component<Props> = (props) => (
                 </Show>
               </span>
               <span class="sidebar-vault-item-name">{v.name}</span>
+              <Show when={!v.owned}>
+                <span class="sidebar-vault-remote-badge" title="Shared from another instance">⇄</span>
+              </Show>
             </DropdownMenu.Item>
           )}
         </For>
         <Show when={(props.vaults?.length ?? 0) > 0}>
           <DropdownMenu.Separator class="sidebar-vault-sep" />
+        </Show>
+        <Show when={props.onShareVault}>
+          <DropdownMenu.Item
+            class="sidebar-vault-item sidebar-vault-manage"
+            onSelect={() => props.onShareVault?.()}
+          >
+            <span class="sidebar-vault-check">
+              <Icon name="share" size={13} />
+            </span>
+            <span>Share this vault with another md-notes user…</span>
+          </DropdownMenu.Item>
         </Show>
         <DropdownMenu.Item
           class="sidebar-vault-item sidebar-vault-manage"

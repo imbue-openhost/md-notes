@@ -27,6 +27,7 @@ from server.core.vaults import VaultNotFound
 from server.web.api.comments import DocCommentsController
 from server.web.api.comments import ShareCommentsController
 from server.web.api.docs import DocsController
+from server.web.api.federation import FederationController
 from server.web.api.settings import SettingsController
 from server.web.api.share import ShareController
 from server.web.api.vaults import VaultsController
@@ -111,6 +112,7 @@ def create_app(config: Config) -> Litestar:
             ShareCommentsController,
             VaultsController,
             ShareController,
+            FederationController,
             SettingsController,
             health,
             api_health,

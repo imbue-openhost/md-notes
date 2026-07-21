@@ -7,7 +7,7 @@
  * response, which is why results are matched back by id.
  */
 
-import type { SearchHit } from './types';
+import type { SearchHit, Vault } from './types';
 import { getWsUrl } from '../editor/sync';
 
 export interface SearchSession {
@@ -17,12 +17,15 @@ export interface SearchSession {
 }
 
 export function createSearchSession(
-  vaultName: string,
+  vault: Vault,
   serverUrl: string,
   onResults: (id: number, hits: SearchHit[]) => void,
   onError: () => void,
 ): SearchSession {
-  const url = `${getWsUrl(serverUrl)}/api/docs/${encodeURIComponent(vaultName)}/search_websocket`;
+  const secret = vault.secret ? `?secret=${encodeURIComponent(vault.secret)}` : '';
+  const url =
+    `${getWsUrl(vault.owned ? serverUrl : vault.host)}` +
+    `/api/docs/${encodeURIComponent(vault.vault)}/search_websocket${secret}`;
   let socket: WebSocket | null = null;
   let pending: string | null = null; // latest message queued while the socket connects
   let closed = false;

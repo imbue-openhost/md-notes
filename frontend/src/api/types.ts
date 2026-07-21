@@ -5,10 +5,25 @@ export interface FileEntry {
   children: FileEntry[] | null;
 }
 
-export interface VaultConfig {
+export type Permission = 'read' | 'comment' | 'write';
+
+/**
+ * A vault the client can open: owned ones live on this instance, connected ones on another.
+ * All data requests go to `host` with `secret` attached when present; `owned` only matters for
+ * management operations (delete vs disconnect, sharing, connection status).
+ */
+export interface Vault {
+  /** Stable local key: the vault name for owned vaults, the connection id for connected ones. */
+  id: string;
+  /** Display name, unique across this instance's vault list. */
   name: string;
-  path: string;
-  sync: boolean;
+  /** Origin serving the vault's API. */
+  host: string;
+  /** Vault name on the host (URL path segment); equals `name` for owned vaults. */
+  vault: string;
+  permission: Permission;
+  owned: boolean;
+  secret: string | null;
 }
 
 /** Codepoint offsets into SearchHit.text; end-exclusive. */

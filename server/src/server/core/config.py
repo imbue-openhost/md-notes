@@ -16,20 +16,30 @@ class Config:
     owner_name: str = "owner"
     host: str = "0.0.0.0"
     port: int = 8000
+    # Public origin of this app instance (e.g. "https://md-notes.alice.selfhost.imbue.com"); federation
+    # invite links point here. Empty only in unit tests that construct Config directly.
+    app_origin: str = ""
+
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"{name} is not set — md-notes must run on OpenHost")
+    return value
 
 
 def load_config() -> Config:
-    app_data_dir = os.environ.get("OPENHOST_APP_DATA_DIR")
-    if not app_data_dir:
-        raise RuntimeError("OPENHOST_APP_DATA_DIR is not set — md-notes must run on OpenHost")
+    app_data_dir = _require_env("OPENHOST_APP_DATA_DIR")
+    sqlite_main = _require_env("OPENHOST_SQLITE_MAIN")
+    app_name = _require_env("OPENHOST_APP_NAME")
+    zone_domain = _require_env("OPENHOST_ZONE_DOMAIN")
 
-    sqlite_main = os.environ.get("OPENHOST_SQLITE_MAIN")
-    if not sqlite_main:
-        raise RuntimeError("OPENHOST_SQLITE_MAIN is not set — md-notes must run on OpenHost")
-
+    # The local test harness serves zones on plain HTTP at <name>.localhost:<port>.
+    scheme = "http" if "localhost" in zone_domain else "https"
     return Config(
         vault_path=Path(app_data_dir) / "vault",
         db_path=Path(sqlite_main),
+        app_origin=f"{scheme}://{app_name}.{zone_domain}",
         # The platform documents "owner" as the default when the operator hasn't configured a name.
         owner_name=os.environ.get("OPENHOST_OWNER_USERNAME", "owner"),
     )

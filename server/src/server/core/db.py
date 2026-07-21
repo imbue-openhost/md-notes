@@ -1,4 +1,4 @@
-"""SQLite database for share links and settings."""
+"""SQLite database for share links, vault shares, connected vaults, and settings."""
 
 import sqlite3
 import uuid
@@ -6,7 +6,10 @@ from datetime import UTC
 from datetime import datetime
 from pathlib import Path
 
+from server.models.federation import VaultShare
 from server.models.share import ShareLink
+from server.models.vaults import Permission
+from server.models.vaults import Vault
 
 _db_path: Path | None = None
 _conn: sqlite3.Connection | None = None
@@ -32,6 +35,26 @@ def init_db(path: Path) -> None:
             key        TEXT PRIMARY KEY,
             value      TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        )
+    """)
+    _conn.execute("""
+        CREATE TABLE IF NOT EXISTS vault_shares (
+            secret     TEXT PRIMARY KEY,
+            vault_name TEXT NOT NULL,
+            share_name TEXT NOT NULL,
+            permission TEXT NOT NULL CHECK (permission IN ('read', 'comment', 'write')),
+            created_at TEXT NOT NULL
+        )
+    """)
+    _conn.execute("""
+        CREATE TABLE IF NOT EXISTS connected_vaults (
+            id         TEXT PRIMARY KEY,
+            name       TEXT NOT NULL UNIQUE,
+            host       TEXT NOT NULL,
+            vault      TEXT NOT NULL,
+            secret     TEXT NOT NULL,
+            permission TEXT NOT NULL CHECK (permission IN ('read', 'comment', 'write')),
+            created_at TEXT NOT NULL
         )
     """)
     _conn.commit()
@@ -127,6 +150,87 @@ def set_setting(key: str, value: str) -> None:
         (key, value, now),
     )
     _get_conn().commit()
+
+
+def _row_to_vault_share(row: sqlite3.Row) -> VaultShare:
+    return VaultShare(
+        secret=row["secret"],
+        vault_name=row["vault_name"],
+        share_name=row["share_name"],
+        permission=row["permission"],
+        created_at=row["created_at"],
+    )
+
+
+def create_vault_share(vault_name: str, share_name: str, permission: Permission) -> VaultShare:
+    secret = uuid.uuid4().hex
+    now = datetime.now(UTC).isoformat()
+    _get_conn().execute(
+        "INSERT INTO vault_shares (secret, vault_name, share_name, permission, created_at) VALUES (?, ?, ?, ?, ?)",
+        (secret, vault_name, share_name, permission, now),
+    )
+    _get_conn().commit()
+    return VaultShare(
+        secret=secret, vault_name=vault_name, share_name=share_name, permission=permission, created_at=now
+    )
+
+
+def get_vault_share(secret: str) -> VaultShare | None:
+    row = _get_conn().execute("SELECT * FROM vault_shares WHERE secret = ?", (secret,)).fetchone()
+    return _row_to_vault_share(row) if row else None
+
+
+def delete_vault_share(secret: str) -> bool:
+    cur = _get_conn().execute("DELETE FROM vault_shares WHERE secret = ?", (secret,))
+    _get_conn().commit()
+    return cur.rowcount > 0
+
+
+def list_vault_shares(vault_name: str | None = None) -> list[VaultShare]:
+    if vault_name:
+        rows = (
+            _get_conn()
+            .execute("SELECT * FROM vault_shares WHERE vault_name = ? ORDER BY created_at", (vault_name,))
+            .fetchall()
+        )
+    else:
+        rows = _get_conn().execute("SELECT * FROM vault_shares ORDER BY created_at").fetchall()
+    return [_row_to_vault_share(r) for r in rows]
+
+
+def _row_to_connected_vault(row: sqlite3.Row) -> Vault:
+    return Vault(
+        id=row["id"],
+        name=row["name"],
+        host=row["host"],
+        vault=row["vault"],
+        secret=row["secret"],
+        permission=row["permission"],
+        owned=False,
+    )
+
+
+def add_connected_vault(name: str, host: str, vault: str, secret: str, permission: Permission) -> Vault:
+    vault_id = uuid.uuid4().hex
+    now = datetime.now(UTC).isoformat()
+    _get_conn().execute(
+        "INSERT INTO connected_vaults (id, name, host, vault, secret, permission, created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (vault_id, name, host, vault, secret, permission, now),
+    )
+    _get_conn().commit()
+    return Vault(id=vault_id, name=name, host=host, vault=vault, secret=secret, permission=permission, owned=False)
+
+
+def delete_connected_vault(vault_id: str) -> bool:
+    cur = _get_conn().execute("DELETE FROM connected_vaults WHERE id = ?", (vault_id,))
+    _get_conn().commit()
+    return cur.rowcount > 0
+
+
+def list_connected_vaults() -> list[Vault]:
+    rows = _get_conn().execute("SELECT * FROM connected_vaults ORDER BY created_at").fetchall()
+    return [_row_to_connected_vault(r) for r in rows]
 
 
 def list_links(doc_path: str | None = None) -> list[ShareLink]:

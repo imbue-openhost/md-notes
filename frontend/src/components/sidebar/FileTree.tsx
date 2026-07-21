@@ -12,6 +12,8 @@ interface Props {
   /** Per-row "⋯" menus for file actions — iOS Safari has no long-press
    * path to the right-click context menus (which are always present). */
   rowMenus?: boolean;
+  /** Hide all mutating actions (read-only remote vaults): menus, drag-moves. */
+  readOnly?: boolean;
 }
 
 /** Inline name editor for create/rename. Commits on Enter or blur, cancels on Escape. */
@@ -154,7 +156,7 @@ export const FileTree: Component<Props> = (props) => {
   }
 
   const RowMenu: Component<{ items: { label: string; action: () => void }[] }> = (p) => (
-    <Show when={props.rowMenus}>
+    <Show when={props.rowMenus && !props.readOnly}>
       <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger
           class="sidebar-row-menu-btn"
@@ -226,7 +228,7 @@ export const FileTree: Component<Props> = (props) => {
             classList={{ 'drop-target': dropTarget() === p.entry.path }}
             data-path={p.entry.path}
             data-type="dir"
-            draggable={!renamingThis(p.entry)}
+            draggable={!renamingThis(p.entry) && !props.readOnly}
             onDragStart={dragStartHandler(p.entry)}
             onDragEnd={endDrag}
             onClick={() => toggle(p.entry.path)}
@@ -244,20 +246,22 @@ export const FileTree: Component<Props> = (props) => {
             </Show>
             <RowMenu items={menuItems} />
           </ContextMenu.Trigger>
-          <ContextMenu.Portal>
-            <ContextMenu.Content
-              class="sidebar-context-menu"
-              onCloseAutoFocus={(e: Event) => e.preventDefault()}
-            >
-              <For each={menuItems}>
-                {(item) => (
-                  <ContextMenu.Item class="sidebar-context-item" onSelect={item.action}>
-                    {item.label}
-                  </ContextMenu.Item>
-                )}
-              </For>
-            </ContextMenu.Content>
-          </ContextMenu.Portal>
+          <Show when={!props.readOnly}>
+            <ContextMenu.Portal>
+              <ContextMenu.Content
+                class="sidebar-context-menu"
+                onCloseAutoFocus={(e: Event) => e.preventDefault()}
+              >
+                <For each={menuItems}>
+                  {(item) => (
+                    <ContextMenu.Item class="sidebar-context-item" onSelect={item.action}>
+                      {item.label}
+                    </ContextMenu.Item>
+                  )}
+                </For>
+              </ContextMenu.Content>
+            </ContextMenu.Portal>
+          </Show>
         </ContextMenu.Root>
         <Show when={isExpanded(p.entry.path)}>
           <ul class="sidebar-children">
@@ -284,7 +288,7 @@ export const FileTree: Component<Props> = (props) => {
             classList={{ active: p.entry.path === props.currentPath }}
             data-path={p.entry.path}
             data-type="file"
-            draggable={!renamingThis(p.entry)}
+            draggable={!renamingThis(p.entry) && !props.readOnly}
             onDragStart={dragStartHandler(p.entry)}
             onDragEnd={endDrag}
             onClick={() => props.onSelect(p.entry.path)}
@@ -301,20 +305,22 @@ export const FileTree: Component<Props> = (props) => {
             </Show>
             <RowMenu items={menuItems} />
           </ContextMenu.Trigger>
-          <ContextMenu.Portal>
-            <ContextMenu.Content
-              class="sidebar-context-menu"
-              onCloseAutoFocus={(e: Event) => e.preventDefault()}
-            >
-              <For each={menuItems}>
-                {(item) => (
-                  <ContextMenu.Item class="sidebar-context-item" onSelect={item.action}>
-                    {item.label}
-                  </ContextMenu.Item>
-                )}
-              </For>
-            </ContextMenu.Content>
-          </ContextMenu.Portal>
+          <Show when={!props.readOnly}>
+            <ContextMenu.Portal>
+              <ContextMenu.Content
+                class="sidebar-context-menu"
+                onCloseAutoFocus={(e: Event) => e.preventDefault()}
+              >
+                <For each={menuItems}>
+                  {(item) => (
+                    <ContextMenu.Item class="sidebar-context-item" onSelect={item.action}>
+                      {item.label}
+                    </ContextMenu.Item>
+                  )}
+                </For>
+              </ContextMenu.Content>
+            </ContextMenu.Portal>
+          </Show>
         </ContextMenu.Root>
       </li>
     );

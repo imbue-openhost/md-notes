@@ -26,6 +26,8 @@ from server.models.comments import CreateCommentResponse
 from server.models.comments import UpdateCommentBody
 from server.models.common import OkResponse
 from server.models.share import ShareLink
+from server.web.auth import is_owner
+from server.web.auth import requires_vault_access
 
 
 def _sync_manager(request: Request[Any, Any, Any]) -> SyncManager:
@@ -77,9 +79,15 @@ async def _delete(manager: SyncManager, doc_path: str, comment_id: str, user_id:
 
 
 class DocCommentsController(Controller):
-    """Owner comment routes; ``path`` query param is the file path within the vault."""
+    """Vault comment routes; ``path`` query param is the file path within the vault.
+
+    Open to the owner and to comment-tier-or-better vault-share secrets; only the owner may
+    moderate other people's comments.
+    """
 
     path = "/api/docs/{vault_name:str}/comments"
+    guards = [requires_vault_access]
+    opt = {"public": True, "permission": "comment"}
 
     @post("/", status_code=HTTP_201_CREATED)
     async def create(
@@ -100,7 +108,9 @@ class DocCommentsController(Controller):
         comment_id: str,
         data: UpdateCommentBody,
     ) -> OkResponse:
-        return await _update(_sync_manager(request), _doc_path(vault_name, path), comment_id, data, is_owner=True)
+        return await _update(
+            _sync_manager(request), _doc_path(vault_name, path), comment_id, data, is_owner=is_owner(request)
+        )
 
     @delete("/{comment_id:str}", status_code=200)
     async def remove(
@@ -111,7 +121,9 @@ class DocCommentsController(Controller):
         comment_id: str,
         userId: str,
     ) -> OkResponse:
-        return await _delete(_sync_manager(request), _doc_path(vault_name, path), comment_id, userId, is_owner=True)
+        return await _delete(
+            _sync_manager(request), _doc_path(vault_name, path), comment_id, userId, is_owner=is_owner(request)
+        )
 
 
 def _commentable_link(link_uuid: str) -> ShareLink:
