@@ -12,10 +12,16 @@ import { EditorView } from '@codemirror/view';
  */
 export const editorTheme = EditorView.theme({
   // ========== Base Styles ==========
+  // --cm-line-pad-left is the line's left padding; it also doubles as the
+  // column where heading fold chevrons render (absolutely positioned, see
+  // .cm-fold-chevron). List layout references this var so bullets align with
+  // the left edge of non-list text (see listLineLayout.ts). The mobile theme
+  // overrides it.
   '&': {
     backgroundColor: 'transparent',
     fontSize: '16px',
     height: '100%',
+    '--cm-line-pad-left': '30px',
   },
 
   '.cm-content': {
@@ -24,10 +30,8 @@ export const editorTheme = EditorView.theme({
     caretColor: 'hsl(var(--primary, 220 90% 56%))',
   },
 
-  // The 30px left padding doubles as the column where heading fold chevrons
-  // render (absolutely positioned, see .cm-fold-chevron).
   '.cm-line': {
-    padding: '0 16px 0 30px',
+    padding: '0 16px 0 var(--cm-line-pad-left)',
     lineHeight: '1.75',
     position: 'relative',
   },
@@ -41,7 +45,7 @@ export const editorTheme = EditorView.theme({
     left: '0',
     top: '0',
     height: '100%',
-    width: '30px',
+    width: 'var(--cm-line-pad-left)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -192,10 +196,11 @@ export const editorTheme = EditorView.theme({
 
   // ========== Blockquote ==========
   // Border keeps the quote visually identifiable while the `>` marks are
-  // hidden. 27px + 3px border matches the 30px line padding.
+  // hidden. Border + paddingLeft add up to the line padding so quoted text
+  // aligns with normal text.
   '.cm-blockquote-line': {
     borderLeft: '3px solid hsl(var(--border, 220 13% 91%))',
-    paddingLeft: '27px',
+    paddingLeft: 'calc(var(--cm-line-pad-left) - 3px)',
     color: 'hsl(var(--muted-foreground, 220 9% 46%))',
   },
 
@@ -494,7 +499,7 @@ export const editorTheme = EditorView.theme({
   },
   '.cm-codeblock-line': {
     display: 'block',
-    padding: '0 16px 0 30px',
+    padding: '0 16px 0 var(--cm-line-pad-left)',
     fontSize: '16px',
     lineHeight: '1.75',
     minHeight: '28px',
@@ -538,7 +543,7 @@ export const editorTheme = EditorView.theme({
   '.cm-codeblock-source': {
     background:
       'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0px), rgba(139, 92, 246, 0.1) var(--cb-indent, 0px))',
-    paddingLeft: 'calc(30px + var(--cb-indent, 0px))',
+    paddingLeft: 'calc(var(--cm-line-pad-left) + var(--cb-indent, 0px))',
     fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
     fontSize: '0.9em',
   },
@@ -560,7 +565,7 @@ export const editorTheme = EditorView.theme({
     // layer behind the text stays visible when code is selected.
     background:
       'linear-gradient(to right, transparent 0, transparent var(--cb-indent, 0px), hsl(var(--foreground, 220 9% 9%) / 0.05) var(--cb-indent, 0px))',
-    paddingLeft: 'calc(30px + var(--cb-indent, 0px))',
+    paddingLeft: 'calc(var(--cm-line-pad-left) + var(--cb-indent, 0px))',
     fontFamily: "'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
     fontSize: '0.9em',
     lineHeight: '1.55',

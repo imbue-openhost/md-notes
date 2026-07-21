@@ -16,18 +16,24 @@ import { EditorView } from '@codemirror/view';
 export const mobileTheme = [
   EditorView.editorAttributes.of({ class: 'cm-mobile' }),
   EditorView.theme({
+    // Narrower line padding / chevron column than desktop; --cm-line-pad-left
+    // drives both the .cm-line padding and the chevron width (base theme), and
+    // keeps list-bullet alignment in sync (see listLineLayout.ts).
+    '&.cm-mobile': {
+      '--cm-line-pad-left': '26px',
+    },
+
     '&.cm-mobile .cm-content': {
       padding: 'calc(56px + env(safe-area-inset-top)) 0 35vh 0',
     },
 
     '&.cm-mobile .cm-line': {
-      padding: '0 12px 0 26px',
+      paddingRight: '12px',
     },
 
-    // Narrower chevron column than desktop. Always visible (no hover on
-    // touch) — the plugin only adds the widget when it should show.
+    // Always visible (no hover on touch) — the plugin only adds the widget
+    // when it should show.
     '&.cm-mobile .cm-fold-chevron': {
-      width: '26px',
       opacity: '1',
     },
   }),

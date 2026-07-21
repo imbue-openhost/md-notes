@@ -15,6 +15,8 @@ from litestar import patch
 from litestar import post
 from litestar import websocket
 from litestar.exceptions import WebSocketDisconnect
+from litestar.params import FromPath
+from litestar.params import FromQuery
 from litestar.status_codes import HTTP_201_CREATED
 from loguru import logger
 
@@ -42,15 +44,17 @@ class DocsController(Controller):
     path = "/api/docs/{vault_name:str}"
 
     @get("/")
-    async def list_all(self, vault_name: str, config: Config) -> list[FileEntry]:
+    async def list_all(self, vault_name: FromPath[str], config: Config) -> list[FileEntry]:
         return list_files(vault_root(config.vault_path, vault_name))
 
     @get("/file", media_type=MediaType.TEXT)
-    async def get_file(self, vault_name: str, path: str, config: Config) -> str:
+    async def get_file(self, vault_name: FromPath[str], path: FromQuery[str], config: Config) -> str:
         return read_file(vault_root(config.vault_path, vault_name), path)
 
     @websocket("/search_websocket")
-    async def search_websocket(self, socket: WebSocket[Any, Any, Any], vault_name: str, config: Config) -> None:
+    async def search_websocket(
+        self, socket: WebSocket[Any, Any, Any], vault_name: FromPath[str], config: Config
+    ) -> None:
         """Interactive search session: one socket per palette, one query message per keystroke.
 
         Client sends {"id", "q", "normalize", "limit"}; server replies {"id", "hits"}. Each incoming
@@ -109,7 +113,9 @@ class DocsController(Controller):
             cancel_current()
 
     @post("/file", status_code=HTTP_201_CREATED)
-    async def create_new_file(self, vault_name: str, path: str, data: CreateFileBody, config: Config) -> OkResponse:
+    async def create_new_file(
+        self, vault_name: FromPath[str], path: FromQuery[str], data: CreateFileBody, config: Config
+    ) -> OkResponse:
         root = vault_root(config.vault_path, vault_name)
         if data.type == "dir":
             create_directory(root, path)
@@ -118,17 +124,21 @@ class DocsController(Controller):
         return OkResponse()
 
     @patch("/file")
-    async def move_file(self, vault_name: str, path: str, data: RenameBody, config: Config) -> OkResponse:
+    async def move_file(
+        self, vault_name: FromPath[str], path: FromQuery[str], data: RenameBody, config: Config
+    ) -> OkResponse:
         rename_file(vault_root(config.vault_path, vault_name), path, data.newPath)
         return OkResponse()
 
     @delete("/file", status_code=200)
-    async def remove_file(self, vault_name: str, path: str, config: Config) -> OkResponse:
+    async def remove_file(self, vault_name: FromPath[str], path: FromQuery[str], config: Config) -> OkResponse:
         delete_file(vault_root(config.vault_path, vault_name), path)
         return OkResponse()
 
     @websocket("/crdt_websocket/{filepath:path}")
-    async def crdt_websocket(self, socket: WebSocket[Any, Any, Any], vault_name: str, filepath: str) -> None:
+    async def crdt_websocket(
+        self, socket: WebSocket[Any, Any, Any], vault_name: FromPath[str], filepath: FromPath[str]
+    ) -> None:
         """Yjs CRDT sync for a single document."""
         await socket.accept()
         manager: SyncManager = socket.app.state.sync_manager

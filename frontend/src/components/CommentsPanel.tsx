@@ -118,7 +118,7 @@ const Entry: Component<EntryProps> = (props) => {
             rows={2}
             value={editText()}
             onInput={(e) => setEditText(e.currentTarget.value)}
-            onKeyDown={(e) => {
+            on:keydown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit();
               if (e.key === 'Escape') setEditing(false);
               e.stopPropagation();
@@ -222,7 +222,7 @@ const ThreadCard: Component<ThreadProps> = (props) => {
           value={replyText()}
           onClick={(e) => e.stopPropagation()}
           onInput={(e) => setReplyText(e.currentTarget.value)}
-          onKeyDown={(e) => {
+          on:keydown={(e) => {
             if (e.key === 'Enter') submitReply();
             e.stopPropagation();
           }}
@@ -366,7 +366,7 @@ export const CommentsPanel: Component<{ controller: CommentsController; toolbarH
               placeholder="Add a comment…"
               value={draftText()}
               onInput={(e) => setDraftText(e.currentTarget.value)}
-              onKeyDown={(e) => {
+              on:keydown={(e) => {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitDraft();
                 if (e.key === 'Escape') props.controller.cancelDraft();
                 e.stopPropagation();
