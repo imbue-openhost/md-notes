@@ -12,6 +12,8 @@ class Config:
     vault_path: Path
     # SQLite database for share links and settings
     db_path: Path
+    # Owner's display name, used to label the owner's comments
+    owner_name: str = "owner"
     host: str = "0.0.0.0"
     port: int = 8000
     # Public origin of this app instance (e.g. "https://md-notes.alice.selfhost.imbue.com"); federation
@@ -38,4 +40,6 @@ def load_config() -> Config:
         vault_path=Path(app_data_dir) / "vault",
         db_path=Path(sqlite_main),
         app_origin=f"{scheme}://{app_name}.{zone_domain}",
+        # The platform documents "owner" as the default when the operator hasn't configured a name.
+        owner_name=os.environ.get("OPENHOST_OWNER_USERNAME", "owner"),
     )

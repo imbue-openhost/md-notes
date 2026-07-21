@@ -55,6 +55,12 @@ import type { EditorKind } from './editor-settings';
 import { createSyncSession, createShareSyncSession, createPeerSyncSession, type SyncSession } from './sync';
 import type { RemoteVaultRef } from '../api/types';
 
+import { render } from 'solid-js/web';
+import { CommentsController } from './comments/controller';
+import { commentsExtension } from './comments/extension';
+import type { CommentIdentity, CommentsApi } from './comments/types';
+import { CommentsPanel } from '../components/CommentsPanel';
+
 export type { EditorKind };
 
 function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, useSync: boolean, touch: boolean): Extension[] {
@@ -178,6 +184,15 @@ function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, use
   ];
 }
 
+export interface EditorCommentsOptions {
+  api: CommentsApi;
+  identity: CommentIdentity;
+  /** False for read-only share links: comments are visible but there's no way to add them. */
+  canComment: boolean;
+  /** 'panel' mounts the side panel; 'highlights' shows span highlights only (mobile, for now). */
+  ui: 'panel' | 'highlights';
+}
+
 export interface EditorOptions {
   /** Editor flavor; defaults to 'live-preview' (standard keybindings). */
   kind?: EditorKind;
@@ -197,6 +212,8 @@ export interface EditorOptions {
   anchorHeader?: string;
   /** When set, heading lines get a hover button that copies a share link to that section. */
   getShareUrl?: GetShareUrl;
+  /** Google-Docs-style comments; requires a sync session (comments live in the doc's CRDT). */
+  comments?: EditorCommentsOptions;
   onDocChange?: (content: string) => void;
   /** Called when the initial server handshake fails (timeout or connection error). */
   onSyncFailed?: (error: Error) => void;
@@ -228,6 +245,23 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
 
   if (syncSession) {
     extensions.push(syncSession.extension);
+  }
+
+  // Comments need the CRDT (anchors + storage), so they only exist on synced docs.
+  let commentsController: CommentsController | null = null;
+  let disposeCommentsPanel: (() => void) | null = null;
+  let unsubscribePanelVisibility: (() => void) | null = null;
+
+  if (options.comments && syncSession) {
+    commentsController = new CommentsController({
+      ydoc: syncSession.ydoc,
+      ytext: syncSession.ytext,
+      api: options.comments.api,
+      identity: options.comments.identity,
+      // Without the panel there's no composer, so highlight-only mode never offers "add comment".
+      canComment: options.comments.canComment && options.comments.ui === 'panel',
+    });
+    extensions.push(commentsExtension(commentsController));
   }
 
   if (options.onDocChange) {
@@ -269,6 +303,30 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     state,
     parent: container,
   });
+
+  commentsController?.attach(view);
+
+  if (commentsController && options.comments?.ui === 'panel') {
+    // Cards live inside the scroller, positioned in document space next to their anchored text,
+    // so they move with the content for free. The toolbar (resolved toggle, errors) stays pinned
+    // to the pane and goes in the editor's outer element instead.
+    const panelHost = document.createElement('div');
+    panelHost.className = 'comments-panel-host';
+    panelHost.style.display = 'none';
+    view.scrollDOM.appendChild(panelHost);
+    const toolbarHost = document.createElement('div');
+    toolbarHost.className = 'comments-toolbar-host';
+    toolbarHost.style.display = 'none';
+    view.dom.appendChild(toolbarHost);
+
+    const controller = commentsController;
+    disposeCommentsPanel = render(() => CommentsPanel({ controller, toolbarHost }), panelHost);
+    unsubscribePanelVisibility = controller.subscribe((s) => {
+      const visible = s.threads.length > 0 || s.resolvedThreads.length > 0 || s.draft !== null;
+      panelHost.style.display = visible ? '' : 'none';
+      toolbarHost.style.display = visible ? '' : 'none';
+    });
+  }
 
   // Password-manager extensions (e.g. iCloud Passwords) listen for these keys
   // on document and forward them to their autofill dropdown when they think
@@ -325,6 +383,9 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
       destroyed = true;
       overlay?.remove();
       overlay = null;
+      unsubscribePanelVisibility?.();
+      disposeCommentsPanel?.();
+      commentsController?.destroy();
       syncSession?.destroy();
       view.destroy();
     },

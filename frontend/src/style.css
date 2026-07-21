@@ -105,6 +105,8 @@ body {
 
 #editor-container .cm-scroller {
   overflow: auto;
+  /* Positioning context for the comment cards, which live in the scroller in document space. */
+  position: relative;
 }
 
 /* ── Sidebar ──────────────────────────────────────────────── */
@@ -1470,4 +1472,277 @@ mark.search-hl {
   input, textarea, select {
     font-size: 16px;
   }
+}
+
+/* ── Comments ─────────────────────────────────────────────── */
+/* Cards live inside the CM scroller, absolutely positioned in document space so each card sits
+   next to its anchored text and scrolls with it. The host ignores pointer events so text under
+   the column stays clickable; the cards themselves are interactive. */
+.comments-panel-host {
+  position: absolute;
+  top: 0;
+  right: 10px;
+  width: min(300px, 45%);
+  height: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.comments-toolbar-host {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.comments-resolved-toggle {
+  pointer-events: auto;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.comments-resolved-toggle:hover {
+  color: hsl(var(--foreground));
+}
+
+.comments-panel-error {
+  pointer-events: auto;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: hsl(0 84% 60%);
+  background: hsl(var(--background));
+  border: 1px solid hsl(0 84% 60% / 0.4);
+  border-radius: 8px;
+}
+
+.comment-card {
+  pointer-events: auto;
+  position: absolute;
+  left: 0;
+  right: 0;
+  transition: top 0.18s ease;
+  /* Cards live inside the scroller; don't inherit the editor's document font. */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: hsl(var(--background));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+  cursor: pointer;
+}
+
+.comment-card-active {
+  border-color: hsl(45 90% 45%);
+}
+
+.comment-card-resolved {
+  opacity: 0.65;
+}
+
+.comment-card-composer {
+  cursor: auto;
+  border-color: hsl(45 90% 45%);
+}
+
+.comment-resolve-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.comment-resolve-btn:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+/* Linear-style thread: avatar column, name/date row, text aligned under the name; a thin
+   connector line links consecutive entries. */
+.comment-entry {
+  position: relative;
+  padding-left: 32px;
+  margin-bottom: 4px;
+}
+
+.comment-entry-linked::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 28px;
+  bottom: -6px;
+  width: 2px;
+  background: hsl(var(--border));
+}
+
+.comment-avatar {
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.comment-entry-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 18px;
+  padding-right: 18px;
+}
+
+.comment-author {
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.comment-time {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+}
+
+.comment-entry-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  visibility: hidden;
+}
+
+.comment-entry:hover .comment-entry-actions {
+  visibility: visible;
+}
+
+.comment-entry-body {
+  padding: 1px 0 6px;
+}
+
+.comment-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+}
+
+.comment-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.comment-action-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+
+.comment-action-btn:hover {
+  color: hsl(var(--foreground));
+  text-decoration: underline;
+}
+
+.comment-action-primary {
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+.comment-reply-input,
+.comments-name-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.comments-name-input {
+  border-radius: 6px;
+}
+
+.comment-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  resize: vertical;
+}
+
+.cm-comment-span {
+  background: rgba(255, 200, 40, 0.22);
+  border-bottom: 2px solid rgba(230, 165, 0, 0.55);
+}
+
+.cm-comment-span-active {
+  background: rgba(255, 200, 40, 0.45);
+}
+
+.cm-comment-span-draft {
+  background: rgba(255, 200, 40, 0.35);
+}
+
+/* Floating add-comment button at the editor's right edge, aligned with the selection. */
+.cm-editor .cm-add-comment-btn {
+  position: absolute;
+  right: 10px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.cm-editor .cm-add-comment-btn:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted));
+}
+
+.share-link-badge-comment {
+  background: hsl(45 90% 90%);
+  color: hsl(35 80% 30%);
 }

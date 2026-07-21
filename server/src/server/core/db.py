@@ -21,11 +21,12 @@ def init_db(path: Path) -> None:
     _db_path = path
     _conn = sqlite3.connect(str(path))
     _conn.row_factory = sqlite3.Row
+    _migrate_share_permission_check(_conn)
     _conn.execute("""
         CREATE TABLE IF NOT EXISTS share_links (
             uuid       TEXT PRIMARY KEY,
             doc_path   TEXT NOT NULL,
-            permission TEXT NOT NULL CHECK (permission IN ('read', 'write')),
+            permission TEXT NOT NULL CHECK (permission IN ('read', 'comment', 'write')),
             created_at TEXT NOT NULL
         )
     """)
@@ -57,6 +58,26 @@ def init_db(path: Path) -> None:
         )
     """)
     _conn.commit()
+
+
+def _migrate_share_permission_check(conn: sqlite3.Connection) -> None:
+    # SQLite can't alter a CHECK constraint in place; rebuild share_links if it predates the 'comment' tier.
+    row = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'share_links'").fetchone()
+    if row is None or "'comment'" in row["sql"]:
+        return
+    conn.executescript("""
+        BEGIN;
+        ALTER TABLE share_links RENAME TO share_links_old;
+        CREATE TABLE share_links (
+            uuid       TEXT PRIMARY KEY,
+            doc_path   TEXT NOT NULL,
+            permission TEXT NOT NULL CHECK (permission IN ('read', 'comment', 'write')),
+            created_at TEXT NOT NULL
+        );
+        INSERT INTO share_links SELECT uuid, doc_path, permission, created_at FROM share_links_old;
+        DROP TABLE share_links_old;
+        COMMIT;
+    """)
 
 
 def _get_conn() -> sqlite3.Connection:

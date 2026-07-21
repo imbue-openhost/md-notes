@@ -35,8 +35,8 @@ class ShareController(Controller):
     async def create_share(self, data: CreateShareBody) -> CreateShareResponse:
         if not data.docPath:
             raise ClientException(detail="docPath is required")
-        if data.permission not in ("read", "write"):
-            raise ClientException(detail="permission must be 'read' or 'write'")
+        if data.permission not in ("read", "comment", "write"):
+            raise ClientException(detail="permission must be 'read', 'comment' or 'write'")
         link_uuid = create_link(data.docPath, data.permission)
         return CreateShareResponse(uuid=link_uuid)
 
@@ -64,8 +64,9 @@ class ShareController(Controller):
     ) -> None:
         """Yjs CRDT sync for shared documents.
 
-        Read-only links: server drops Yjs update messages from the client; only the initial sync handshake
-        passes through. Write links: full bidirectional sync.
+        Read and comment links: server drops Yjs update messages from the client; only the initial sync
+        handshake passes through (comment-tier mutations go through the REST comment routes, which write
+        server-side). Write links: full bidirectional sync.
         """
         await socket.accept()
 
@@ -76,7 +77,7 @@ class ShareController(Controller):
 
         manager: SyncManager = socket.app.state.sync_manager
         raw = LitestarWebsocketChannel(socket, link.doc_path)
-        channel = ReadOnlyChannel(raw) if link.permission == "read" else raw
+        channel = raw if link.permission == "write" else ReadOnlyChannel(raw)
         try:
             await manager.serve(channel)
         except SyncNotRunning:

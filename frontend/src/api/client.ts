@@ -3,6 +3,7 @@
  */
 
 import type { FileEntry, RemoteVaultRef } from './types';
+import type { CommentsApi } from '../editor/comments/types';
 import {
   markConnected, markDisconnected, markUnauthorized, UnauthorizedError,
 } from './connection';
@@ -128,16 +129,18 @@ export async function deleteVault(name: string): Promise<void> {
 
 // ── Share links ───────────────────────────────────────────────────────────
 
+export type SharePermission = 'read' | 'comment' | 'write';
+
 export interface ShareLink {
   uuid: string;
   doc_path: string;
-  permission: 'read' | 'write';
+  permission: SharePermission;
   created_at: string;
 }
 
 export async function createShareLink(
   docPath: string,
-  permission: 'read' | 'write' = 'read',
+  permission: SharePermission = 'read',
 ): Promise<string> {
   const res = await apiFetch('/api/share', {
     method: 'POST',
@@ -219,7 +222,69 @@ export async function removeRemoteVault(id: string): Promise<void> {
   await apiFetch(`/api/federation/remotes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
+// ── Comments ──────────────────────────────────────────────────────────────
+
+// Comment routes get a bare fetch, not apiFetch: a 403 here is a domain-level permission result
+// ("not your comment", "link doesn't allow commenting"), and must not flip the app's connection
+// state to "unauthorized".
+async function commentFetch(path: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(`${baseUrl}${path}`, init);
+  if (!res.ok) {
+    const body = await res.text();
+    let message = body || `HTTP ${res.status}`;
+    try {
+      const data = JSON.parse(body);
+      message = data.error || data.detail || message;
+    } catch {}
+    throw new Error(message);
+  }
+  return res;
+}
+
+function jsonInit(method: string, body: unknown): RequestInit {
+  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
+
+function commentsApiAt(base: string, query: (extra?: string) => string): CommentsApi {
+  return {
+    async create(body) {
+      const res = await commentFetch(`${base}${query()}`, jsonInit('POST', body));
+      return (await res.json()).id;
+    },
+    async update(commentId, body) {
+      await commentFetch(`${base}/${encodeURIComponent(commentId)}${query()}`, jsonInit('PATCH', body));
+    },
+    async remove(commentId, userId) {
+      await commentFetch(
+        `${base}/${encodeURIComponent(commentId)}${query(`userId=${encodeURIComponent(userId)}`)}`,
+        { method: 'DELETE' },
+      );
+    },
+  };
+}
+
+export function ownerCommentsApi(vaultName: string, filePath: string): CommentsApi {
+  return commentsApiAt(
+    `${docsBase(vaultName)}/comments`,
+    (extra?: string) => `?path=${encodeURIComponent(filePath)}${extra ? `&${extra}` : ''}`,
+  );
+}
+
+export function shareCommentsApi(uuid: string): CommentsApi {
+  return commentsApiAt(
+    `/api/share/${encodeURIComponent(uuid)}/comments`,
+    (extra?: string) => (extra ? `?${extra}` : ''),
+  );
+
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────
+
+/** Owner display name (from the OpenHost env), used to label the owner's comments. */
+export async function getOwnerInfo(): Promise<{ displayName: string }> {
+  const res = await apiFetch('/api/settings/me');
+  return res.json();
+}
 
 export async function getServerVimrc(): Promise<string | null> {
   const res = await apiFetch('/api/settings/vimrc');

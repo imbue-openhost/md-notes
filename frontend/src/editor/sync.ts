@@ -187,6 +187,10 @@ export function getWsUrl(serverUrl: string): string {
 export interface SyncSession {
   extension: Extension;
   undoManager: Y.UndoManager;
+  /** The live doc, shared with the server; comments live in its 'comments' Y.Map. */
+  ydoc: Y.Doc;
+  /** The 'content' text the editor is bound to. */
+  ytext: Y.Text;
   getText: () => string;
   /** Resolves after the first server sync; rejects on timeout or hard failure. */
   ready: Promise<void>;
@@ -342,6 +346,8 @@ function buildSession(
   return {
     extension,
     undoManager,
+    ydoc,
+    ytext,
     getText: () => ytext.toString(),
     ready,
     destroy: () => {
