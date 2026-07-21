@@ -19,20 +19,26 @@ active editing session (creation, rename, delete).
 
 import asyncio
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from typing import ClassVar
 from typing import Self
+from typing import TypeVar
 
 from loguru import logger
+from pycrdt import Doc
 from pycrdt import Text
 from pycrdt.websocket import WebsocketServer
 from pycrdt.websocket import YRoom
 
 from server.core import crdt_store
+from server.core.comments import gc_orphaned_comments
 from server.core.files import PathTraversalError
 from server.core.files import read_file
 from server.core.files import write_file
+
+T = TypeVar("T")
 
 
 class SyncNotRunning(Exception):
@@ -219,6 +225,35 @@ class SyncManager:
             if not room.clients:
                 self._schedule_room_cleanup(doc_path, room)
 
+    async def mutate_doc(self, doc_path: str, mutate: Callable[[Doc[Any]], T]) -> T:
+        """Apply a synchronous mutation to a document's live Y.Doc (loading the room if needed).
+
+        This is how REST endpoints (comments) write into the CRDT: the room broadcasts the resulting update to
+        every connected client, and the doc-level observer schedules the usual debounced save. Raises
+        ``SyncNotRunning`` / ``FileNotFoundError`` like ``serve``.
+        """
+        if self._ws_server is None:
+            raise SyncNotRunning()
+
+        room = await self._ws_server.get_room(doc_path)
+        # get_room launches the room's provider in the background; stopping (delete_room) or mutating
+        # before it has started races its awareness/broadcast startup.
+        await room.started.wait()
+        try:
+            self._init_room(room, doc_path)
+        except FileNotFoundError:
+            await self._ws_server.delete_room(room=room)
+            raise
+        room.ready = True
+
+        result = mutate(room.ydoc)
+
+        # A REST mutation may have created the room with no websocket clients; make sure it doesn't
+        # linger in memory forever (serve() cancels this if a client joins).
+        if not room.clients and doc_path not in self._cleanup_tasks:
+            self._schedule_room_cleanup(doc_path, room)
+        return result
+
     # ── room cleanup ─────────────────────────────────────────────────────
 
     def _schedule_room_cleanup(self, doc_path: str, room: YRoom) -> None:
@@ -305,6 +340,7 @@ class SyncManager:
             text = doc.get("content", type=Text)
             if text is None:
                 return
+            gc_orphaned_comments(doc, room_name)
             content = str(text)
             new_size = len(content)
             prev_size = self._last_saved_size.get(room_name)

@@ -1,6 +1,12 @@
 import { createResource, For, Show, type Component } from 'solid-js';
 import { Dialog } from '@kobalte/core';
-import { createShareLink, listShareLinks, deleteShareLink } from '../api/client';
+import { createShareLink, listShareLinks, deleteShareLink, type SharePermission } from '../api/client';
+
+const PERMISSION_LABELS: Record<SharePermission, string> = {
+  read: 'View only',
+  comment: 'Can comment',
+  write: 'Can edit',
+};
 
 interface Props {
   path: string;
@@ -12,7 +18,7 @@ export const ShareModal: Component<Props> = (props) => {
   const serverPath = () => props.vaultName ? `${props.vaultName}/${props.path}` : props.path;
   const [links, { refetch }] = createResource(serverPath, (sp) => listShareLinks(sp));
 
-  async function handleCreate(permission: 'read' | 'write') {
+  async function handleCreate(permission: SharePermission) {
     await createShareLink(serverPath(), permission);
     refetch();
   }
@@ -49,8 +55,8 @@ export const ShareModal: Component<Props> = (props) => {
                       return (
                         <div class="share-link-row">
                           <div class="share-link-info">
-                            <span class={`share-link-badge ${link.permission === 'write' ? 'share-link-badge-write' : ''}`}>
-                              {link.permission === 'write' ? 'Can edit' : 'View only'}
+                            <span class={`share-link-badge ${link.permission === 'write' ? 'share-link-badge-write' : ''} ${link.permission === 'comment' ? 'share-link-badge-comment' : ''}`}>
+                              {PERMISSION_LABELS[link.permission]}
                             </span>
                             <span class="share-link-date">
                               {new Date(link.created_at).toLocaleDateString()}
@@ -83,6 +89,7 @@ export const ShareModal: Component<Props> = (props) => {
                   <div class="share-modal-label">Create new link</div>
                   <div class="share-modal-buttons">
                     <button class="share-modal-btn" onClick={() => handleCreate('read')}>View only</button>
+                    <button class="share-modal-btn" onClick={() => handleCreate('comment')}>Can comment</button>
                     <button class="share-modal-btn share-modal-btn-primary" onClick={() => handleCreate('write')}>Can edit</button>
                   </div>
                 </div>

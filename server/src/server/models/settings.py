@@ -9,3 +9,8 @@ class VimrcResponse:
 @attr.s(auto_attribs=True, frozen=True)
 class VimrcBody:
     vimrc: str
+
+
+@attr.s(auto_attribs=True, frozen=True)
+class MeResponse:
+    displayName: str
