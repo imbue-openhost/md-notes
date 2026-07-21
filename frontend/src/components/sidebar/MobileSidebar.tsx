@@ -31,14 +31,14 @@ export const MobileSidebar: Component<Props> = (props) => {
             vaultName={props.vaultName}
             vaults={props.vaults}
             isRemote={props.isRemote}
-            readOnly={props.readOnly}
+            permission={props.permission}
             onShareVault={props.onShareVault}
             onSwitchToVault={props.onSwitchToVault}
             onManageVaults={props.onManageVaults}
             onRefreshVaults={props.onRefreshVaults}
           />
           <div class="sidebar-header-buttons">
-            <Show when={!props.readOnly}>
+            <Show when={props.permission === 'write'}>
               <button class="sidebar-btn" title="New file" onClick={() => ops.startCreate('file')}>
                 <Icon name="file-plus" />
               </button>
@@ -79,7 +79,7 @@ export const MobileSidebar: Component<Props> = (props) => {
           </Show>
         </div>
 
-        <FileTree ops={ops} currentPath={props.currentPath} onSelect={props.onSelect} rowMenus readOnly={props.readOnly} />
+        <FileTree ops={ops} currentPath={props.currentPath} onSelect={props.onSelect} rowMenus readOnly={props.permission !== 'write'} />
 
         <SyncFooter
           showSyncStatus={props.showSyncStatus}

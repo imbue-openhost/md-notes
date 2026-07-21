@@ -5,23 +5,25 @@ export interface FileEntry {
   children: FileEntry[] | null;
 }
 
-/** A vault shared from another md-notes instance, stored on our server. */
-export interface RemoteVaultRef {
-  id: string;
-  name: string;
-  source_url: string;
-  vault_name: string;
-  secret: string;
-  permission: 'read' | 'write';
-  created_at: string;
-}
+export type Permission = 'read' | 'comment' | 'write';
 
-export interface VaultConfig {
+/**
+ * A vault the client can open: owned ones live on this instance, connected ones on another.
+ * All data requests go to `host` with `secret` attached when present; `owned` only matters for
+ * management operations (delete vs disconnect, sharing, connection status).
+ */
+export interface Vault {
+  /** Stable local key: the vault name for owned vaults, the connection id for connected ones. */
+  id: string;
+  /** Display name, unique across this instance's vault list. */
   name: string;
-  path: string;
-  sync: boolean;
-  /** Present for federated vaults living on another instance. */
-  remote?: RemoteVaultRef;
+  /** Origin serving the vault's API. */
+  host: string;
+  /** Vault name on the host (URL path segment); equals `name` for owned vaults. */
+  vault: string;
+  permission: Permission;
+  owned: boolean;
+  secret: string | null;
 }
 
 /** Codepoint offsets into SearchHit.text; end-exclusive. */

@@ -60,12 +60,13 @@ i ended up switching to the second pattern; just seemed like that's closer to st
 
 ### federation
 
-Whole vaults can be shared with other md-notes instances (read-only or read-write): see
-`docs/federation.md` for the protocol. Sharing is per-vault ("Share this vault..." in the
-sidebar's vault menu), named per recipient, and revocable. The share produces an invite link to
-this instance; the recipient pastes it into their own md-notes ("Manage vaults… → Connect a
-shared vault"). Connected remote vaults appear in the recipient's vault list; their client talks
-directly to the sharing instance, authenticated by the share secret.
+Whole vaults can be shared with other md-notes instances (view-only, comment-only, or full
+access): see `docs/federation.md`. There's a single vault model — host URL + optional secret +
+permission — so owned and connected vaults go through the same client code path, talking
+directly from the browser to the vault's host. Sharing is per-vault ("Share this vault with
+another md-notes user..." in the sidebar's vault menu), named per recipient, and revocable. The
+share produces an invite link to this instance; the recipient pastes it into their own md-notes
+("Manage vaults… → Connect a shared vault"), whose server merely records the connection.
 
 ### tauri native editor
 

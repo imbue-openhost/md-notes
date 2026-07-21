@@ -2,16 +2,15 @@ import { createSignal, createResource, createEffect, onMount, onCleanup, Show, t
 import { createEditor, type EditorInstance } from './editor/editor';
 import { getEditorKind } from './editor/editor-settings';
 import {
-  listVaults, createVault, deleteVault, getServerVimrc, pingHealth,
+  listVaults, createVault, deleteVault, connectVault, disconnectVault, getServerVimrc, pingHealth,
   createShareLink, listShareLinks,
-  listRemoteVaults, addRemoteVault, removeRemoteVault,
-  getOwnerInfo, ownerCommentsApi, shareCommentsApi,
+  getOwnerInfo, vaultCommentsApi, shareCommentsApi,
 } from './api/client';
 import { ownerIdentity, shareIdentity } from './editor/comments/identity';
-import { parseInviteLink, fetchPeerVaultInfo, PeerAuthError } from './api/peer';
+import { parseInviteLink, fetchShareInfo as fetchVaultShareInfo, InviteRejectedError } from './api/invites';
 import { setActiveVault } from './api/vault-ops';
 import {
-  clearVaultCache, clearRemoteVaultCache,
+  clearVaultCache,
   onConnectionStatus, onConnectionError, onLastSyncedAt, onIdbError,
   type AggregateConnectionStatus,
 } from './editor/sync';
@@ -20,7 +19,7 @@ import {
   serverUrl, getShareUuid, getVaultNameFromUrl, getUrlHeaderAnchor, fetchShareInfo, getLoginUrl,
   getFederationInvite, type ShareInfo,
 } from './config';
-import type { VaultConfig } from './api/types';
+import type { Vault } from './api/types';
 import { VaultPicker } from './components/VaultPicker';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { MobileSidebar } from './components/sidebar/MobileSidebar';
@@ -104,8 +103,8 @@ export const App: Component = () => {
   const [ownerName, setOwnerName] = createSignal('owner');
   const [editorKind, setEditorKind] = createSignal(getEditorKind());
   const [shellKind, setShellKind] = createSignal(resolveShellKind());
-  const [vault, setVault] = createSignal<VaultConfig | null>(null);
-  const [vaultList, setVaultList] = createSignal<VaultConfig[]>([]);
+  const [vault, setVault] = createSignal<Vault | null>(null);
+  const [vaultList, setVaultList] = createSignal<Vault[]>([]);
   const [showVaultPicker, setShowVaultPicker] = createSignal(false);
   const [booting, setBooting] = createSignal(true);
   const [currentDocPath, setCurrentDocPath] = createSignal<string | null>(null);
@@ -154,26 +153,11 @@ export const App: Component = () => {
     });
   }
 
-  async function fetchVaultList(): Promise<VaultConfig[]> {
-    const local = await listVaults();
-    const vaults: VaultConfig[] = local.map((v) => ({ name: v.name, path: '', sync: true }));
-    // Remote (federated) vaults live on another instance; sync=false so we never try to create
-    // them locally.
-    try {
-      const remotes = await listRemoteVaults();
-      vaults.push(...remotes.map((r) => ({ name: r.name, path: '', sync: false, remote: r })));
-    } catch (e) {
-      if (e instanceof UnauthorizedError) throw e;
-      console.warn('Failed to load remote vaults:', e);
-    }
-    return vaults;
-  }
-
-  async function fetchVaultListWithRetry(): Promise<VaultConfig[]> {
+  async function fetchVaultListWithRetry(): Promise<Vault[]> {
     let delay = 500;
     while (true) {
       try {
-        return await fetchVaultList();
+        return await listVaults();
       } catch (e) {
         if (e instanceof UnauthorizedError) throw e;
         console.warn('Backend not ready, retrying:', e);
@@ -184,7 +168,7 @@ export const App: Component = () => {
   }
 
   async function loadWebVaults() {
-    let vaults: VaultConfig[];
+    let vaults: Vault[];
     try {
       vaults = await fetchVaultListWithRetry();
     } catch (e) {
@@ -226,23 +210,23 @@ export const App: Component = () => {
 
   async function refreshVaultList() {
     try {
-      setVaultList(await fetchVaultList());
+      setVaultList(await listVaults());
     } catch (e) {
       console.warn('Failed to refresh vault list:', e);
     }
   }
 
-  function switchToVault(v: VaultConfig) {
+  function switchToVault(v: Vault) {
     if (v.name === vault()?.name) return;
     setVault(null);
     queueMicrotask(() => openVault(v));
   }
 
-  function openVault(v: VaultConfig) {
+  function openVault(v: Vault) {
     setActiveVault(v);
     setVault(v);
     setShowVaultPicker(false);
-    if (v.remote) checkRemoteVault(v);
+    if (!v.owned) checkConnectedVault(v);
     if (v.name) {
       try {
         sessionStorage.setItem('mdnotes-last-vault', v.name);
@@ -250,23 +234,22 @@ export const App: Component = () => {
       } catch {}
       history.replaceState({}, '', '/' + encodeURIComponent(v.name));
     }
-    if (v.sync && v.name) {
+    if (v.owned) {
       createVault(v.name).catch(() => {});
     }
   }
 
-  // The source instance can change under us between sessions (upgraded API, revoked share), so
-  // re-verify the handshake every time a remote vault is opened. Non-blocking: the vault opens
+  // The sharing instance can change under us between sessions (upgraded API, revoked share), so
+  // re-verify the handshake every time a connected vault is opened. Non-blocking: the vault opens
   // optimistically and a failure surfaces as a modal.
-  function checkRemoteVault(v: VaultConfig) {
-    const remote = v.remote!;
+  function checkConnectedVault(v: Vault) {
     setRemoteVaultError(null);
-    fetchPeerVaultInfo(remote.source_url, remote.secret).catch((e) => {
-      if (vault()?.remote?.id !== remote.id) return;
+    fetchVaultShareInfo(v.host, v.secret ?? '').catch((e) => {
+      if (vault()?.id !== v.id) return;
       const host = (() => {
-        try { return new URL(remote.source_url).host; } catch { return remote.source_url; }
+        try { return new URL(v.host).host; } catch { return v.host; }
       })();
-      if (e instanceof PeerAuthError) {
+      if (e instanceof InviteRejectedError) {
         setRemoteVaultError(`${host} rejected this vault's share — it may have been revoked.`);
       } else if (e instanceof TypeError) {
         // fetch network failure — the instance is unreachable; sync status already shows offline.
@@ -278,7 +261,7 @@ export const App: Component = () => {
 
   function switchVault() {
     setVault(null);
-    fetchVaultList().then((vaults) => {
+    listVaults().then((vaults) => {
       setVaultList(vaults);
       setShowVaultPicker(true);
     }).catch((e) => {
@@ -305,21 +288,19 @@ export const App: Component = () => {
       kind: mobile ? 'live-preview-mobile' : editorKind(),
       vimrcContent: activeVimrc(),
       touch: mobile,
-      syncVault: v?.remote ? undefined : (v?.name || undefined),
+      vault: v ?? undefined,
       syncFilePath: path,
       syncServerUrl: serverUrl,
-      remoteVault: v?.remote,
-      readOnly: v?.remote?.permission === 'read',
-      // Per-file share links and comments live on the local server; remote-vault comments
-      // arrive with the unified-vault redesign.
-      getShareUrl: v?.remote
-        ? undefined
-        : (permission) => shareUrlForDoc(v?.name ? `${v.name}/${path}` : path, permission),
-      comments: v?.name && !v.remote
+      readOnly: v ? v.permission !== 'write' : false,
+      // Per-file share links are minted by this instance, so they only exist for owned vaults.
+      getShareUrl: v?.owned
+        ? (permission) => shareUrlForDoc(`${v.name}/${path}`, permission)
+        : undefined,
+      comments: v
         ? {
-            api: ownerCommentsApi(v.name, path),
-            identity: ownerIdentity(ownerName()),
-            canComment: true,
+            api: vaultCommentsApi(v, path),
+            identity: v.owned ? ownerIdentity(ownerName()) : shareIdentity(),
+            canComment: v.permission !== 'read',
             ui: mobile ? 'highlights' : 'panel',
           }
         : undefined,
@@ -327,13 +308,12 @@ export const App: Component = () => {
     });
   }
 
-  function handleVaultSelect(v: VaultConfig) {
+  function handleVaultSelect(v: Vault) {
     openVault(v);
   }
 
   async function handleVaultAdd(name: string, path: string, sync: boolean) {
-    const created = await createVault(name);
-    openVault({ name: created.name, path: '', sync: true });
+    openVault(await createVault(name));
   }
 
   async function handleConnectRemote(link: string) {
@@ -341,22 +321,20 @@ export const App: Component = () => {
     if (!invite) {
       throw new Error('That doesn\'t look like an invite link — expected https://…/federation/connect?…');
     }
-    // Our server validates against the source instance (secret + API version) before storing.
-    const remote = await addRemoteVault(invite.sourceUrl, invite.vault, invite.secret);
-    const vaults = await fetchVaultList();
+    // Validate straight from the browser against the sharing instance (secret + API version);
+    // our own server just stores the connection record.
+    const info = await fetchVaultShareInfo(invite.host, invite.secret);
+    const connected = await connectVault(invite.host, info.vault, invite.secret, info.permission);
+    const vaults = await listVaults();
     setVaultList(vaults);
-    const match = vaults.find((v) => v.remote?.id === remote.id);
+    const match = vaults.find((v) => v.id === connected.id);
     if (match) openVault(match);
   }
 
-  async function handleVaultRemove(v: VaultConfig) {
-    if (v.remote) {
-      await removeRemoteVault(v.remote.id);
-      await clearRemoteVaultCache(v.remote.id);
-    } else {
-      await deleteVault(v.name);
-      await clearVaultCache(v.name);
-    }
+  async function handleVaultRemove(v: Vault) {
+    if (v.owned) await deleteVault(v.name);
+    else await disconnectVault(v.id);
+    await clearVaultCache(v.id);
     await loadWebVaults();
   }
 
@@ -450,14 +428,14 @@ export const App: Component = () => {
                 <MobileSidebar
                   vaultName={vault()!.name}
                   vaults={vaultList()}
-                  isRemote={!!vault()!.remote}
-                  readOnly={vault()!.remote?.permission === 'read'}
+                  isRemote={!vault()!.owned}
+                  permission={vault()!.permission}
                   onSelect={handleFileSelect}
                   onDeleted={(path) => layoutHandle?.closeFilesUnder(path)}
                   onQuickOpen={() => setShowQuickOpen(true)}
                   onSearch={() => setShowSearch(true)}
-                  onShare={vault()!.remote ? undefined : setShareModalPath}
-                  onShareVault={vault()!.remote ? undefined : () => setShareVaultName(vault()!.name)}
+                  onShare={vault()!.owned ? setShareModalPath : undefined}
+                  onShareVault={vault()!.owned ? () => setShareVaultName(vault()!.name) : undefined}
                   onSwitchToVault={switchToVault}
                   onManageVaults={switchVault}
                   onRefreshVaults={refreshVaultList}
@@ -477,13 +455,13 @@ export const App: Component = () => {
           <Sidebar
             vaultName={vault()!.name}
             vaults={vaultList()}
-            isRemote={!!vault()!.remote}
-            readOnly={vault()!.remote?.permission === 'read'}
+            isRemote={!vault()!.owned}
+            permission={vault()!.permission}
             onSelect={handleFileSelect}
             onDeleted={(path) => layoutHandle?.closeFilesUnder(path)}
             onSearch={() => setShowSearch(true)}
-            onShare={vault()!.remote ? undefined : setShareModalPath}
-            onShareVault={vault()!.remote ? undefined : () => setShareVaultName(vault()!.name)}
+            onShare={vault()!.owned ? setShareModalPath : undefined}
+            onShareVault={vault()!.owned ? () => setShareVaultName(vault()!.name) : undefined}
             onSwitchToVault={switchToVault}
             onManageVaults={switchVault}
             onRefreshVaults={refreshVaultList}
@@ -530,8 +508,7 @@ export const App: Component = () => {
 
       <Show when={vault() && showSearch()}>
         <SearchModal
-          vaultName={vault()!.remote ? vault()!.remote!.vault_name : vault()!.name}
-          remote={vault()!.remote}
+          vault={vault()!}
           onSelect={(path, line) => layoutHandle?.openFileAt(path, line)}
           onClose={() => setShowSearch(false)}
         />

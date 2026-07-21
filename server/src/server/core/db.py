@@ -1,15 +1,15 @@
-"""SQLite database for share links, vault shares, remote vaults, and settings."""
+"""SQLite database for share links, vault shares, connected vaults, and settings."""
 
 import sqlite3
 import uuid
 from datetime import UTC
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
 
-from server.models.federation import RemoteVault
 from server.models.federation import VaultShare
 from server.models.share import ShareLink
+from server.models.vaults import Permission
+from server.models.vaults import Vault
 
 _db_path: Path | None = None
 _conn: sqlite3.Connection | None = None
@@ -42,18 +42,18 @@ def init_db(path: Path) -> None:
             secret     TEXT PRIMARY KEY,
             vault_name TEXT NOT NULL,
             share_name TEXT NOT NULL,
-            permission TEXT NOT NULL CHECK (permission IN ('read', 'write')),
+            permission TEXT NOT NULL CHECK (permission IN ('read', 'comment', 'write')),
             created_at TEXT NOT NULL
         )
     """)
     _conn.execute("""
-        CREATE TABLE IF NOT EXISTS remote_vaults (
+        CREATE TABLE IF NOT EXISTS connected_vaults (
             id         TEXT PRIMARY KEY,
             name       TEXT NOT NULL UNIQUE,
-            source_url TEXT NOT NULL,
-            vault_name TEXT NOT NULL,
+            host       TEXT NOT NULL,
+            vault      TEXT NOT NULL,
             secret     TEXT NOT NULL,
-            permission TEXT NOT NULL CHECK (permission IN ('read', 'write')),
+            permission TEXT NOT NULL CHECK (permission IN ('read', 'comment', 'write')),
             created_at TEXT NOT NULL
         )
     """)
@@ -162,7 +162,7 @@ def _row_to_vault_share(row: sqlite3.Row) -> VaultShare:
     )
 
 
-def create_vault_share(vault_name: str, share_name: str, permission: Literal["read", "write"]) -> VaultShare:
+def create_vault_share(vault_name: str, share_name: str, permission: Permission) -> VaultShare:
     secret = uuid.uuid4().hex
     now = datetime.now(UTC).isoformat()
     _get_conn().execute(
@@ -198,54 +198,39 @@ def list_vault_shares(vault_name: str | None = None) -> list[VaultShare]:
     return [_row_to_vault_share(r) for r in rows]
 
 
-def _row_to_remote_vault(row: sqlite3.Row) -> RemoteVault:
-    return RemoteVault(
+def _row_to_connected_vault(row: sqlite3.Row) -> Vault:
+    return Vault(
         id=row["id"],
         name=row["name"],
-        source_url=row["source_url"],
-        vault_name=row["vault_name"],
+        host=row["host"],
+        vault=row["vault"],
         secret=row["secret"],
         permission=row["permission"],
-        created_at=row["created_at"],
+        owned=False,
     )
 
 
-def add_remote_vault(
-    name: str, source_url: str, vault_name: str, secret: str, permission: Literal["read", "write"]
-) -> RemoteVault:
+def add_connected_vault(name: str, host: str, vault: str, secret: str, permission: Permission) -> Vault:
     vault_id = uuid.uuid4().hex
     now = datetime.now(UTC).isoformat()
     _get_conn().execute(
-        "INSERT INTO remote_vaults (id, name, source_url, vault_name, secret, permission, created_at)"
+        "INSERT INTO connected_vaults (id, name, host, vault, secret, permission, created_at)"
         " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (vault_id, name, source_url, vault_name, secret, permission, now),
+        (vault_id, name, host, vault, secret, permission, now),
     )
     _get_conn().commit()
-    return RemoteVault(
-        id=vault_id,
-        name=name,
-        source_url=source_url,
-        vault_name=vault_name,
-        secret=secret,
-        permission=permission,
-        created_at=now,
-    )
+    return Vault(id=vault_id, name=name, host=host, vault=vault, secret=secret, permission=permission, owned=False)
 
 
-def get_remote_vault(vault_id: str) -> RemoteVault | None:
-    row = _get_conn().execute("SELECT * FROM remote_vaults WHERE id = ?", (vault_id,)).fetchone()
-    return _row_to_remote_vault(row) if row else None
-
-
-def delete_remote_vault(vault_id: str) -> bool:
-    cur = _get_conn().execute("DELETE FROM remote_vaults WHERE id = ?", (vault_id,))
+def delete_connected_vault(vault_id: str) -> bool:
+    cur = _get_conn().execute("DELETE FROM connected_vaults WHERE id = ?", (vault_id,))
     _get_conn().commit()
     return cur.rowcount > 0
 
 
-def list_remote_vaults() -> list[RemoteVault]:
-    rows = _get_conn().execute("SELECT * FROM remote_vaults ORDER BY created_at").fetchall()
-    return [_row_to_remote_vault(r) for r in rows]
+def list_connected_vaults() -> list[Vault]:
+    rows = _get_conn().execute("SELECT * FROM connected_vaults ORDER BY created_at").fetchall()
+    return [_row_to_connected_vault(r) for r in rows]
 
 
 def list_links(doc_path: str | None = None) -> list[ShareLink]:

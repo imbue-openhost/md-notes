@@ -1,66 +1,19 @@
 """Two-instance federation tests: instance A shares a vault, instance B connects to it.
 
-Runs two full OpenHost stacks (two routers, two md-notes containers) side by side. Instance B's
-server stores the remote-vault reference, and B's "browser" (requests + Playwright) talks directly
-to instance A, exactly as in production.
+Runs two full OpenHost stacks (two routers, two md-notes containers) side by side. Everything
+crosses instances through the browser (requests + Playwright, both running on the host, like a
+real user's browser): B's server only stores the connection record and never contacts A.
 """
 
-import tempfile
 import time
-from pathlib import Path
 
 import pytest
 import requests
 from openhost_test_harness import OpenhostStack
-from openhost_test_harness.stack import _snapshot_working_tree
 from playwright.sync_api import Page
 from playwright.sync_api import expect
 
 pytestmark = pytest.mark.containers
-
-# Appended to server/core/federation.py in instance B's deploy snapshot. The harness serves zones
-# on *.localhost domains that don't resolve inside app containers, so B's server-side validation
-# of A's share can't reach A directly; this harness-only override routes it via the router's host
-# (from OPENHOST_ROUTER_URL) with the real zone Host header. Production code stays free of this.
-HARNESS_LOCALHOST_FETCH_PATCH = """
-
-# --- appended by tests/test_federation_e2e.py: local-harness *.localhost routing ---
-import os as _os
-from urllib.parse import urlparse as _urlparse
-
-_fetch_peer_vault_info_direct = fetch_peer_vault_info
-
-
-async def fetch_peer_vault_info(source_url: str, secret: str) -> PeerVaultInfo:  # type: ignore[no-redef]
-    parsed = _urlparse(source_url)
-    hostname = parsed.hostname or ""
-    router_url = _os.environ.get("OPENHOST_ROUTER_URL", "")
-    if not router_url or not (hostname == "localhost" or hostname.endswith(".localhost")):
-        return await _fetch_peer_vault_info_direct(source_url, secret)
-    router_host = _urlparse(router_url).hostname
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    url = f"{parsed.scheme}://{router_host}:{port}/api/federation/peer/vault"
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, params={"secret": secret}, headers={"Host": parsed.netloc})
-    except httpx.HTTPError as e:
-        raise RemoteVaultError(f"Could not reach {source_url}: {e}") from e
-    if response.status_code == 401:
-        raise RemoteVaultError("The share secret was rejected — the share may have been revoked")
-    if response.status_code != 200:
-        raise RemoteVaultError(f"{source_url} returned HTTP {response.status_code}")
-    return parse_peer_vault_info(response.json(), source_url)
-"""
-
-
-def _patched_app_copy() -> Path:
-    """Snapshot of this repo with the harness-only fetch override appended for instance B."""
-    dest = Path(tempfile.mkdtemp(prefix="md-notes-b-")) / "app"
-    _snapshot_working_tree(Path(__file__).resolve().parent.parent, dest)
-    federation_py = dest / "server" / "src" / "server" / "core" / "federation.py"
-    federation_py.write_text(federation_py.read_text() + HARNESS_LOCALHOST_FETCH_PATCH)
-    return dest
-
 
 VAULT = "fedvault"
 FILE = "shared.md"
@@ -81,11 +34,10 @@ def _wait_healthy(stack: OpenhostStack, timeout: float = 60) -> None:
 
 
 # Instance A is the shared session-scoped `stack` fixture from conftest (app name "md-notes").
-# Instance B needs a distinct app name because podman container names are global, and deploys
-# from a patched snapshot (see HARNESS_LOCALHOST_FETCH_PATCH).
+# Instance B needs a distinct app name because podman container names are global.
 @pytest.fixture(scope="module")
 def stack_b():
-    with OpenhostStack(app_dir=_patched_app_copy(), app_name="md-notes-b", zone_name="zoneb") as s:
+    with OpenhostStack(app_name="md-notes-b", zone_name="zoneb") as s:
         _wait_healthy(s)
         yield s
 
@@ -116,104 +68,77 @@ def test_invite_url_shape(stack: OpenhostStack) -> None:
     stack.owner_session.delete(f"{stack.url}/api/federation/shares/{share['secret']}")
 
 
-def test_peer_api_cross_origin(stack: OpenhostStack) -> None:
-    """Simulates instance B's browser hitting instance A directly with the share secret."""
+def test_cross_origin_vault_api(stack: OpenhostStack) -> None:
+    """Simulates instance B's browser hitting instance A's unified vault API with a secret."""
     write_share = _create_share(stack, "bob", "write")
     read_share = _create_share(stack, "carol", "read")
-    base = f"{stack.url}/api/federation/peer"
+    base = f"{stack.url}/api/docs/{VAULT}"
     anon = requests.Session()  # no owner cookies — a foreign browser
 
-    # metadata, including the app/version handshake
-    r = anon.get(f"{base}/vault", params={"secret": write_share["secret"]})
+    # share-info handshake
+    r = anon.get(f"{stack.url}/api/federation/share-info", params={"secret": write_share["secret"]})
     assert r.status_code == 200
-    assert r.json() == {"vault_name": VAULT, "permission": "write", "app": "md-notes", "api_version": 1}
-    assert anon.get(f"{base}/vault", params={"secret": "nope"}).status_code == 401
+    assert r.json() == {"app": "md-notes", "api_version": 1, "vault": VAULT, "permission": "write"}
+    assert anon.get(f"{stack.url}/api/federation/share-info", params={"secret": "nope"}).status_code == 401
 
     # listing + reading
-    r = anon.get(f"{base}/docs", params={"secret": read_share["secret"]})
+    assert anon.get(base).status_code == 401
+    r = anon.get(base, params={"secret": read_share["secret"]})
     assert r.status_code == 200
     assert FILE in [e["path"] for e in r.json()]
-    r = anon.get(f"{base}/docs/file", params={"secret": read_share["secret"], "path": FILE})
+    r = anon.get(f"{base}/file", params={"secret": read_share["secret"], "path": FILE})
     assert r.text == FILE_CONTENT
 
     # writes: allowed for write shares, rejected for read shares
     r = anon.post(
-        f"{base}/docs/file",
+        f"{base}/file",
         params={"secret": write_share["secret"], "path": "from-b.md"},
         json={"content": "written by B", "type": "file"},
     )
     assert r.status_code == 201, r.text
     r = anon.post(
-        f"{base}/docs/file",
+        f"{base}/file",
         params={"secret": read_share["secret"], "path": "nope.md"},
         json={"content": "x", "type": "file"},
     )
-    assert r.status_code == 403
+    assert r.status_code == 401
 
     # revocation cuts access immediately
     assert stack.owner_session.delete(f"{stack.url}/api/federation/shares/{read_share['secret']}").status_code == 200
-    assert anon.get(f"{base}/docs", params={"secret": read_share["secret"]}).status_code == 401
+    assert anon.get(base, params={"secret": read_share["secret"]}).status_code == 401
 
     stack.owner_session.delete(f"{stack.url}/api/federation/shares/{write_share['secret']}")
-    anon.delete(f"{base}/docs/file", params={"secret": write_share["secret"], "path": "from-b.md"})
+    anon.delete(f"{base}/file", params={"secret": write_share["secret"], "path": "from-b.md"})
 
 
-def test_connect_remote_vault(stack: OpenhostStack, stack_b: OpenhostStack) -> None:
-    """Instance B stores a reference to A's vault, validating it server-to-server."""
-    share = _create_share(stack, "instance-b", "write")
+def test_connect_and_unified_vault_list(stack: OpenhostStack, stack_b: OpenhostStack) -> None:
+    """Instance B stores a connection record and lists it alongside its own vaults."""
+    share = _create_share(stack, "instance-b", "comment")
     sb = stack_b.owner_session
 
     r = sb.post(
-        f"{stack_b.url}/api/federation/remotes",
-        json={"sourceUrl": stack.url, "vaultName": VAULT, "secret": share["secret"], "name": ""},
+        f"{stack_b.url}/api/vaults/connections",
+        json={"host": stack.url, "vault": VAULT, "secret": share["secret"], "permission": "comment", "name": ""},
     )
     assert r.status_code == 201, r.text
-    remote = r.json()
-    assert remote["vault_name"] == VAULT
-    assert remote["name"] == VAULT
-    assert remote["permission"] == "write"
-    assert remote["source_url"] == stack.url
+    connected = r.json()
+    assert connected["owned"] is False
+    assert connected["host"] == stack.url
+    assert connected["vault"] == VAULT
+    assert connected["permission"] == "comment"
 
-    # idempotent: same source+secret returns the existing record
-    r = sb.post(
-        f"{stack_b.url}/api/federation/remotes",
-        json={"sourceUrl": stack.url, "vaultName": VAULT, "secret": share["secret"], "name": ""},
+    # Idempotent on host+secret.
+    again = sb.post(
+        f"{stack_b.url}/api/vaults/connections",
+        json={"host": stack.url, "vault": VAULT, "secret": share["secret"], "permission": "comment", "name": ""},
     )
-    assert r.status_code == 201
-    assert r.json()["id"] == remote["id"]
+    assert again.json()["id"] == connected["id"]
 
-    listed = sb.get(f"{stack_b.url}/api/federation/remotes").json()
-    assert [rv["id"] for rv in listed] == [remote["id"]]
+    vaults = sb.get(f"{stack_b.url}/api/vaults").json()
+    assert [v["owned"] for v in vaults if v["id"] == connected["id"]] == [False]
 
-    # a bogus secret is rejected during server-side validation
-    r = sb.post(
-        f"{stack_b.url}/api/federation/remotes",
-        json={"sourceUrl": stack.url, "vaultName": VAULT, "secret": "bogus", "name": ""},
-    )
-    assert r.status_code == 502, r.text
-
-    assert sb.delete(f"{stack_b.url}/api/federation/remotes/{remote['id']}").status_code == 200
-    assert sb.get(f"{stack_b.url}/api/federation/remotes").json() == []
+    assert sb.delete(f"{stack_b.url}/api/vaults/connections/{connected['id']}").status_code == 200
     stack.owner_session.delete(f"{stack.url}/api/federation/shares/{share['secret']}")
-
-
-def _connect_and_open(stack: OpenhostStack, stack_b: OpenhostStack, page: Page, permission: str) -> dict:
-    """Create a share on A, register it on B, and open the remote vault in B's UI."""
-    share = _create_share(stack, f"pw-{permission}", permission)
-    r = stack_b.owner_session.post(
-        f"{stack_b.url}/api/federation/remotes",
-        json={"sourceUrl": stack.url, "vaultName": VAULT, "secret": share["secret"], "name": f"remote-{permission}"},
-    )
-    assert r.status_code == 201, r.text
-    remote = r.json()
-
-    stack_b.playwright_login(page)
-    page.goto(stack_b.url)
-    page.locator(".vault-picker-item-name", has_text=remote["name"]).click()
-    page.locator(f'.sidebar-item[data-type="file"][data-path="{FILE}"]').click()
-    page.wait_for_selector(".cm-editor", timeout=15_000)
-    page.wait_for_timeout(1500)
-    return {"share": share, "remote": remote}
 
 
 def test_invite_landing_page(stack: OpenhostStack, page: Page) -> None:
@@ -226,10 +151,9 @@ def test_invite_landing_page(stack: OpenhostStack, page: Page) -> None:
     stack.owner_session.delete(f"{stack.url}/api/federation/shares/{share['secret']}")
 
 
-def test_b_connects_by_pasting_invite_and_edits(stack: OpenhostStack, stack_b: OpenhostStack, page: Page) -> None:
+def _connect_via_ui(stack: OpenhostStack, stack_b: OpenhostStack, page: Page, permission: str) -> dict:
     """The real user flow: B pastes A's invite link into their own vault picker."""
-    share = _create_share(stack, "paste-ui", "write")
-
+    share = _create_share(stack, f"ui-{permission}", permission)
     stack_b.playwright_login(page)
     page.goto(stack_b.url)
     page.fill('input[placeholder^="Paste an invite link"]', share["invite_url"])
@@ -237,18 +161,11 @@ def test_b_connects_by_pasting_invite_and_edits(stack: OpenhostStack, stack_b: O
     page.locator(f'.sidebar-item[data-type="file"][data-path="{FILE}"]').click()
     page.wait_for_selector(".cm-editor", timeout=15_000)
     page.wait_for_timeout(1500)
-
-    content = page.locator(".cm-content")
-    expect(content).to_contain_text("Greetings from instance A.")
-
-    remotes = stack_b.owner_session.get(f"{stack_b.url}/api/federation/remotes").json()
-    assert [rv["vault_name"] for rv in remotes] == [VAULT]
-    stack_b.owner_session.delete(f"{stack_b.url}/api/federation/remotes/{remotes[0]['id']}")
-    stack.owner_session.delete(f"{stack.url}/api/federation/shares/{share['secret']}")
+    return share
 
 
-def test_b_edits_a_vault_via_ui(stack: OpenhostStack, stack_b: OpenhostStack, page: Page) -> None:
-    ctx = _connect_and_open(stack, stack_b, page, "write")
+def test_b_connects_by_pasting_invite_and_edits(stack: OpenhostStack, stack_b: OpenhostStack, page: Page) -> None:
+    share = _connect_via_ui(stack, stack_b, page, "write")
     content = page.locator(".cm-content")
     expect(content).to_contain_text("Greetings from instance A.")
 
@@ -270,12 +187,11 @@ def test_b_edits_a_vault_via_ui(stack: OpenhostStack, stack_b: OpenhostStack, pa
     else:
         raise AssertionError("Edit from instance B never reached instance A's markdown file")
 
-    stack_b.owner_session.delete(f"{stack_b.url}/api/federation/remotes/{ctx['remote']['id']}")
-    stack.owner_session.delete(f"{stack.url}/api/federation/shares/{ctx['share']['secret']}")
+    _cleanup_connection(stack, stack_b, share)
 
 
-def test_readonly_remote_vault_ui(stack: OpenhostStack, stack_b: OpenhostStack, page: Page) -> None:
-    ctx = _connect_and_open(stack, stack_b, page, "read")
+def test_readonly_connected_vault_ui(stack: OpenhostStack, stack_b: OpenhostStack, page: Page) -> None:
+    share = _connect_via_ui(stack, stack_b, page, "read")
     content = page.locator(".cm-content")
     expect(content).to_contain_text("Greetings from instance A.")
     # CodeMirror readOnly + editable(false) renders a non-editable content element.
@@ -289,5 +205,32 @@ def test_readonly_remote_vault_ui(stack: OpenhostStack, stack_b: OpenhostStack, 
     body = stack.owner_session.get(f"{stack.url}/api/docs/{VAULT}/file", params={"path": FILE}).text
     assert "SHOULD_NOT_APPEAR" not in body
 
-    stack_b.owner_session.delete(f"{stack_b.url}/api/federation/remotes/{ctx['remote']['id']}")
-    stack.owner_session.delete(f"{stack.url}/api/federation/shares/{ctx['share']['secret']}")
+    _cleanup_connection(stack, stack_b, share)
+
+
+def test_comment_tier_connected_vault_ui(stack: OpenhostStack, stack_b: OpenhostStack, page: Page) -> None:
+    """Comment tier: doc is not editable in the UI, but the comment API accepts the secret."""
+    share = _connect_via_ui(stack, stack_b, page, "comment")
+    content = page.locator(".cm-content")
+    expect(content).to_contain_text("Greetings from instance A.")
+    assert content.get_attribute("contenteditable") == "false"
+    # The comments panel offers "add comment" affordances only when canComment; at minimum the
+    # comment-tier secret must pass A's auth for the comments route (400 = domain validation,
+    # not 401 = rejected).
+    anon = requests.Session()
+    r = anon.post(
+        f"{stack.url}/api/docs/{VAULT}/comments",
+        params={"path": FILE, "secret": share["secret"]},
+        json={"userId": "u1", "userName": "B", "text": "hi", "anchorStart": None, "anchorEnd": None},
+    )
+    assert r.status_code == 400, r.text
+
+    _cleanup_connection(stack, stack_b, share)
+
+
+def _cleanup_connection(stack: OpenhostStack, stack_b: OpenhostStack, share: dict) -> None:
+    sb = stack_b.owner_session
+    for vault in sb.get(f"{stack_b.url}/api/vaults").json():
+        if not vault["owned"]:
+            sb.delete(f"{stack_b.url}/api/vaults/connections/{vault['id']}")
+    stack.owner_session.delete(f"{stack.url}/api/federation/shares/{share['secret']}")

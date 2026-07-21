@@ -957,6 +957,74 @@
         "deprecated": false
       }
     },
+    "/api/vaults/connections": {
+      "post": {
+        "summary": "Connect",
+        "operationId": "ApiVaultsConnectionsConnect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectVaultBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Document created, URL follows",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Vault"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request syntax or unsupported method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status_code": {
+                      "type": "integer"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "extra": {
+                      "additionalProperties": {},
+                      "type": [
+                        "null",
+                        "object",
+                        "array"
+                      ]
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail",
+                    "status_code"
+                  ],
+                  "description": "Validation Exception",
+                  "examples": [
+                    {
+                      "status_code": 400,
+                      "detail": "Bad Request",
+                      "extra": {}
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
     "/api/vaults": {
       "get": {
         "summary": "ListAll",
@@ -1000,6 +1068,75 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Vault"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request syntax or unsupported method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status_code": {
+                      "type": "integer"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "extra": {
+                      "additionalProperties": {},
+                      "type": [
+                        "null",
+                        "object",
+                        "array"
+                      ]
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail",
+                    "status_code"
+                  ],
+                  "description": "Validation Exception",
+                  "examples": [
+                    {
+                      "status_code": 400,
+                      "detail": "Bad Request",
+                      "extra": {}
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/api/vaults/connections/{connection_id}": {
+      "delete": {
+        "summary": "Disconnect",
+        "operationId": "ApiVaultsConnectionsConnectionIdDisconnect",
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -1475,95 +1612,6 @@
         "deprecated": false
       }
     },
-    "/api/federation/remotes": {
-      "get": {
-        "summary": "ListRemotes",
-        "operationId": "ApiFederationRemotesListRemotes",
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {},
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/RemoteVault"
-                  },
-                  "type": "array"
-                }
-              }
-            }
-          }
-        },
-        "deprecated": false
-      },
-      "post": {
-        "summary": "AddRemote",
-        "operationId": "ApiFederationRemotesAddRemote",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddRemoteVaultBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Document created, URL follows",
-            "headers": {},
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RemoteVault"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request syntax or unsupported method",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status_code": {
-                      "type": "integer"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "extra": {
-                      "additionalProperties": {},
-                      "type": [
-                        "null",
-                        "object",
-                        "array"
-                      ]
-                    }
-                  },
-                  "type": "object",
-                  "required": [
-                    "detail",
-                    "status_code"
-                  ],
-                  "description": "Validation Exception",
-                  "examples": [
-                    {
-                      "status_code": 400,
-                      "detail": "Bad Request",
-                      "extra": {}
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
     "/api/federation/shares": {
       "get": {
         "summary": "ListShares",
@@ -1711,562 +1759,6 @@
         "deprecated": false
       }
     },
-    "/api/federation/peer/docs/file": {
-      "get": {
-        "summary": "PeerGetFile",
-        "operationId": "ApiFederationPeerDocsFilePeerGetFile",
-        "parameters": [
-          {
-            "name": "secret",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "path",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {},
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request syntax or unsupported method",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status_code": {
-                      "type": "integer"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "extra": {
-                      "additionalProperties": {},
-                      "type": [
-                        "null",
-                        "object",
-                        "array"
-                      ]
-                    }
-                  },
-                  "type": "object",
-                  "required": [
-                    "detail",
-                    "status_code"
-                  ],
-                  "description": "Validation Exception",
-                  "examples": [
-                    {
-                      "status_code": 400,
-                      "detail": "Bad Request",
-                      "extra": {}
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "deprecated": false
-      },
-      "post": {
-        "summary": "PeerCreateFile",
-        "operationId": "ApiFederationPeerDocsFilePeerCreateFile",
-        "parameters": [
-          {
-            "name": "secret",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "path",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateFileBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Document created, URL follows",
-            "headers": {},
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request syntax or unsupported method",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status_code": {
-                      "type": "integer"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "extra": {
-                      "additionalProperties": {},
-                      "type": [
-                        "null",
-                        "object",
-                        "array"
-                      ]
-                    }
-                  },
-                  "type": "object",
-                  "required": [
-                    "detail",
-                    "status_code"
-                  ],
-                  "description": "Validation Exception",
-                  "examples": [
-                    {
-                      "status_code": 400,
-                      "detail": "Bad Request",
-                      "extra": {}
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "deprecated": false
-      },
-      "delete": {
-        "summary": "PeerRemoveFile",
-        "operationId": "ApiFederationPeerDocsFilePeerRemoveFile",
-        "parameters": [
-          {
-            "name": "secret",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "path",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {},
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request syntax or unsupported method",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status_code": {
-                      "type": "integer"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "extra": {
-                      "additionalProperties": {},
-                      "type": [
-                        "null",
-                        "object",
-                        "array"
-                      ]
-                    }
-                  },
-                  "type": "object",
-                  "required": [
-                    "detail",
-                    "status_code"
-                  ],
-                  "description": "Validation Exception",
-                  "examples": [
-                    {
-                      "status_code": 400,
-                      "detail": "Bad Request",
-                      "extra": {}
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "deprecated": false
-      },
-      "patch": {
-        "summary": "PeerMoveFile",
-        "operationId": "ApiFederationPeerDocsFilePeerMoveFile",
-        "parameters": [
-          {
-            "name": "secret",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "path",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RenameBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {},
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request syntax or unsupported method",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status_code": {
-                      "type": "integer"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "extra": {
-                      "additionalProperties": {},
-                      "type": [
-                        "null",
-                        "object",
-                        "array"
-                      ]
-                    }
-                  },
-                  "type": "object",
-                  "required": [
-                    "detail",
-                    "status_code"
-                  ],
-                  "description": "Validation Exception",
-                  "examples": [
-                    {
-                      "status_code": 400,
-                      "detail": "Bad Request",
-                      "extra": {}
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/api/federation/peer/docs": {
-      "get": {
-        "summary": "PeerListDocs",
-        "operationId": "ApiFederationPeerDocsPeerListDocs",
-        "parameters": [
-          {
-            "name": "secret",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {},
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/FileEntry"
-                  },
-                  "type": "array"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request syntax or unsupported method",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status_code": {
-                      "type": "integer"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "extra": {
-                      "additionalProperties": {},
-                      "type": [
-                        "null",
-                        "object",
-                        "array"
-                      ]
-                    }
-                  },
-                  "type": "object",
-                  "required": [
-                    "detail",
-                    "status_code"
-                  ],
-                  "description": "Validation Exception",
-                  "examples": [
-                    {
-                      "status_code": 400,
-                      "detail": "Bad Request",
-                      "extra": {}
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/api/federation/peer/vault": {
-      "get": {
-        "summary": "PeerVault",
-        "operationId": "ApiFederationPeerVaultPeerVault",
-        "parameters": [
-          {
-            "name": "secret",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {},
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PeerVaultInfo"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request syntax or unsupported method",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status_code": {
-                      "type": "integer"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "extra": {
-                      "additionalProperties": {},
-                      "type": [
-                        "null",
-                        "object",
-                        "array"
-                      ]
-                    }
-                  },
-                  "type": "object",
-                  "required": [
-                    "detail",
-                    "status_code"
-                  ],
-                  "description": "Validation Exception",
-                  "examples": [
-                    {
-                      "status_code": 400,
-                      "detail": "Bad Request",
-                      "extra": {}
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/api/federation/remotes/{vault_id}": {
-      "delete": {
-        "summary": "RemoveRemote",
-        "operationId": "ApiFederationRemotesVaultIdRemoveRemote",
-        "parameters": [
-          {
-            "name": "vault_id",
-            "in": "path",
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "deprecated": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {},
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request syntax or unsupported method",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status_code": {
-                      "type": "integer"
-                    },
-                    "detail": {
-                      "type": "string"
-                    },
-                    "extra": {
-                      "additionalProperties": {},
-                      "type": [
-                        "null",
-                        "object",
-                        "array"
-                      ]
-                    }
-                  },
-                  "type": "object",
-                  "required": [
-                    "detail",
-                    "status_code"
-                  ],
-                  "description": "Validation Exception",
-                  "examples": [
-                    {
-                      "status_code": 400,
-                      "detail": "Bad Request",
-                      "extra": {}
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
     "/api/federation/shares/{secret}": {
       "delete": {
         "summary": "RevokeShare",
@@ -2290,6 +1782,77 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request syntax or unsupported method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status_code": {
+                      "type": "integer"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "extra": {
+                      "additionalProperties": {},
+                      "type": [
+                        "null",
+                        "object",
+                        "array"
+                      ]
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail",
+                    "status_code"
+                  ],
+                  "description": "Validation Exception",
+                  "examples": [
+                    {
+                      "status_code": 400,
+                      "detail": "Bad Request",
+                      "extra": {}
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/api/federation/share-info": {
+      "get": {
+        "summary": "ShareInfo",
+        "operationId": "ApiFederationShareInfoShareInfo",
+        "parameters": [
+          {
+            "name": "secret",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareInfo"
                 }
               }
             }
@@ -2485,16 +2048,24 @@
   },
   "components": {
     "schemas": {
-      "AddRemoteVaultBody": {
+      "ConnectVaultBody": {
         "properties": {
-          "sourceUrl": {
+          "host": {
             "type": "string"
           },
-          "vaultName": {
+          "vault": {
             "type": "string"
           },
           "secret": {
             "type": "string"
+          },
+          "permission": {
+            "type": "string",
+            "enum": [
+              "read",
+              "comment",
+              "write"
+            ]
           },
           "name": {
             "type": "string"
@@ -2502,11 +2073,12 @@
         },
         "type": "object",
         "required": [
+          "host",
+          "permission",
           "secret",
-          "sourceUrl",
-          "vaultName"
+          "vault"
         ],
-        "title": "AddRemoteVaultBody"
+        "title": "ConnectVaultBody"
       },
       "CreateCommentBody": {
         "properties": {
@@ -2631,6 +2203,7 @@
             "type": "string",
             "enum": [
               "read",
+              "comment",
               "write"
             ]
           }
@@ -2701,72 +2274,6 @@
         "required": [],
         "title": "OkResponse"
       },
-      "PeerVaultInfo": {
-        "properties": {
-          "vault_name": {
-            "type": "string"
-          },
-          "permission": {
-            "type": "string",
-            "enum": [
-              "read",
-              "write"
-            ]
-          },
-          "app": {
-            "type": "string"
-          },
-          "api_version": {
-            "type": "integer"
-          }
-        },
-        "type": "object",
-        "required": [
-          "permission",
-          "vault_name"
-        ],
-        "title": "PeerVaultInfo"
-      },
-      "RemoteVault": {
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "source_url": {
-            "type": "string"
-          },
-          "vault_name": {
-            "type": "string"
-          },
-          "secret": {
-            "type": "string"
-          },
-          "permission": {
-            "type": "string",
-            "enum": [
-              "read",
-              "write"
-            ]
-          },
-          "created_at": {
-            "type": "string"
-          }
-        },
-        "type": "object",
-        "required": [
-          "created_at",
-          "id",
-          "name",
-          "permission",
-          "secret",
-          "source_url",
-          "vault_name"
-        ],
-        "title": "RemoteVault"
-      },
       "RenameBody": {
         "properties": {
           "newPath": {
@@ -2778,6 +2285,35 @@
           "newPath"
         ],
         "title": "RenameBody"
+      },
+      "ShareInfo": {
+        "properties": {
+          "app": {
+            "type": "string"
+          },
+          "api_version": {
+            "type": "integer"
+          },
+          "vault": {
+            "type": "string"
+          },
+          "permission": {
+            "type": "string",
+            "enum": [
+              "read",
+              "comment",
+              "write"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "api_version",
+          "app",
+          "permission",
+          "vault"
+        ],
+        "title": "ShareInfo"
       },
       "ShareLink": {
         "properties": {
@@ -2842,13 +2378,48 @@
       },
       "Vault": {
         "properties": {
+          "id": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "vault": {
+            "type": "string"
+          },
+          "permission": {
+            "type": "string",
+            "enum": [
+              "read",
+              "comment",
+              "write"
+            ]
+          },
+          "owned": {
+            "type": "boolean"
+          },
+          "secret": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "required": [
-          "name"
+          "host",
+          "id",
+          "name",
+          "owned",
+          "permission",
+          "vault"
         ],
         "title": "Vault"
       },
@@ -2879,6 +2450,7 @@
             "type": "string",
             "enum": [
               "read",
+              "comment",
               "write"
             ]
           },

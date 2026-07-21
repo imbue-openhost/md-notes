@@ -1,10 +1,12 @@
 import { createResource, Show, type Component } from 'solid-js';
 import { serverUrl, type FederationInvite } from '../config';
-import { fetchPeerVaultInfo, PeerAuthError } from '../api/peer';
+import { fetchShareInfo, InviteRejectedError } from '../api/invites';
 
 interface Props {
   invite: FederationInvite;
 }
+
+const PERMISSION_LABELS = { read: 'view only', comment: 'can comment', write: 'can edit' } as const;
 
 /**
  * Landing page shown when an invite link is opened directly. Invite links point at the *sharing*
@@ -16,7 +18,7 @@ export const FederationConnect: Component<Props> = (props) => {
 
   const [info] = createResource(async () => {
     if (!props.invite.secret) throw new Error('This invite link is missing its secret.');
-    return fetchPeerVaultInfo(serverUrl, props.invite.secret);
+    return fetchShareInfo(serverUrl, props.invite.secret);
   });
 
   function copyLink(btn: HTMLButtonElement) {
@@ -26,7 +28,7 @@ export const FederationConnect: Component<Props> = (props) => {
   }
 
   function errorMessage(e: unknown): string {
-    if (e instanceof PeerAuthError) return 'This invite is invalid or has been revoked.';
+    if (e instanceof InviteRejectedError) return 'This invite is invalid or has been revoked.';
     return String(e instanceof Error ? e.message : e);
   }
 
@@ -41,8 +43,8 @@ export const FederationConnect: Component<Props> = (props) => {
               {(data) => (
                 <>
                   <p>
-                    This link is an invite to the vault <strong>{data().vault_name}</strong> on this
-                    md-notes instance ({data().permission === 'write' ? 'can edit' : 'view only'}).
+                    This link is an invite to the vault <strong>{data().vault}</strong> on this
+                    md-notes instance ({PERMISSION_LABELS[data().permission]}).
                   </p>
                   <p>
                     To connect it, open <strong>your own</strong> md-notes, choose{' '}

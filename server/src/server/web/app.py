@@ -18,7 +18,6 @@ from server.core.comments import InvalidComment
 from server.core.config import Config
 from server.core.db import close_db
 from server.core.db import init_db
-from server.core.federation import RemoteVaultError
 from server.core.files import PathTraversalError
 from server.core.history import HistoryManager
 from server.core.sync import SyncManager
@@ -65,10 +64,6 @@ def _invalid_vault_name_handler(request: Request[Any, Any, Any], exc: InvalidVau
 
 def _vault_not_found_handler(request: Request[Any, Any, Any], exc: VaultNotFound) -> Response[dict[str, str]]:
     return Response({"error": "not found"}, status_code=404)
-
-
-def _remote_vault_error_handler(request: Request[Any, Any, Any], exc: RemoteVaultError) -> Response[dict[str, str]]:
-    return Response({"error": str(exc)}, status_code=502)
 
 
 def _vault_already_exists_handler(
@@ -135,7 +130,6 @@ def create_app(config: Config) -> Litestar:
             InvalidVaultName: _invalid_vault_name_handler,
             VaultNotFound: _vault_not_found_handler,
             VaultAlreadyExists: _vault_already_exists_handler,
-            RemoteVaultError: _remote_vault_error_handler,
             CommentNotFound: _comment_not_found_handler,
             CommentPermissionError: _comment_permission_handler,
             InvalidComment: _invalid_comment_handler,

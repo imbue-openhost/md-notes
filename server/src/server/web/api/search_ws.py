@@ -1,4 +1,4 @@
-"""Interactive search over a websocket, shared by the vault and federation-peer endpoints."""
+"""Interactive search over a websocket."""
 
 import threading
 from functools import partial

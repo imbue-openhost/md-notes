@@ -1,11 +1,11 @@
 import { createSignal, For, Show, type Component } from 'solid-js';
-import type { VaultConfig } from '../api/types';
+import type { Vault } from '../api/types';
 
 interface Props {
-  vaults: VaultConfig[];
-  onSelect: (vault: VaultConfig) => void;
+  vaults: Vault[];
+  onSelect: (vault: Vault) => void;
   onAdd: (name: string, path: string, sync: boolean) => void;
-  onRemove: (vault: VaultConfig) => void;
+  onRemove: (vault: Vault) => void;
   /** Connect a shared vault from a pasted invite link; rejects with a user-facing message. */
   onConnectRemote: (link: string) => Promise<void>;
 }
@@ -50,27 +50,25 @@ export const VaultPicker: Component<Props> = (props) => {
                 <div class="vault-picker-item-info" onClick={() => props.onSelect(vault)}>
                   <div class="vault-picker-item-name">
                     {vault.name}
-                    <Show when={vault.remote}>
-                      {(remote) => (
-                        <span
-                          class="vault-picker-item-remote"
-                          title={`Shared from ${remote().source_url} (${remote().permission === 'write' ? 'can edit' : 'view only'})`}
-                        >
-                          {' ⇄ '}{new URL(remote().source_url).host}
-                        </span>
-                      )}
+                    <Show when={!vault.owned}>
+                      <span
+                        class="vault-picker-item-remote"
+                        title={`Shared from ${vault.host} (${vault.permission === 'write' ? 'can edit' : vault.permission === 'comment' ? 'can comment' : 'view only'})`}
+                      >
+                        {' ⇄ '}{new URL(vault.host).host}
+                      </span>
                     </Show>
                   </div>
                 </div>
                 <div class="vault-picker-item-badges">
                   <button
                     class="vault-picker-remove"
-                    title={vault.remote ? 'Disconnect shared vault' : 'Remove vault'}
+                    title={vault.owned ? 'Remove vault' : 'Disconnect shared vault'}
                     onClick={(e) => {
                       e.stopPropagation();
-                      const message = vault.remote
-                        ? `Disconnect shared vault "${vault.name}"? The files stay on the other instance.`
-                        : `Delete vault "${vault.name}"? All files will be permanently deleted.`;
+                      const message = vault.owned
+                        ? `Delete vault "${vault.name}"? All files will be permanently deleted.`
+                        : `Disconnect shared vault "${vault.name}"? The files stay on the other instance.`;
                       if (confirm(message)) props.onRemove(vault);
                     }}
                   >

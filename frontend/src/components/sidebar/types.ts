@@ -1,4 +1,4 @@
-import type { VaultConfig } from '../../api/types';
+import type { Permission, Vault } from '../../api/types';
 
 export type SyncStatus = 'connected' | 'disconnected' | 'connecting';
 export type BackendStatus = 'connected' | 'disconnected' | 'unauthorized';
@@ -6,17 +6,17 @@ export type BackendStatus = 'connected' | 'disconnected' | 'unauthorized';
 /** Props shared by the desktop and mobile sidebar variants. */
 export interface SidebarCommonProps {
   vaultName?: string;
-  vaults?: VaultConfig[];
-  /** True when the active vault is a remote share (files live on another instance). */
+  vaults?: Vault[];
+  /** True when the active vault is connected from another instance. */
   isRemote?: boolean;
-  /** True when the active vault cannot be edited (read-only remote share). */
-  readOnly?: boolean;
+  /** Permission on the active vault; anything below 'write' hides mutating file actions. */
+  permission?: Permission;
   onSelect: (path: string) => void;
   /** A file or folder was deleted; close any editors on paths under it. */
   onDeleted?: (path: string) => void;
   onShare?: (path: string) => void;
   onShareVault?: () => void;
-  onSwitchToVault?: (v: VaultConfig) => void;
+  onSwitchToVault?: (v: Vault) => void;
   onManageVaults?: () => void;
   onRefreshVaults?: () => void;
   onSettings?: () => void;

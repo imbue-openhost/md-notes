@@ -1,4 +1,10 @@
-"""Document endpoints: file CRUD, search, and CRDT WebSocket, scoped per vault."""
+"""Document endpoints: file CRUD, search, and CRDT WebSocket, scoped per vault.
+
+Accessible to the owner and to vault-share secrets (see ``requires_vault_access``); each handler's
+``permission`` opt declares the minimum tier. Only write-tier callers get a CRDT channel that
+accepts document updates — read/comment tiers sync but their updates are dropped (comments go
+through the REST comment routes instead).
+"""
 
 from typing import Any
 
@@ -21,6 +27,7 @@ from server.core.files import delete_file
 from server.core.files import list_files
 from server.core.files import read_file
 from server.core.files import rename_file
+from server.core.sync import ReadOnlyChannel
 from server.core.sync import SyncManager
 from server.core.sync import SyncNotRunning
 from server.core.vaults import VaultNotFound
@@ -31,20 +38,24 @@ from server.models.files import FileEntry
 from server.models.files import RenameBody
 from server.web.api.channel import LitestarWebsocketChannel
 from server.web.api.search_ws import serve_search_socket
+from server.web.auth import requires_vault_access
+from server.web.auth import vault_permission
 
 
 class DocsController(Controller):
     path = "/api/docs/{vault_name:str}"
+    guards = [requires_vault_access]
+    opt = {"public": True}  # opts out of the app-wide owner guard; requires_vault_access takes over
 
-    @get("/")
+    @get("/", opt={"permission": "read"})
     async def list_all(self, vault_name: FromPath[str], config: Config) -> list[FileEntry]:
         return list_files(vault_root(config.vault_path, vault_name))
 
-    @get("/file", media_type=MediaType.TEXT)
+    @get("/file", media_type=MediaType.TEXT, opt={"permission": "read"})
     async def get_file(self, vault_name: FromPath[str], path: FromQuery[str], config: Config) -> str:
         return read_file(vault_root(config.vault_path, vault_name), path)
 
-    @websocket("/search_websocket")
+    @websocket("/search_websocket", opt={"permission": "read"})
     async def search_websocket(
         self, socket: WebSocket[Any, Any, Any], vault_name: FromPath[str], config: Config
     ) -> None:
@@ -56,7 +67,7 @@ class DocsController(Controller):
             return
         await serve_search_socket(socket, root)
 
-    @post("/file", status_code=HTTP_201_CREATED)
+    @post("/file", status_code=HTTP_201_CREATED, opt={"permission": "write"})
     async def create_new_file(
         self, vault_name: FromPath[str], path: FromQuery[str], data: CreateFileBody, config: Config
     ) -> OkResponse:
@@ -67,19 +78,19 @@ class DocsController(Controller):
             create_file(root, path, data.content)
         return OkResponse()
 
-    @patch("/file")
+    @patch("/file", opt={"permission": "write"})
     async def move_file(
         self, vault_name: FromPath[str], path: FromQuery[str], data: RenameBody, config: Config
     ) -> OkResponse:
         rename_file(vault_root(config.vault_path, vault_name), path, data.newPath)
         return OkResponse()
 
-    @delete("/file", status_code=200)
+    @delete("/file", status_code=200, opt={"permission": "write"})
     async def remove_file(self, vault_name: FromPath[str], path: FromQuery[str], config: Config) -> OkResponse:
         delete_file(vault_root(config.vault_path, vault_name), path)
         return OkResponse()
 
-    @websocket("/crdt_websocket/{filepath:path}")
+    @websocket("/crdt_websocket/{filepath:path}", opt={"permission": "read"})
     async def crdt_websocket(
         self, socket: WebSocket[Any, Any, Any], vault_name: FromPath[str], filepath: FromPath[str]
     ) -> None:
@@ -87,7 +98,8 @@ class DocsController(Controller):
         await socket.accept()
         manager: SyncManager = socket.app.state.sync_manager
         doc_path = f"{vault_name}/{filepath.lstrip('/')}"
-        channel = LitestarWebsocketChannel(socket, doc_path)
+        raw = LitestarWebsocketChannel(socket, doc_path)
+        channel = raw if vault_permission(socket, vault_name) == "write" else ReadOnlyChannel(raw)
         try:
             await manager.serve(channel)
         except SyncNotRunning:

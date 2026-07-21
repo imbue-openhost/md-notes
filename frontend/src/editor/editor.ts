@@ -52,8 +52,8 @@ import { syncHistoryKeymap } from './undo-redo';
 import { foldChevrons } from './foldChevrons';
 import { mobileTheme } from './mobile/theme';
 import type { EditorKind } from './editor-settings';
-import { createSyncSession, createShareSyncSession, createPeerSyncSession, type SyncSession } from './sync';
-import type { RemoteVaultRef } from '../api/types';
+import { createSyncSession, createShareSyncSession, type SyncSession } from './sync';
+import type { Vault } from '../api/types';
 
 import { render } from 'solid-js/web';
 import { CommentsController } from './comments/controller';
@@ -200,13 +200,12 @@ export interface EditorOptions {
   vimrcContent?: string;
   /** Touch-device editing: enables autocapitalize/autocorrect/spellcheck. */
   touch?: boolean;
-  syncVault?: string;
+  /** Vault (owned or connected) to sync against; requires syncFilePath + syncServerUrl. */
+  vault?: Vault;
   syncFilePath?: string;
   syncServerUrl?: string;
   shareUuid?: string;
   shareDocPath?: string;
-  /** Sync against a federated vault on another instance instead of a local vault. */
-  remoteVault?: RemoteVaultRef;
   readOnly?: boolean;
   /** Header slug (or raw header text) to jump to once the doc has loaded. */
   anchorHeader?: string;
@@ -229,16 +228,13 @@ export interface EditorInstance {
 
 export function createEditor(container: HTMLElement, options: EditorOptions = {}): EditorInstance {
   const kind = options.kind ?? 'live-preview';
-  const useSync = !!(options.remoteVault || (options.syncServerUrl && (options.syncVault || options.shareUuid)));
+  const useSync = !!(options.syncServerUrl && (options.vault || options.shareUuid));
   const extensions = buildExtensions(kind, options.vimrcContent, useSync, options.touch ?? false);
 
   let syncSession: SyncSession | null = null;
 
-  if (options.remoteVault && options.syncFilePath) {
-    const remote = options.remoteVault;
-    syncSession = createPeerSyncSession(remote.source_url, remote.secret, remote.id, options.syncFilePath);
-  } else if (options.syncServerUrl && options.syncVault && options.syncFilePath) {
-    syncSession = createSyncSession(options.syncVault, options.syncFilePath, options.syncServerUrl);
+  if (options.syncServerUrl && options.vault && options.syncFilePath) {
+    syncSession = createSyncSession(options.vault, options.syncFilePath, options.syncServerUrl);
   } else if (options.syncServerUrl && options.shareUuid && options.shareDocPath) {
     syncSession = createShareSyncSession(options.shareUuid, options.shareDocPath, options.syncServerUrl);
   }
@@ -278,10 +274,8 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
     extensions.push(EditorView.editable.of(false));
   }
 
-  if (options.remoteVault && options.syncFilePath) {
-    extensions.push(foldPersistence({ vault: `remote:${options.remoteVault.id}`, filePath: options.syncFilePath }));
-  } else if (options.syncVault && options.syncFilePath) {
-    extensions.push(foldPersistence({ vault: options.syncVault, filePath: options.syncFilePath }));
+  if (options.vault && options.syncFilePath) {
+    extensions.push(foldPersistence({ vault: options.vault.id, filePath: options.syncFilePath }));
   }
 
   if (options.anchorHeader) {

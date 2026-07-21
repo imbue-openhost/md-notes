@@ -1,15 +1,15 @@
 import { For, Show, type Component } from 'solid-js';
 import { DropdownMenu } from '@kobalte/core';
-import type { VaultConfig } from '../../api/types';
+import type { Permission, Vault } from '../../api/types';
 import { Icon } from './icons';
 
 interface Props {
   vaultName?: string;
-  vaults?: VaultConfig[];
+  vaults?: Vault[];
   isRemote?: boolean;
-  readOnly?: boolean;
+  permission?: Permission;
   onShareVault?: () => void;
-  onSwitchToVault?: (v: VaultConfig) => void;
+  onSwitchToVault?: (v: Vault) => void;
   onManageVaults?: () => void;
   onRefreshVaults?: () => void;
 }
@@ -21,8 +21,8 @@ export const VaultSwitcher: Component<Props> = (props) => (
     <DropdownMenu.Trigger class="sidebar-vault-trigger" title="Switch vault">
       <span class="sidebar-vault-name">{props.vaultName || 'No vault'}</span>
       <Show when={props.isRemote}>
-        <span class="sidebar-vault-remote-badge" title={props.readOnly ? 'Shared from another instance (read-only)' : 'Shared from another instance'}>
-          {props.readOnly ? '⇄ read-only' : '⇄'}
+        <span class="sidebar-vault-remote-badge" title="Shared from another instance">
+          {props.permission === 'read' ? '⇄ read-only' : props.permission === 'comment' ? '⇄ comment-only' : '⇄'}
         </span>
       </Show>
       <span class="sidebar-vault-chevron" aria-hidden>
@@ -47,7 +47,7 @@ export const VaultSwitcher: Component<Props> = (props) => (
                 </Show>
               </span>
               <span class="sidebar-vault-item-name">{v.name}</span>
-              <Show when={v.remote}>
+              <Show when={!v.owned}>
                 <span class="sidebar-vault-remote-badge" title="Shared from another instance">⇄</span>
               </Show>
             </DropdownMenu.Item>
