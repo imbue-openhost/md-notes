@@ -49,7 +49,7 @@ import { pasteIndentNormalization } from './indent/pasteIndent';
 import { vimMode } from './vim';
 import { toggleTaskAtSelection } from './tasks';
 import { syncHistoryKeymap } from './undo-redo';
-import { mobileFoldChevrons } from './mobile/foldChevrons';
+import { foldChevrons } from './foldChevrons';
 import { mobileTheme } from './mobile/theme';
 import type { EditorKind } from './editor-settings';
 import { createSyncSession, createShareSyncSession, type SyncSession } from './sync';
@@ -120,7 +120,8 @@ function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, use
     collapseOnSelectionFacet.of(true),
     mouseSelectingField,
     editorTheme,
-    ...(kind === 'live-preview-mobile' ? [mobileTheme, mobileFoldChevrons()] : []),
+    ...(kind === 'live-preview-mobile' ? [mobileTheme] : []),
+    foldChevrons(kind === 'live-preview-mobile' ? 'cursor' : 'hover'),
     indentDetection(),
     pasteIndentNormalization(),
     spaceWidthField,
@@ -157,7 +158,14 @@ function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, use
       mousedown: (_event, view) => {
         view.dispatch({ effects: setMouseSelecting.of(true) });
         const onUp = () => {
-          view.dispatch({ effects: setMouseSelecting.of(false) });
+          // Re-assert the (unchanged) selection: the drag-end rebuild reveals
+          // formatting marks and shifts the line's text, and without a
+          // selection in this transaction the cursor layer may keep a stale
+          // caret position/paint until some later event.
+          view.dispatch({
+            effects: setMouseSelecting.of(false),
+            selection: view.state.selection,
+          });
           document.removeEventListener('mouseup', onUp);
         };
         document.addEventListener('mouseup', onUp);
@@ -165,7 +173,7 @@ function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, use
       },
     }),
 
-    markdownFolding({ gutter: kind !== 'live-preview-mobile' }),
+    markdownFolding(),
   ];
 }
 
@@ -234,7 +242,7 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   }
 
   if (options.anchorHeader) {
-    extensions.push(headerAnchorJump(options.anchorHeader));
+    extensions.push(headerAnchorJump(options.anchorHeader, syncSession?.ready));
   }
 
   // Header link buttons are hover-revealed, which has no touch equivalent;
@@ -251,6 +259,22 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   const view = new EditorView({
     state,
     parent: container,
+  });
+
+  // Password-manager extensions (e.g. iCloud Passwords) listen for these keys
+  // on document and forward them to their autofill dropdown when they think
+  // one is open — a stale dropdown request turns Enter into "Open Passwords
+  // app". The editor fully handles these keys, so hide them from page-level
+  // listeners. (A raw bubble listener on view.dom, because CM's keymaps stop
+  // running domEventHandlers once a key is handled.)
+  view.dom.addEventListener('keydown', (event) => {
+    switch (event.key) {
+      case 'Enter':
+      case 'Escape':
+      case 'ArrowUp':
+      case 'ArrowDown':
+        event.stopPropagation();
+    }
   });
 
   // Block input until the sync session reports a successful first handshake

@@ -8,6 +8,8 @@ export interface SidebarCommonProps {
   vaultName?: string;
   vaults?: VaultConfig[];
   onSelect: (path: string) => void;
+  /** A file or folder was deleted; close any editors on paths under it. */
+  onDeleted?: (path: string) => void;
   onShare?: (path: string) => void;
   onSwitchToVault?: (v: VaultConfig) => void;
   onManageVaults?: () => void;

@@ -109,6 +109,7 @@ export const QuickOpen: Component<Props> = (props) => {
   }
 
   function onKeyDown(e: KeyboardEvent) {
+    e.stopPropagation();
     if (e.key === 'Escape') {
       e.preventDefault();
       props.onClose();
@@ -131,14 +132,19 @@ export const QuickOpen: Component<Props> = (props) => {
       <Dialog.Portal>
         <div class="settings-modal-overlay">
           <Dialog.Content class="quick-open-modal" onInteractOutside={() => props.onClose()}>
+            {/* autocomplete=off plus native (non-delegated) listeners that stop
+                propagation: password-manager extensions watch input/keydown at
+                the document level and can anchor their autofill dropdown here,
+                which lets them hijack Enter/arrow keys page-wide afterwards. */}
             <input
               ref={inputRef}
               class="quick-open-input"
               type="text"
+              autocomplete="off"
               placeholder="Search files..."
               value={query()}
-              onInput={(e) => setQuery(e.currentTarget.value)}
-              onKeyDown={onKeyDown}
+              on:input={(e) => { e.stopPropagation(); setQuery(inputRef.value); }}
+              on:keydown={onKeyDown}
             />
             <Show when={results().length > 0} fallback={
               <div class="quick-open-empty">{allFiles.loading ? 'Loading...' : 'No matches'}</div>

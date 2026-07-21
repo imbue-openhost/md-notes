@@ -388,6 +388,14 @@ export async function clearVaultDocCache(vaultName: string, filePath: string): P
   await deleteIDBDatabase(vaultIdbKey(vaultName, filePath));
 }
 
+/** Drop IDB stores for a path and (for dirs) everything cached under it (call after rename/move). */
+export async function clearVaultDocCacheUnder(vaultName: string, path: string): Promise<void> {
+  await deleteIDBDatabase(vaultIdbKey(vaultName, path));
+  const prefix = vaultIdbKey(vaultName, `${path}/`);
+  const all = await listIDBDatabases();
+  await Promise.all(all.filter((n) => n.startsWith(prefix)).map(deleteIDBDatabase));
+}
+
 /** Drop IDB stores for every cached doc in a vault. */
 export async function clearVaultCache(vaultName: string): Promise<void> {
   const prefix = `mdnotes:vault:${vaultName}:`;

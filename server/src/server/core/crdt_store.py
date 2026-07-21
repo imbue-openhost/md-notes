@@ -6,6 +6,7 @@ clientID/clocks they last saw — no doubling.
 """
 
 import os
+import shutil
 from pathlib import Path
 from pathlib import PurePosixPath
 
@@ -70,10 +71,7 @@ def _dir_path(vault_root: Path, rel_path: str) -> Path:
 def delete_dir(vault_root: Path, rel_path: str) -> None:
     target = _dir_path(vault_root, rel_path)
     if target.is_dir():
-        try:
-            target.rmdir()
-        except OSError:
-            pass
+        shutil.rmtree(target, ignore_errors=True)
 
 
 def rename_dir(vault_root: Path, old_path: str, new_path: str) -> None:

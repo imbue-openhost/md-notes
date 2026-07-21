@@ -16,30 +16,25 @@ import { EditorView } from '@codemirror/view';
 export const mobileTheme = [
   EditorView.editorAttributes.of({ class: 'cm-mobile' }),
   EditorView.theme({
+    // Narrower line padding / chevron column than desktop; --cm-line-pad-left
+    // drives both the .cm-line padding and the chevron width (base theme), and
+    // keeps list-bullet alignment in sync (see listLineLayout.ts).
+    '&.cm-mobile': {
+      '--cm-line-pad-left': '26px',
+    },
+
     '&.cm-mobile .cm-content': {
       padding: 'calc(56px + env(safe-area-inset-top)) 0 35vh 0',
     },
 
     '&.cm-mobile .cm-line': {
-      padding: '0 12px 0 26px',
+      paddingRight: '12px',
     },
 
-    // Full-height flex box so the glyph centers on the (possibly heading-
-    // sized) line; fixed font size so it doesn't scale with the heading.
-    '&.cm-mobile .cm-mobile-fold-chevron': {
-      position: 'absolute',
-      left: '0',
-      top: '0',
-      height: '100%',
-      width: '26px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: 'hsl(var(--muted-foreground, 220 9% 46%))',
-      cursor: 'pointer',
-      userSelect: 'none',
-      '-webkit-user-select': 'none',
-      fontSize: '17px',
+    // Always visible (no hover on touch) — the plugin only adds the widget
+    // when it should show.
+    '&.cm-mobile .cm-fold-chevron': {
+      opacity: '1',
     },
   }),
 ];

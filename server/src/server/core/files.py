@@ -4,6 +4,7 @@ All path arguments are relative to the vault root and validated
 to prevent directory traversal.
 """
 
+import shutil
 from pathlib import Path
 from pathlib import PurePosixPath
 
@@ -61,6 +62,15 @@ def write_file(root: Path, rel_path: str, content: str) -> None:
     target.write_text(content, encoding="utf-8")
 
 
+def create_file(root: Path, rel_path: str, content: str) -> None:
+    """Create a new file; refuse to overwrite an existing one."""
+    target = _resolve_and_validate(root, rel_path)
+    if target.exists():
+        raise FileExistsError(f"Already exists: {rel_path}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+
+
 def create_directory(root: Path, rel_path: str) -> None:
     """Create a directory inside the vault."""
     target = _resolve_and_validate(root, rel_path)
@@ -68,10 +78,10 @@ def create_directory(root: Path, rel_path: str) -> None:
 
 
 def delete_file(root: Path, rel_path: str) -> None:
-    """Delete a file or empty directory; propagate to CRDT sidecar tree."""
+    """Delete a file or directory (recursively); propagate to CRDT sidecar tree."""
     target = _resolve_and_validate(root, rel_path)
     if target.is_dir():
-        target.rmdir()
+        shutil.rmtree(target)
         crdt_store.delete_dir(root, rel_path)
     else:
         target.unlink()
@@ -82,6 +92,8 @@ def rename_file(root: Path, old_path: str, new_path: str) -> None:
     """Rename / move a file within the vault; propagate to CRDT sidecar tree."""
     src = _resolve_and_validate(root, old_path)
     dst = _resolve_and_validate(root, new_path)
+    if dst.exists():
+        raise FileExistsError(f"Already exists: {new_path}")
     dst.parent.mkdir(parents=True, exist_ok=True)
     is_dir = src.is_dir()
     src.rename(dst)

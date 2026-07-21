@@ -109,8 +109,10 @@ body {
 
 /* ── Sidebar ──────────────────────────────────────────────── */
 #sidebar {
+  position: relative;
   width: 240px;
   min-width: 180px;
+  flex-shrink: 0;
   border-right: 1px solid hsl(var(--border));
   display: flex;
   flex-direction: column;
@@ -118,92 +120,173 @@ body {
   background: hsl(var(--muted));
 }
 
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.sidebar-resize-handle:hover {
+  background: hsl(var(--primary) / 0.25);
+}
+
+body.sidebar-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.sidebar-resizing .sidebar-resize-handle {
+  background: hsl(var(--primary) / 0.35);
+}
+
+#sidebar-rail {
+  width: 38px;
+  flex-shrink: 0;
+  border-right: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+}
+
+/* Wraps: the vault trigger claims its row; when the buttons don't fit
+ * beside it they reflow onto their own line below. */
 .sidebar-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  font-weight: 600;
-  font-size: 13px;
-  border-bottom: 1px solid hsl(var(--border));
+  flex-wrap: wrap;
+  row-gap: 2px;
+  column-gap: 4px;
+  padding: 8px 8px 6px 8px;
 }
 
 .sidebar-header-buttons {
   display: flex;
-  gap: 4px;
+  gap: 0;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .sidebar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: none;
-  border: 1px solid hsl(var(--border));
-  border-radius: 4px;
+  border: none;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 14px;
-  padding: 2px 8px;
-  color: hsl(var(--foreground));
+  padding: 5px;
+  color: hsl(var(--muted-foreground));
 }
 
 .sidebar-btn:hover {
-  background: hsl(var(--border));
+  background: hsl(220 13% 88%);
+  color: hsl(var(--foreground));
 }
 
 .sidebar-tree {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 0;
+  padding: 4px 0 24px;
+}
+
+.sidebar-tree.drop-target-root {
+  box-shadow: inset 0 0 0 2px hsl(var(--primary) / 0.35);
+  border-radius: 6px;
 }
 
 .sidebar-tree ul {
   list-style: none;
-  padding: 0 0 0 12px;
+  padding: 0;
   margin: 0;
 }
 
-.sidebar-tree > ul {
-  padding-left: 0;
-}
-
-.sidebar-children {
-  display: none;
-}
-
-li.open > .sidebar-children {
-  display: block;
+/* Obsidian-style indent guides: each nesting level gets a vertical rule.
+ * Scoped under .sidebar-tree to outrank the `.sidebar-tree ul` reset. */
+.sidebar-tree .sidebar-children {
+  margin-left: 15px;
+  border-left: 1px solid hsl(220 13% 86%);
+  padding-left: 5px;
 }
 
 .sidebar-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 12px;
+  gap: 2px;
+  min-height: 26px;
+  padding: 2px 6px;
   cursor: pointer;
-  font-size: 13px;
-  border-radius: 4px;
-  margin: 1px 4px;
+  font-size: 13.5px;
+  color: hsl(var(--foreground) / 0.85);
+  border-radius: 6px;
+  margin: 0 8px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .sidebar-item:hover {
-  background: hsl(var(--border));
+  background: hsl(220 13% 90%);
 }
 
 .sidebar-item.active {
-  background: hsl(var(--primary) / 0.15);
-  color: hsl(var(--primary));
+  background: hsl(220 13% 85%);
+  color: hsl(var(--foreground));
+}
+
+.sidebar-item.drop-target {
+  background: hsl(var(--primary) / 0.08);
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.4);
+}
+
+/* Files have no chevron; pad them to line up with folder names (4px pad + 18px arrow). */
+.sidebar-item[data-type="file"],
+.sidebar-item-editing {
+  padding-left: 22px;
+}
+
+.sidebar-item-editing.sidebar-item-editing-dir,
+.sidebar-item[data-type="dir"] {
+  padding-left: 4px;
 }
 
 .sidebar-arrow {
-  font-size: 10px;
-  width: 14px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  width: 18px;
   flex-shrink: 0;
+  color: hsl(var(--muted-foreground));
+}
+
+.sidebar-arrow svg {
+  transition: transform 0.1s ease;
+}
+
+li.open > .sidebar-item .sidebar-arrow svg {
+  transform: rotate(90deg);
+}
+
+.sidebar-name-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--primary) / 0.6);
+  border-radius: 4px;
+  padding: 1px 4px;
+  outline: none;
 }
 
 .sidebar-icon {
-  font-size: 12px;
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
+  color: hsl(var(--muted-foreground));
 }
 
 .sidebar-error {
@@ -319,12 +402,26 @@ li.open > .sidebar-children {
 .modal-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .modal-actions button {
   padding: 6px 14px;
   font-size: 13px;
   cursor: pointer;
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--background));
+}
+
+.modal-actions .modal-btn-danger {
+  background: hsl(0 84% 60%);
+  border-color: hsl(0 84% 55%);
+  color: white;
+}
+
+.modal-actions .modal-btn-danger:hover {
+  background: hsl(0 84% 55%);
 }
 
 
@@ -352,12 +449,19 @@ li.open > .sidebar-children {
 }
 
 /* ── Header link button ───────────────────────────────────── */
+/* Absolutely positioned so it takes no inline space (the end-of-line caret
+   stays flush with the text). left stays auto → the box sits at its static
+   inline position, right after the header text; top/bottom span the line so
+   the icon centers vertically whatever the heading size. */
 .header-link-btn {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* inline-flex (not flex): the static position that `left: auto` falls back
+     to is only the inline one when the box is inline-level. */
   display: inline-flex;
   align-items: center;
-  vertical-align: middle;
-  margin-left: 8px;
-  padding: 0 2px;
+  padding: 0 0 0 10px;
   border: none;
   background: none;
   cursor: pointer;
@@ -368,6 +472,12 @@ li.open > .sidebar-children {
 
 .cm-line:hover .header-link-btn {
   opacity: 0.6;
+}
+
+/* On a folded heading the button would sit on top of the "..." placeholder
+   and steal its unfold click. */
+.cm-line:has(.cm-foldPlaceholder) .header-link-btn {
+  display: none;
 }
 
 .header-link-btn:hover {
@@ -381,14 +491,15 @@ li.open > .sidebar-children {
 
 /* ── Sidebar vault switcher ───────────────────────────────── */
 .sidebar-vault-trigger {
+  flex: 1 0 auto;
+  max-width: 100%;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   background: none;
   border: none;
-  padding: 2px 6px;
-  margin: -2px -6px;
-  border-radius: 4px;
+  padding: 4px 6px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
@@ -400,12 +511,12 @@ li.open > .sidebar-children {
 
 .sidebar-vault-trigger:hover,
 .sidebar-vault-trigger[data-expanded] {
-  background: hsl(var(--border));
+  background: hsl(220 13% 88%);
 }
 
 .sidebar-vault-chevron {
-  font-size: 12px;
-  line-height: 1;
+  display: flex;
+  align-items: center;
   color: hsl(var(--muted-foreground));
   flex-shrink: 0;
 }
@@ -425,23 +536,34 @@ li.open > .sidebar-children {
 .sidebar-vault-menu {
   background: hsl(var(--background));
   border: 1px solid hsl(var(--border));
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 4px;
-  min-width: 200px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 210px;
+  max-width: 320px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
   z-index: 1000;
   outline: none;
+}
+
+.sidebar-vault-menu-label {
+  padding: 5px 8px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
 }
 
 .sidebar-vault-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   padding: 6px 8px;
   font-size: 13px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
   outline: none;
+  color: hsl(var(--foreground) / 0.9);
 }
 
 .sidebar-vault-item:hover,
@@ -449,11 +571,23 @@ li.open > .sidebar-children {
   background: hsl(var(--muted));
 }
 
-.sidebar-vault-check {
-  width: 14px;
-  flex-shrink: 0;
+.sidebar-vault-item-active {
+  font-weight: 600;
   color: hsl(var(--foreground));
-  font-size: 12px;
+}
+
+.sidebar-vault-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-vault-check {
+  display: flex;
+  align-items: center;
+  width: 15px;
+  flex-shrink: 0;
+  color: hsl(var(--primary));
 }
 
 .sidebar-vault-sep {
@@ -464,6 +598,10 @@ li.open > .sidebar-children {
 }
 
 .sidebar-vault-manage {
+  color: hsl(var(--muted-foreground));
+}
+
+.sidebar-vault-manage .sidebar-vault-check {
   color: hsl(var(--muted-foreground));
 }
 
@@ -1232,6 +1370,17 @@ mark.search-hl {
   font-size: 16px;
 }
 
+.mobile-shell .sidebar-item[data-type="file"],
+.mobile-drawer .sidebar-item[data-type="file"],
+.mobile-drawer .sidebar-item-editing {
+  padding-left: 28px;
+}
+
+.mobile-drawer .sidebar-item[data-type="dir"],
+.mobile-drawer .sidebar-item-editing.sidebar-item-editing-dir {
+  padding-left: 10px;
+}
+
 .mobile-drawer .sidebar-btn {
   font-size: 16px;
   padding: 8px 12px;
@@ -1245,10 +1394,6 @@ mark.search-hl {
 .mobile-drawer .sidebar-row-menu-btn {
   font-size: 18px;
   padding: 4px 10px;
-}
-
-.mobile-shell .cm-foldGutter span {
-  padding: 0 6px;
 }
 
 /* Bigger tap targets for context/dropdown menu items on coarse pointers. */

@@ -363,6 +363,7 @@ export const App: Component = () => {
                   vaultName={vault()!.name}
                   vaults={vaultList()}
                   onSelect={handleFileSelect}
+                  onDeleted={(path) => layoutHandle?.closeFilesUnder(path)}
                   onQuickOpen={() => setShowQuickOpen(true)}
                   onSearch={() => setShowSearch(true)}
                   onShare={setShareModalPath}
@@ -386,6 +387,7 @@ export const App: Component = () => {
             vaultName={vault()!.name}
             vaults={vaultList()}
             onSelect={handleFileSelect}
+            onDeleted={(path) => layoutHandle?.closeFilesUnder(path)}
             onSearch={() => setShowSearch(true)}
             onShare={setShareModalPath}
             onSwitchToVault={switchToVault}

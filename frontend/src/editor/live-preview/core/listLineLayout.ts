@@ -22,11 +22,11 @@ import { spaceWidth } from './spaceWidth';
 import { indentUnitOf } from '../../indent/indentUnitField';
 import { indentVisualMultiplier } from '../../indent/detectIndent';
 
-// Natural left padding of `.cm-line` in the editor theme (`padding: 0 16px`).
-// List lines need to *add* their hanging-indent prefix to this rather than
-// replace it, so the bullet on a list line sits at the same column as the
-// first character of a non-list line. Kept in sync with theme/default.ts.
-const CM_LINE_PADDING_PX = 16;
+// The line decoration's `padding-inline-start` overrides `.cm-line`'s own
+// padding-left, so it must re-add that padding — otherwise the bullet lands
+// left of where non-list text sits. Reference the theme's --cm-line-pad-left
+// var (30px desktop, 26px mobile) via calc() so the two never drift.
+export const CM_LINE_PAD = 'var(--cm-line-pad-left, 16px)';
 
 class IndentSpacesWidget extends WidgetType {
   constructor(
@@ -123,10 +123,9 @@ export function listLineLayout(
   // first-line text-indent pulls the bullet back to the *natural* margin
   // (where non-list lines like a leading paragraph sit). Wrapped lines
   // start at margin + prefix so they align under the bullet's text.
-  const padPx = CM_LINE_PADDING_PX + prefixPx;
   const lineDecoration = Decoration.line({
     attributes: {
-      style: `text-indent: -${prefixPx}px; padding-inline-start: ${padPx}px;`,
+      style: `text-indent: -${prefixPx}px; padding-inline-start: calc(${CM_LINE_PAD} + ${prefixPx}px);`,
     },
   }).range(line.from);
 

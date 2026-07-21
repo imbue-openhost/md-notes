@@ -15,6 +15,8 @@ import type { EditorInstance } from '../editor/editor';
 export interface EditorLayoutHandle {
   openFile: (path: string) => void;
   openFileAt: (path: string, line: number) => void;
+  /** Close panels showing `path` or any file under it (for deletes). */
+  closeFilesUnder: (path: string) => void;
   splitPane: () => void;
   toggleCollapseActivePane: () => void;
   focusGroupLeft: () => void;
@@ -276,6 +278,15 @@ export const EditorLayout: Component<Props> = (props) => {
     openFileAt(path: string, line: number) {
       openPanel(path, line);
     },
+    closeFilesUnder(path: string) {
+      if (!api) return;
+      for (const panel of [...api.panels]) {
+        const filePath = (panel.params as any)?.filePath;
+        if (filePath === path || filePath?.startsWith(`${path}/`)) {
+          api.removePanel(panel);
+        }
+      }
+    },
     splitPane() {
       if (!api) return;
       const active = api.activePanel;
@@ -402,7 +413,13 @@ export const EditorLayout: Component<Props> = (props) => {
       if (panel) {
         const entry = editorInstances.get(panel.id);
         if (entry?.view) {
-          requestAnimationFrame(() => entry.view.focus());
+          requestAnimationFrame(() => {
+            // Don't yank focus while the user is typing elsewhere (e.g. the
+            // sidebar's inline rename input).
+            const ae = document.activeElement;
+            if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement) return;
+            entry.view.focus();
+          });
         }
       }
     });
