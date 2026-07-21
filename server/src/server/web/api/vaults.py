@@ -5,6 +5,7 @@ from litestar import delete
 from litestar import get
 from litestar import patch
 from litestar import post
+from litestar.params import FromPath
 from litestar.status_codes import HTTP_201_CREATED
 
 from server.core.config import Config
@@ -29,10 +30,10 @@ class VaultsController(Controller):
         return create_vault(config.vault_path, data.name)
 
     @patch("/{vault_name:str}")
-    async def rename(self, vault_name: str, data: VaultBody, config: Config) -> Vault:
+    async def rename(self, vault_name: FromPath[str], data: VaultBody, config: Config) -> Vault:
         return rename_vault(config.vault_path, vault_name, data.name)
 
     @delete("/{vault_name:str}", status_code=200)
-    async def remove(self, vault_name: str, config: Config) -> OkResponse:
+    async def remove(self, vault_name: FromPath[str], config: Config) -> OkResponse:
         delete_vault(config.vault_path, vault_name)
         return OkResponse()
