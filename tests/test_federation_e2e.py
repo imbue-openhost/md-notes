@@ -68,11 +68,38 @@ def test_invite_url_shape(stack: OpenhostStack) -> None:
     stack.owner_session.delete(f"{stack.url}/api/federation/shares/{share['secret']}")
 
 
+def test_share_vault_via_ui(stack: OpenhostStack, page: Page) -> None:
+    """The share dialog opens from the vault menu (regression: the menu's focus-restore used to
+    dismiss it instantly) and creates a named share with an invite link."""
+    stack.playwright_login(page)
+    page.goto(f"{stack.url}/{VAULT}")
+    page.wait_for_selector("#sidebar", timeout=10_000)
+    page.locator(".sidebar-vault-trigger").click()
+    page.get_by_text("Share this vault", exact=False).first.click()
+    expect(page.locator(".share-modal")).to_be_visible()
+
+    page.fill(".share-modal .settings-input", "ui-recipient")
+    page.get_by_role("button", name="Can comment", exact=True).click()
+    expect(page.locator(".share-link-row")).to_have_count(1)
+    expect(page.locator(".share-link-badge")).to_contain_text("Can comment")
+    invite_url = page.locator(".share-modal-link").input_value()
+    assert "/federation/connect?" in invite_url and "secret=" in invite_url
+
+    shares = stack.owner_session.get(f"{stack.url}/api/federation/shares").json()
+    created = [s for s in shares if s["share_name"] == "ui-recipient"]
+    assert len(created) == 1 and created[0]["permission"] == "comment"
+    stack.owner_session.delete(f"{stack.url}/api/federation/shares/{created[0]['secret']}")
+
+
 def test_cross_origin_vault_api(stack: OpenhostStack) -> None:
     """Simulates instance B's browser hitting instance A's unified vault API with a secret."""
     write_share = _create_share(stack, "bob", "write")
     read_share = _create_share(stack, "carol", "read")
     base = f"{stack.url}/api/docs/{VAULT}"
+    # Own file: pytest groups the browser-parametrized tests together, so tests that edit FILE
+    # can run before this one regardless of definition order.
+    r = stack.owner_session.post(f"{base}/file", params={"path": "cross-origin.md"}, json={"content": "untouched"})
+    assert r.status_code == 201, r.text
     anon = requests.Session()  # no owner cookies — a foreign browser
 
     # share-info handshake
@@ -85,9 +112,9 @@ def test_cross_origin_vault_api(stack: OpenhostStack) -> None:
     assert anon.get(base).status_code == 401
     r = anon.get(base, params={"secret": read_share["secret"]})
     assert r.status_code == 200
-    assert FILE in [e["path"] for e in r.json()]
-    r = anon.get(f"{base}/file", params={"secret": read_share["secret"], "path": FILE})
-    assert r.text == FILE_CONTENT
+    assert "cross-origin.md" in [e["path"] for e in r.json()]
+    r = anon.get(f"{base}/file", params={"secret": read_share["secret"], "path": "cross-origin.md"})
+    assert r.text == "untouched"
 
     # writes: allowed for write shares, rejected for read shares
     r = anon.post(
