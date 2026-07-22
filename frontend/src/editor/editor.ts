@@ -40,6 +40,7 @@ import {
 } from './live-preview/index';
 
 import { markdownFolding } from './folding';
+import { emptyLineCaret } from './empty-line-caret';
 import { foldPersistence } from './fold-persistence';
 import { headerAnchorJump } from './header-anchor';
 import { headerLinkButtons, type GetShareUrl } from './header-link-button';
@@ -94,6 +95,7 @@ function buildExtensions(kind: EditorKind, vimrcContent: string | undefined, use
     ...(useSync ? [] : [history()]),
     EditorView.lineWrapping,
     drawSelection(),
+    emptyLineCaret(),
     highlightActiveLine(),
     highlightSelectionMatches(),
     bracketMatching(),
