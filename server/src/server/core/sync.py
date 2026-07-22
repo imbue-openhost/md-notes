@@ -13,8 +13,9 @@ last disconnect, save-all on shutdown — is owned by ``SyncManager``. One insta
 ``serve(channel)`` with a Channel-protocol object (any object with ``path``, ``__aiter__``, ``send``, ``recv``).
 
 REST file writes bypass this layer entirely — they edit the ``.md`` directly. A REST write to a doc that has a
-live room will be overwritten on the room's next save, so callers should only use REST for files without an
-active editing session (creation, rename, delete).
+live room will be overwritten on the room's next save. Delete/rename endpoints therefore call ``close_rooms``
+first, which drops any live room (disconnecting its clients) so it can't write the file back; as a backstop,
+``_save_room`` refuses to save a doc whose ``.md`` no longer exists.
 """
 
 import asyncio
@@ -28,6 +29,7 @@ from typing import TypeVar
 
 from loguru import logger
 from pycrdt import Doc
+from pycrdt import Subscription
 from pycrdt import Text
 from pycrdt.websocket import WebsocketServer
 from pycrdt.websocket import YRoom
@@ -35,6 +37,7 @@ from pycrdt.websocket import YRoom
 from server.core import crdt_store
 from server.core.comments import gc_orphaned_comments
 from server.core.files import PathTraversalError
+from server.core.files import file_exists
 from server.core.files import read_file
 from server.core.files import write_file
 
@@ -55,6 +58,22 @@ _SYNC_UPDATE = 2
 # the kilobytes is suspicious — typically a stale client reconciling its full local state with
 # the server's, which is the pattern that produces content duplication.
 _LARGE_UPDATE_BYTES = 2048
+
+# WebSocket close code sent to clients when their doc's room is force-closed because the doc (or
+# its vault) was deleted or moved. Clients must stop reconnecting and drop local caches —
+# retrying would merge their orphaned state into whatever doc later reuses the path.
+DOC_GONE_CLOSE_CODE = 4404
+
+# The OpenHost router does not preserve WebSocket close codes (clients observe 1011), so the same
+# signal also rides the Yjs channel as a data frame right before the close: varuint message type
+# (unused by y-protocols; y-websocket uses 0-3) + varstring reason, decodable by lib0.
+_MSG_DOC_GONE = 100
+
+
+def _doc_gone_message(reason: str) -> bytes:
+    payload = reason.encode()
+    assert len(payload) < 128  # single-byte varuint length
+    return bytes([_MSG_DOC_GONE, len(payload)]) + payload
 
 
 class ReadOnlyChannel:
@@ -90,6 +109,9 @@ class ReadOnlyChannel:
     async def recv(self) -> bytes:
         return await self._inner.recv()  # type: ignore[no-any-return]
 
+    async def close(self, code: int, reason: str) -> None:
+        await self._inner.close(code, reason)
+
 
 class LoggingChannel:
     """Wraps a channel to log suspiciously-large incoming Yjs sync updates at INFO."""
@@ -122,6 +144,9 @@ class LoggingChannel:
     async def recv(self) -> bytes:
         return await self._inner.recv()  # type: ignore[no-any-return]
 
+    async def close(self, code: int, reason: str) -> None:
+        await self._inner.close(code, reason)
+
 
 # ── Sync manager ────────────────────────────────────────────────────────
 
@@ -142,6 +167,7 @@ class SyncManager:
         self._first_dirty_at: dict[str, float] = {}
         self._cleanup_tasks: dict[str, asyncio.Task[None]] = {}
         self._last_saved_size: dict[str, int] = {}
+        self._subscriptions: dict[str, Subscription] = {}
 
     # ── lifecycle ───────────────────────────────────────────────────────
 
@@ -170,7 +196,27 @@ class SyncManager:
         self._ws_server = None
         self._initialised_rooms.clear()
         self._first_dirty_at.clear()
+        self._subscriptions.clear()
         logger.info("Yjs WebSocket server stopped")
+
+    async def _delete_room(self, room: YRoom) -> None:
+        """``delete_room``, but only after the room's background startup has settled.
+
+        pycrdt sets ``room.started`` before the room's awareness/provider tasks actually spawn; stopping a
+        room inside that window makes ``YRoom._start`` resume against a nulled task group, and the resulting
+        crash takes down the WebsocketServer's whole task group — silently killing sync for every doc. The
+        awareness task group is the last thing ``_start`` awaits, so once it exists (plus one scheduler tick
+        for the remaining synchronous step) the room is safe to stop.
+        """
+        assert self._ws_server is not None
+        for _ in range(500):
+            if room.awareness._task_group is not None:
+                break
+            await asyncio.sleep(0.01)
+        else:
+            logger.warning("Room startup never settled; deleting anyway")
+        await asyncio.sleep(0.01)
+        await self._ws_server.delete_room(room=room)
 
     # ── public serve ────────────────────────────────────────────────────
 
@@ -195,7 +241,7 @@ class SyncManager:
         try:
             self._init_room(room, doc_path)
         except FileNotFoundError:
-            await self._ws_server.delete_room(room=room)
+            await self._delete_room(room)
             logger.info("Refusing room {}: .md not found", doc_path)
             raise
         room.ready = True
@@ -222,7 +268,9 @@ class SyncManager:
                 doc_path,
                 remaining,
             )
-            if not room.clients:
+            # Identity check: skip cleanup if the room was force-closed (deleted/renamed) while
+            # this client was being served — scheduling would save the doc right back to disk.
+            if not room.clients and self._ws_server and self._ws_server.rooms.get(doc_path) is room:
                 self._schedule_room_cleanup(doc_path, room)
 
     async def mutate_doc(self, doc_path: str, mutate: Callable[[Doc[Any]], T]) -> T:
@@ -242,7 +290,7 @@ class SyncManager:
         try:
             self._init_room(room, doc_path)
         except FileNotFoundError:
-            await self._ws_server.delete_room(room=room)
+            await self._delete_room(room)
             raise
         room.ready = True
 
@@ -253,6 +301,61 @@ class SyncManager:
         if not room.clients and doc_path not in self._cleanup_tasks:
             self._schedule_room_cleanup(doc_path, room)
         return result
+
+    async def close_rooms(self, doc_path: str, *, save: bool, reason: str) -> None:
+        """Force-close the live room at ``doc_path`` and any rooms below it (for directories/vaults).
+
+        REST delete/rename callers must invoke this *before* touching disk: a live room would otherwise write
+        the doc right back on its next save (edit debounce, cleanup grace period, or shutdown). ``save=True``
+        flushes current content to the .md/sidecar first — wanted for renames, where the move carries the
+        flushed state along; deletes pass ``save=False`` so nothing is written back.
+        """
+        if self._ws_server is None:
+            return
+        prefix = doc_path.rstrip("/") + "/"
+        for name in list(self._ws_server.rooms):
+            if name == doc_path or name.startswith(prefix):
+                await self._close_room(name, save=save, reason=reason)
+
+    async def _close_room(self, doc_path: str, *, save: bool, reason: str) -> None:
+        assert self._ws_server is not None
+        room = self._ws_server.rooms.get(doc_path)
+        if room is None:
+            return
+        for tasks in (self._save_tasks, self._cleanup_tasks):
+            task = tasks.pop(doc_path, None)
+            if task and not task.done():
+                task.cancel()
+        await room.started.wait()
+        if save:
+            await self._save_room(doc_path, room)
+        # Detach our doc observer so a straggling update (a client message racing the socket close)
+        # can't schedule a new save from the dead room.
+        subscription = self._subscriptions.pop(doc_path, None)
+        if subscription is not None:
+            room.ydoc.unobserve(subscription)
+        clients = list(room.clients)
+        for client in clients:
+            try:
+                await client.send(_doc_gone_message(reason))
+            except Exception:
+                logger.debug("Failed to send doc-gone message on {}", doc_path)
+            close = getattr(client, "close", None)
+            if close is not None:
+                try:
+                    await close(DOC_GONE_CLOSE_CODE, reason)
+                except Exception:
+                    logger.exception("Failed to close client socket on {}", doc_path)
+        await self._delete_room(room)
+        # A disconnecting client's serve() may have scheduled a cleanup while we waited to delete
+        # the room (its save would recreate the doc) — cancel it.
+        late_cleanup = self._cleanup_tasks.pop(doc_path, None)
+        if late_cleanup and not late_cleanup.done():
+            late_cleanup.cancel()
+        self._initialised_rooms.discard(doc_path)
+        self._last_saved_size.pop(doc_path, None)
+        self._first_dirty_at.pop(doc_path, None)
+        logger.info("Force-closed room {} ({} client(s)): {}", doc_path, len(clients), reason)
 
     # ── room cleanup ─────────────────────────────────────────────────────
 
@@ -281,9 +384,11 @@ class SyncManager:
 
         async def _delayed_cleanup() -> None:
             await asyncio.sleep(self.ROOM_CLEANUP_DELAY_SECS)
-            if self._ws_server and not room.clients:
+            # Identity check: the room may have been force-closed (and possibly replaced) meanwhile.
+            if self._ws_server and not room.clients and self._ws_server.rooms.get(doc_path) is room:
                 await self._save_room(doc_path, room)
-                await self._ws_server.delete_room(room=room)
+                await self._delete_room(room)
+                self._subscriptions.pop(doc_path, None)
                 self._initialised_rooms.discard(doc_path)
                 self._last_saved_size.pop(doc_path, None)
                 logger.info("Closed room {} after grace period", doc_path)
@@ -327,7 +432,7 @@ class SyncManager:
         def on_change(event: Any) -> None:
             self._schedule_save(room_name, room)
 
-        doc.observe(on_change)
+        self._subscriptions[room_name] = doc.observe(on_change)
 
         self._initialised_rooms.add(room_name)
         self._last_saved_size[room_name] = initial_chars
@@ -339,6 +444,11 @@ class SyncManager:
             doc = room.ydoc
             text = doc.get("content", type=Text)
             if text is None:
+                return
+            # The .md is the source of truth for existence: if it was deleted, never write it back.
+            if not file_exists(self._vault_path, room_name):
+                self._first_dirty_at.pop(room_name, None)
+                logger.info("Room {} not saved: .md no longer exists", room_name)
                 return
             gc_orphaned_comments(doc, room_name)
             content = str(text)

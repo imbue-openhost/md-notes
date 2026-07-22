@@ -35,6 +35,7 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.7.0",
     "codemirror": "^6.0.2",
+    "lib0": "^0.2.117",
     "lowlight": "^3.3.0",
     "solid-js": "^1.9.12",
     "vite-plugin-solid": "^2.11.12",
