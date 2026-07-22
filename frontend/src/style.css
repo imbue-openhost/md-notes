@@ -791,6 +791,14 @@ li.open > .sidebar-item .sidebar-arrow svg {
   padding-top: 10vh;
 }
 
+.federation-connect-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid hsl(var(--border));
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+
 .federation-connect .vault-picker-card {
   max-width: 480px;
 }

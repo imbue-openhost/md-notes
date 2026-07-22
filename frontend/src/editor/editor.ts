@@ -207,6 +207,8 @@ export interface EditorOptions {
   shareUuid?: string;
   shareDocPath?: string;
   readOnly?: boolean;
+  /** Display name shown to other collaborators on this user's cursor. */
+  userName?: string;
   /** Header slug (or raw header text) to jump to once the doc has loaded. */
   anchorHeader?: string;
   /** When set, heading lines get a hover button that copies a share link to that section. */
@@ -234,9 +236,9 @@ export function createEditor(container: HTMLElement, options: EditorOptions = {}
   let syncSession: SyncSession | null = null;
 
   if (options.syncServerUrl && options.vault && options.syncFilePath) {
-    syncSession = createSyncSession(options.vault, options.syncFilePath, options.syncServerUrl);
+    syncSession = createSyncSession(options.vault, options.syncFilePath, options.syncServerUrl, options.userName);
   } else if (options.syncServerUrl && options.shareUuid && options.shareDocPath) {
-    syncSession = createShareSyncSession(options.shareUuid, options.shareDocPath, options.syncServerUrl);
+    syncSession = createShareSyncSession(options.shareUuid, options.shareDocPath, options.syncServerUrl, options.userName);
   }
 
   if (syncSession) {
