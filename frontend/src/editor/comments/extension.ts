@@ -148,11 +148,31 @@ function addCommentButton(controller: CommentsController) {
 }
 
 // Card positions derive from line-block geometry, which shifts on edits, wraps, image loads, etc.
+// Also publishes the scroller's vertical scrollbar width as a CSS var so the add-comment button and
+// toolbar (which live in view.dom, whose right edge includes the scrollbar gutter) can clear it —
+// classic scrollbars take ~15px, overlay scrollbars measure 0.
 function geometryNotifier(controller: CommentsController) {
   return ViewPlugin.fromClass(
     class {
+      private lastScrollbarWidth = -1;
+      private readonly measure = {
+        read: (view: EditorView) => view.scrollDOM.offsetWidth - view.scrollDOM.clientWidth,
+        write: (width: number, view: EditorView) => {
+          if (width === this.lastScrollbarWidth) return;
+          this.lastScrollbarWidth = width;
+          view.dom.style.setProperty('--comments-scrollbar-width', `${width}px`);
+        },
+      };
+
+      constructor(view: EditorView) {
+        view.requestMeasure(this.measure);
+      }
+
       update(update: ViewUpdate): void {
-        if (update.docChanged || update.geometryChanged) controller.notifyGeometryChanged();
+        if (update.docChanged || update.geometryChanged) {
+          controller.notifyGeometryChanged();
+          update.view.requestMeasure(this.measure);
+        }
       }
     },
   );
