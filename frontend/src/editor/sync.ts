@@ -209,11 +209,24 @@ export async function ensureFreshIdbCache(idbKey: string): Promise<boolean> {
   return true;
 }
 
+/** Awareness user state for collaboration cursors, with a color derived from the name. */
+export function awarenessUser(name: string): { name: string; color: string; colorLight: string } {
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.codePointAt(0)!) >>> 0;
+  const hue = hash % 360;
+  return {
+    name,
+    color: `hsl(${hue}, 65%, 45%)`,
+    colorLight: `hsla(${hue}, 65%, 45%, 0.3)`,
+  };
+}
+
 function buildSession(
   wsUrl: string,
   roomName: string,
   idbKey: string,
   wsParams?: Record<string, string>,
+  userName?: string,
 ): SyncSession {
   let consecutiveFailures = 0;
   let destroyed = false;
@@ -221,6 +234,8 @@ function buildSession(
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText('content');
   const provider = new WebsocketProvider(wsUrl, roomName, ydoc, { params: wsParams ?? {} });
+  // Label our cursor for other collaborators (y-codemirror shows "Anonymous" otherwise).
+  if (userName) provider.awareness.setLocalStateField('user', awarenessUser(userName));
   const undoManager = new Y.UndoManager(ytext);
 
   const sessionId = nextSessionId++;
@@ -382,12 +397,13 @@ export function createSyncSession(
   vault: Vault,
   filePath: string,
   serverUrl: string,
+  userName?: string,
 ): SyncSession {
   const wsUrl =
     getWsUrl(vault.owned ? serverUrl : vault.host) +
     `/api/docs/${encodeURIComponent(vault.vault)}/crdt_websocket`;
   const params = vault.secret ? { secret: vault.secret } : undefined;
-  return buildSession(wsUrl, filePath, vaultIdbKey(vault.id, filePath), params);
+  return buildSession(wsUrl, filePath, vaultIdbKey(vault.id, filePath), params, userName);
 }
 
 /** Public share sync: WS /api/share/{uuid}/crdt_websocket/{docPath} */
@@ -395,9 +411,10 @@ export function createShareSyncSession(
   uuid: string,
   docPath: string,
   serverUrl: string,
+  userName?: string,
 ): SyncSession {
   const wsUrl = getWsUrl(serverUrl) + `/api/share/${encodeURIComponent(uuid)}/crdt_websocket`;
-  return buildSession(wsUrl, docPath, shareIdbKey(uuid, docPath));
+  return buildSession(wsUrl, docPath, shareIdbKey(uuid, docPath), undefined, userName);
 }
 
 /** Drop IDB stores for a path and (for dirs) everything cached under it (call after rename/delete). */

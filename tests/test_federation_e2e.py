@@ -175,6 +175,9 @@ def test_invite_landing_page(stack: OpenhostStack, page: Page) -> None:
     expect(page.locator(".vault-picker-title")).to_contain_text("Shared vault invite")
     expect(page.locator(".vault-picker-card")).to_contain_text(VAULT)
     expect(page.locator(".vault-picker-card")).to_contain_text("view only")
+    # Recipients without their own instance can discover the app.
+    github = page.locator('.federation-connect-footer a[href="https://github.com/imbue-openhost/md-notes"]')
+    expect(github).to_be_visible()
     stack.owner_session.delete(f"{stack.url}/api/federation/shares/{share['secret']}")
 
 
@@ -213,6 +216,22 @@ def test_b_connects_by_pasting_invite_and_edits(stack: OpenhostStack, stack_b: O
         time.sleep(2)
     else:
         raise AssertionError("Edit from instance B never reached instance A's markdown file")
+
+    # A's owner opens the same doc and sees B's cursor labeled with B's OpenHost username,
+    # not "Anonymous".
+    b_username = stack_b.owner_session.get(f"{stack_b.url}/api/settings/me").json()["displayName"]
+    content.click()  # keep B's cursor live in the doc
+    browser = page.context.browser
+    assert browser is not None
+    ctx_a = browser.new_context()
+    page_a = ctx_a.new_page()
+    stack.playwright_login(page_a)
+    page_a.goto(f"{stack.url}/{VAULT}")
+    page_a.locator(f'.sidebar-item[data-type="file"][data-path="{FILE}"]').click()
+    page_a.wait_for_selector(".cm-editor", timeout=15_000)
+    expect(page_a.locator(".cm-ySelectionInfo").first).to_have_text(b_username, timeout=10_000)
+    assert "Anonymous" not in page_a.locator(".cm-editor").inner_text()
+    ctx_a.close()
 
     _cleanup_connection(stack, stack_b, share)
 

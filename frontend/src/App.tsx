@@ -6,7 +6,7 @@ import {
   createShareLink, listShareLinks,
   getOwnerInfo, vaultCommentsApi, shareCommentsApi,
 } from './api/client';
-import { ownerIdentity, shareIdentity } from './editor/comments/identity';
+import { ownerIdentity, shareIdentity, federatedIdentity } from './editor/comments/identity';
 import { parseInviteLink, fetchShareInfo as fetchVaultShareInfo, InviteRejectedError } from './api/invites';
 import { setActiveVault } from './api/vault-ops';
 import {
@@ -292,6 +292,9 @@ export const App: Component = () => {
       syncFilePath: path,
       syncServerUrl: serverUrl,
       readOnly: v ? v.permission !== 'write' : false,
+      // Our OpenHost username labels our cursor for other collaborators — on our own vaults and,
+      // as a federated user, on connected ones.
+      userName: ownerName(),
       // Per-file share links are minted by this instance, so they only exist for owned vaults.
       getShareUrl: v?.owned
         ? (permission) => shareUrlForDoc(`${v.name}/${path}`, permission)
@@ -299,7 +302,7 @@ export const App: Component = () => {
       comments: v
         ? {
             api: vaultCommentsApi(v, path),
-            identity: v.owned ? ownerIdentity(ownerName()) : shareIdentity(),
+            identity: v.owned ? ownerIdentity(ownerName()) : federatedIdentity(ownerName()),
             canComment: v.permission !== 'read',
             ui: mobile ? 'highlights' : 'panel',
           }

@@ -49,3 +49,13 @@ export function ownerIdentity(displayName: string): CommentIdentity {
     setName: () => {},
   };
 }
+
+/** Identity on a connected vault: the user's own OpenHost username, but not the host's owner. */
+export function federatedIdentity(displayName: string): CommentIdentity {
+  return {
+    userId: getOrCreateUserId(),
+    isOwner: false,
+    getName: () => displayName,
+    setName: () => {},
+  };
+}

@@ -6,6 +6,8 @@ interface Props {
   invite: FederationInvite;
 }
 
+const GITHUB_URL = 'https://github.com/imbue-openhost/md-notes';
+
 const PERMISSION_LABELS = { read: 'view only', comment: 'can comment', write: 'can edit' } as const;
 
 /**
@@ -61,6 +63,12 @@ export const FederationConnect: Component<Props> = (props) => {
             </Show>
           </Show>
         </Show>
+
+        <p class="federation-connect-footer">
+          Don't have md-notes yet? It's open source — get it at{' '}
+          <a href={GITHUB_URL}>{GITHUB_URL.replace('https://', '')}</a> and deploy it on your own
+          OpenHost space, then come back to this link.
+        </p>
       </div>
     </div>
   );
