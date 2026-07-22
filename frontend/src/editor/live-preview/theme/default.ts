@@ -205,18 +205,26 @@ export const editorTheme = EditorView.theme({
   },
 
   // ========== Task List Checkboxes ==========
-  // A styled <span>, not a native <input> — see the task plugin.
+  // A styled <span>, not a native <input> — see the task plugin. Obsidian-
+  // style: rounded box, accent fill when checked, round-capped checkmark
+  // drawn via an SVG mask so it renders crisply at any DPI.
   '.cm-task-checkbox': {
     display: 'inline-block',
     boxSizing: 'border-box',
-    width: '14px',
-    height: '14px',
-    margin: '0 0.4em 0 0',
-    border: '1.5px solid hsl(var(--muted-foreground, 220 9% 46%))',
-    borderRadius: '3px',
+    width: '16px',
+    height: '16px',
+    margin: '0 6px 0 0',
+    border: '1px solid hsl(var(--muted-foreground, 220 9% 46%) / 0.6)',
+    borderRadius: '4px',
     cursor: 'pointer',
     verticalAlign: 'middle',
     position: 'relative',
+    top: '-1px',
+    transition: 'background-color 0.1s, border-color 0.1s, box-shadow 0.1s',
+  },
+  '.cm-task-checkbox:hover': {
+    borderColor: 'hsl(var(--primary, 220 90% 56%))',
+    boxShadow: '0 0 0 2px hsl(var(--primary, 220 90% 56%) / 0.15)',
   },
   '.cm-task-checkbox[aria-checked="true"]': {
     backgroundColor: 'hsl(var(--primary, 220 90% 56%))',
@@ -225,13 +233,16 @@ export const editorTheme = EditorView.theme({
   '.cm-task-checkbox[aria-checked="true"]::after': {
     content: "''",
     position: 'absolute',
-    left: '3.5px',
-    top: '0.5px',
-    width: '4px',
-    height: '8px',
-    border: 'solid hsl(var(--background, 0 0% 100%))',
-    borderWidth: '0 2px 2px 0',
-    transform: 'rotate(45deg)',
+    inset: '0',
+    backgroundColor: 'hsl(var(--background, 0 0% 100%))',
+    maskImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.1 8.6l2.7 2.7 5.1-6' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+    WebkitMaskImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.1 8.6l2.7 2.7 5.1-6' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+    maskRepeat: 'no-repeat',
+    WebkitMaskRepeat: 'no-repeat',
+    maskPosition: 'center',
+    WebkitMaskPosition: 'center',
+    maskSize: '100%',
+    WebkitMaskSize: '100%',
   },
   '.cm-task-checked': {
     textDecoration: 'line-through',

@@ -14,9 +14,8 @@ import { spaceWidthField } from '../core/spaceWidth';
 // Visual pixel width of the rendered checkbox widget plus its
 // margin-right. Used for the task line's hanging-indent math so wrapped
 // task text lines up under the task's text column rather than under the
-// checkbox. The theme sizes the box at 14px plus a 0.4em right margin
-// (~6.4px at 16px). One value is fine — checkboxes don't scale with the
-// editor font.
+// checkbox. The theme sizes the box at 16px plus a 6px right margin.
+// One value is fine — checkboxes don't scale with the editor font.
 const CHECKBOX_PX = 22;
 
 // The checkbox is a styled <span>, not an <input>: password-manager
