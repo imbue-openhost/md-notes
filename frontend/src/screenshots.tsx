@@ -4,12 +4,12 @@
 // Used by playwright_tests/list-screenshots.spec.ts to capture rendered
 // list/task/code-block visuals without requiring the full e2e stack.
 
-import { createEditor, type EditorInstance } from './editor/editor';
+import { createEditor, type EditorInstance, type EditorKind } from './editor/editor';
 import { EditorSelection } from '@codemirror/state';
 
 declare global {
   interface Window {
-    mountEditor: (content: string, label?: string) => Promise<void>;
+    mountEditor: (content: string, label?: string, kind?: EditorKind) => Promise<void>;
     moveCursor: (pos: number) => Promise<void>;
     __editor?: EditorInstance;
   }
@@ -18,14 +18,14 @@ declare global {
 const host = document.getElementById('host')!;
 const label = document.getElementById('label')!;
 
-window.mountEditor = async (content: string, labelText = '') => {
+window.mountEditor = async (content: string, labelText = '', kind?: EditorKind) => {
   if (window.__editor) {
     window.__editor.destroy();
     window.__editor = undefined;
   }
   host.innerHTML = '';
   label.textContent = labelText;
-  const editor = createEditor(host);
+  const editor = createEditor(host, kind ? { kind } : {});
   editor.view.dispatch({
     changes: { from: 0, to: editor.view.state.doc.length, insert: content },
   });
