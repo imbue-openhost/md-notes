@@ -1491,7 +1491,7 @@ mark.search-hl {
 .comments-toolbar-host {
   position: absolute;
   top: 8px;
-  right: 14px;
+  right: calc(14px + var(--comments-scrollbar-width, 0px));
   z-index: 7;
   display: flex;
   flex-direction: column;
@@ -1721,7 +1721,7 @@ mark.search-hl {
 /* Floating add-comment button at the editor's right edge, aligned with the selection. */
 .cm-editor .cm-add-comment-btn {
   position: absolute;
-  right: 10px;
+  right: calc(10px + var(--comments-scrollbar-width, 0px));
   z-index: 7;
   display: flex;
   align-items: center;
