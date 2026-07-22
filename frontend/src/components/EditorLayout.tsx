@@ -468,14 +468,13 @@ export const EditorLayout: Component<Props> = (props) => {
   }
 
   onCleanup(() => {
-    // api.dispose() cascades through onDidRemovePanel -> destroy each editor instance.
-    // Dockview's own teardown can throw "resource already disposed" from internal
-    // double-dispose paths; swallow so the unmount completes and the picker can render.
-    try {
-      api?.dispose();
-    } catch (e) {
-      console.warn('dockview dispose threw:', e);
-    }
+    // Don't call api.dispose() here: DockviewSolid disposes the dockview in its
+    // own onCleanup, which Solid runs before this one (child owners are cleaned
+    // first), and a second dispose cascades into already-disposed panel portals
+    // and throws "resource already disposed". Panel portal teardown destroys
+    // each editor instance; anything left is destroyed here as a safety net.
+    api = undefined;
+    editorInstances.forEach((instance) => instance.destroy());
     editorInstances.clear();
     panelScrollTops.clear();
     pendingJumps.clear();
