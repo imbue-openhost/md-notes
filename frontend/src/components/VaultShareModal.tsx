@@ -56,7 +56,14 @@ export const VaultShareModal: Component<Props> = (props) => {
     <Dialog.Root open onOpenChange={(open) => { if (!open) props.onClose(); }}>
       <Dialog.Portal>
         <div class="settings-modal-overlay">
-          <Dialog.Content class="share-modal" onInteractOutside={props.onClose}>
+          {/* Dismiss on pointer-outside only: this dialog opens from the vault menu, whose close
+              sequence restores focus to its trigger — a focus-outside dismissal would close the
+              dialog the instant it opens. */}
+          <Dialog.Content
+            class="share-modal"
+            onPointerDownOutside={props.onClose}
+            onFocusOutside={(e: Event) => e.preventDefault()}
+          >
             <Dialog.Title class="share-modal-title">
               Share vault with another md-notes user: {props.vaultName}
             </Dialog.Title>
