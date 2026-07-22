@@ -7,6 +7,8 @@ a vault live in ``server.vault``.
 import shutil
 from pathlib import Path
 
+from server.core import crdt_store
+
 
 class InvalidVaultName(Exception):
     pass
@@ -59,6 +61,7 @@ def rename_vault(vault_path: Path, old_name: str, new_name: str) -> str:
     if new_dir.exists():
         raise VaultAlreadyExists(new_name)
     old_dir.rename(new_dir)
+    crdt_store.rename_dir(vault_path, old_name, new_name)
     return new_name
 
 
@@ -67,3 +70,4 @@ def delete_vault(vault_path: Path, name: str) -> None:
     if not vault_dir.is_dir():
         raise VaultNotFound(name)
     shutil.rmtree(vault_dir)
+    crdt_store.delete_dir(vault_path, name)

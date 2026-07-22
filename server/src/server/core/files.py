@@ -49,10 +49,28 @@ def list_files(root: Path) -> list[FileEntry]:
     return _walk(root)
 
 
+def _crdt_args(root: Path, rel_path: str) -> tuple[Path, str]:
+    """Map a vault-scoped path to crdt_store's coordinates.
+
+    Sidecars live in one tree rooted next to the *vaults* directory (``<vaults>_crdt/<vault>/<rel>.bin``,
+    the layout SyncManager writes), so ops on ``<vaults>/<vault>`` + ``<rel>`` translate to
+    ``<vaults>`` + ``<vault>/<rel>``.
+    """
+    return root.parent, f"{root.name}/{rel_path}"
+
+
 def read_file(root: Path, rel_path: str) -> str:
     """Read a file's contents as UTF-8 text."""
     target = _resolve_and_validate(root, rel_path)
     return target.read_text(encoding="utf-8")
+
+
+def file_exists(root: Path, rel_path: str) -> bool:
+    """True if ``rel_path`` is an existing file inside the vault."""
+    try:
+        return _resolve_and_validate(root, rel_path).is_file()
+    except PathTraversalError:
+        return False
 
 
 def write_file(root: Path, rel_path: str, content: str) -> None:
@@ -82,10 +100,10 @@ def delete_file(root: Path, rel_path: str) -> None:
     target = _resolve_and_validate(root, rel_path)
     if target.is_dir():
         shutil.rmtree(target)
-        crdt_store.delete_dir(root, rel_path)
+        crdt_store.delete_dir(*_crdt_args(root, rel_path))
     else:
         target.unlink()
-        crdt_store.delete_state(root, rel_path)
+        crdt_store.delete_state(*_crdt_args(root, rel_path))
 
 
 def rename_file(root: Path, old_path: str, new_path: str) -> None:
@@ -97,7 +115,9 @@ def rename_file(root: Path, old_path: str, new_path: str) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     is_dir = src.is_dir()
     src.rename(dst)
+    crdt_root, crdt_old = _crdt_args(root, old_path)
+    _, crdt_new = _crdt_args(root, new_path)
     if is_dir:
-        crdt_store.rename_dir(root, old_path, new_path)
+        crdt_store.rename_dir(crdt_root, crdt_old, crdt_new)
     else:
-        crdt_store.rename_state(root, old_path, new_path)
+        crdt_store.rename_state(crdt_root, crdt_old, crdt_new)

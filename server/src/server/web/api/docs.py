@@ -10,6 +10,7 @@ from typing import Any
 
 from litestar import Controller
 from litestar import MediaType
+from litestar import Request
 from litestar import WebSocket
 from litestar import delete
 from litestar import get
@@ -80,13 +81,27 @@ class DocsController(Controller):
 
     @patch("/file", opt={"permission": "write"})
     async def move_file(
-        self, vault_name: FromPath[str], path: FromQuery[str], data: RenameBody, config: Config
+        self,
+        request: Request[Any, Any, Any],
+        vault_name: FromPath[str],
+        path: FromQuery[str],
+        data: RenameBody,
+        config: Config,
     ) -> OkResponse:
+        # Flush and drop any live room first so it can't recreate the old path on its next save;
+        # the flushed .md/sidecar then move together.
+        manager: SyncManager = request.app.state.sync_manager
+        await manager.close_rooms(f"{vault_name}/{path.lstrip('/')}", save=True, reason="Document moved")
         rename_file(vault_root(config.vault_path, vault_name), path, data.newPath)
         return OkResponse()
 
     @delete("/file", status_code=200, opt={"permission": "write"})
-    async def remove_file(self, vault_name: FromPath[str], path: FromQuery[str], config: Config) -> OkResponse:
+    async def remove_file(
+        self, request: Request[Any, Any, Any], vault_name: FromPath[str], path: FromQuery[str], config: Config
+    ) -> OkResponse:
+        # Drop any live room (without saving) so it can't write the doc back after deletion.
+        manager: SyncManager = request.app.state.sync_manager
+        await manager.close_rooms(f"{vault_name}/{path.lstrip('/')}", save=False, reason="Document deleted")
         delete_file(vault_root(config.vault_path, vault_name), path)
         return OkResponse()
 

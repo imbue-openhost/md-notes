@@ -48,6 +48,12 @@ class LitestarWebsocketChannel:
         logger.debug("[ch] {} recv ok ({} bytes)", self._path, len(data))
         return data
 
+    async def close(self, code: int, reason: str) -> None:
+        try:
+            await self._ws.close(code=code, reason=reason)
+        except Exception as e:
+            logger.debug("[ch] {} close failed: {}: {}", self._path, type(e).__name__, e)
+
     async def send(self, message: bytes) -> None:
         try:
             await self._ws.send_bytes(message)

@@ -5,7 +5,10 @@ instances; the client treats them the same. Connection records are stored verbat
 owner's client — the sharing instance is the authority on whether a secret actually works.
 """
 
+from typing import Any
+
 from litestar import Controller
+from litestar import Request
 from litestar import delete
 from litestar import get
 from litestar import patch
@@ -19,6 +22,7 @@ from server.core.config import Config
 from server.core.db import add_connected_vault
 from server.core.db import delete_connected_vault
 from server.core.db import list_connected_vaults
+from server.core.sync import SyncManager
 from server.core.vaults import create_vault
 from server.core.vaults import delete_vault
 from server.core.vaults import list_vault_names
@@ -59,11 +63,17 @@ class VaultsController(Controller):
         return owned_vault(config, create_vault(config.vault_path, data.name))
 
     @patch("/{vault_name:str}")
-    async def rename(self, vault_name: FromPath[str], data: VaultBody, config: Config) -> Vault:
+    async def rename(
+        self, request: Request[Any, Any, Any], vault_name: FromPath[str], data: VaultBody, config: Config
+    ) -> Vault:
+        manager: SyncManager = request.app.state.sync_manager
+        await manager.close_rooms(vault_name, save=True, reason="Vault renamed")
         return owned_vault(config, rename_vault(config.vault_path, vault_name, data.name))
 
     @delete("/{vault_name:str}", status_code=200)
-    async def remove(self, vault_name: FromPath[str], config: Config) -> OkResponse:
+    async def remove(self, request: Request[Any, Any, Any], vault_name: FromPath[str], config: Config) -> OkResponse:
+        manager: SyncManager = request.app.state.sync_manager
+        await manager.close_rooms(vault_name, save=False, reason="Vault deleted")
         delete_vault(config.vault_path, vault_name)
         return OkResponse()
 

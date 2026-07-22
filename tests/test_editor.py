@@ -98,6 +98,56 @@ def test_yjs_sync_between_tabs(stack: OpenhostStack, page: Page) -> None:
     ctx2.close()
 
 
+def test_delete_while_open_stays_deleted(stack: OpenhostStack, page: Page) -> None:
+    """A doc deleted via REST must stay deleted even while another client holds a live CRDT room on it.
+
+    Regression test: the live room used to write the doc back to disk on its next save (edit debounce or
+    cleanup), resurrecting deleted files — especially visible with federated vaults, where the other user's
+    browser keeps the room open.
+    """
+    s = stack.owner_session
+    doc = "delete-me.md"
+    r = s.post(f"{stack.url}/api/docs/{VAULT}/file?path={doc}", json={"content": "goner"})
+    assert r.status_code == 201
+
+    # Open the doc in a browser so a live CRDT room exists, and type so a debounced save is pending.
+    stack.playwright_login(page)
+    page.goto(stack.url)
+    page.locator(".vault-picker-item-name", has_text=VAULT).click()
+    page.locator(f'.sidebar-item[data-type="file"][data-path="{doc}"]').click()
+    page.wait_for_selector(".cm-editor", timeout=10_000)
+    page.wait_for_timeout(1000)
+    page.locator(".cm-content").click()
+    page.keyboard.type("ZOMBIE")
+
+    r = s.delete(f"{stack.url}/api/docs/{VAULT}/file?path={doc}")
+    assert r.status_code == 200
+
+    # Wait past the save debounce (5s); the old bug rewrote the .md here.
+    page.wait_for_timeout(7000)
+    r = s.get(f"{stack.url}/api/docs/{VAULT}/file?path={doc}")
+    assert r.status_code == 404, f"doc came back from the dead: {r.status_code} {r.text!r}"
+
+    # Recreating a same-named doc must not resurrect old content from a stale CRDT sidecar.
+    r = s.post(f"{stack.url}/api/docs/{VAULT}/file?path={doc}", json={"content": "fresh"})
+    assert r.status_code == 201
+    ctx2 = page.context.browser.new_context() if page.context.browser else None
+    assert ctx2 is not None
+    p2 = ctx2.new_page()
+    stack.playwright_login(p2)
+    p2.goto(stack.url)
+    p2.locator(".vault-picker-item-name", has_text=VAULT).click()
+    p2.locator(f'.sidebar-item[data-type="file"][data-path="{doc}"]').click()
+    p2.wait_for_selector(".cm-editor", timeout=10_000)
+    p2.wait_for_timeout(1500)
+    content = p2.locator(".cm-content")
+    expect(content).to_contain_text("fresh")
+    expect(content).not_to_contain_text("goner")
+    expect(content).not_to_contain_text("ZOMBIE")
+    ctx2.close()
+    s.delete(f"{stack.url}/api/docs/{VAULT}/file?path={doc}")
+
+
 def test_pane_collapse(stack: OpenhostStack, page: Page) -> None:
     _open_file(stack, page)
 

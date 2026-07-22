@@ -39,9 +39,18 @@ import { WebsocketProvider } from 'y-websocket';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { yCollab } from 'y-codemirror.next';
 import { Facet, type Extension } from '@codemirror/state';
+import * as decoding from 'lib0/decoding';
 import type { Vault } from '../api/types';
 
 const MAX_RETRIES = 3;
+
+// The server signals "this doc (or its vault) was deleted or moved" two ways: a Yjs data-frame
+// message (type 100 + varstring reason — see server sync._MSG_DOC_GONE) and close code 4404.
+// The data frame is the reliable one — the OpenHost router rewrites close codes to 1011. On
+// either signal we must stop reconnecting and drop the local cache: retrying would merge our
+// now-orphaned state into whatever doc later reuses the path.
+const MESSAGE_DOC_GONE = 100;
+const DOC_GONE_CLOSE_CODE = 4404;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const IDB_HEALTH_INTERVAL_MS = 120_000;
 
@@ -230,6 +239,7 @@ function buildSession(
 ): SyncSession {
   let consecutiveFailures = 0;
   let destroyed = false;
+  let docGone = false;
 
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText('content');
@@ -266,7 +276,7 @@ function buildSession(
   let idbPersistence: IndexeddbPersistence | null = null;
   let idbHealthInterval: ReturnType<typeof setInterval> | null = null;
   const cacheReady = ensureFreshIdbCache(idbKey).then((fresh) => {
-    if (destroyed) return false;
+    if (destroyed || docGone) return false;
     if (!fresh) {
       rejectReady(new Error('This doc\'s local cache is outdated and another tab is holding it open — close other md-notes tabs and reopen'));
       return false;
@@ -341,7 +351,36 @@ function buildSession(
     }
   });
 
+  const handleDocGone = (reason: string) => {
+    if (docGone) return;
+    docGone = true;
+    provider.disconnect();
+    setSessionStatus('disconnected');
+    notifyError(reason);
+    rejectReady(new Error(reason));
+    if (idbPersistence) {
+      void idbPersistence.clearData().catch(() => {});
+    } else {
+      void deleteIDBDatabase(idbKey);
+    }
+  };
+
+  provider.messageHandlers[MESSAGE_DOC_GONE] = (_encoder, decoder) => {
+    let reason = '';
+    try {
+      reason = decoding.readVarString(decoder);
+    } catch {
+      // reason stays generic
+    }
+    handleDocGone(reason || 'Document deleted');
+  };
+
   provider.on('connection-close', (event: CloseEvent | null) => {
+    if (event && event.code === DOC_GONE_CLOSE_CODE) {
+      handleDocGone(event.reason || 'Document deleted');
+      return;
+    }
+    if (docGone) return;
     if (event && event.code !== 1000 && event.code !== 1005) {
       const reason = event.reason || `code ${event.code}`;
       consecutiveFailures++;
